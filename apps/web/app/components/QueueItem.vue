@@ -85,25 +85,33 @@ function formatDuration(durationMs: number) {
   min-height: 68px;
   grid-template-columns: 35px minmax(0, 1fr) auto;
   align-items: center;
-  border-bottom: 1px solid rgb(23 48 62 / 80%);
-  background: var(--color-surface-raised);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: var(--surface-raised);
 }
 
 .queue-item[data-status='playing'] {
-  box-shadow: inset 3px 0 var(--color-mint);
-  background: linear-gradient(90deg, rgb(84 242 135 / 8%), var(--color-surface-raised) 42%);
+  box-shadow: inset 3px 0 var(--accent-primary);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent-primary) 8%, transparent),
+    var(--surface-raised) 42%
+  );
 }
 
 .queue-item[data-status='failed'] {
-  box-shadow: inset 3px 0 var(--color-error);
-  background: linear-gradient(90deg, rgb(255 107 134 / 8%), var(--color-surface-raised) 42%);
+  box-shadow: inset 3px 0 var(--danger);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--danger) 8%, transparent),
+    var(--surface-raised) 42%
+  );
 }
 
 .queue-order {
   display: grid;
   justify-items: center;
   gap: 2px;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   font-family: 'Geist Mono Variable', monospace;
   font-size: 9px;
 }
@@ -130,9 +138,9 @@ function formatDuration(durationMs: number) {
 .queue-cover-empty {
   display: grid;
   place-items: center;
-  border: 1px solid var(--color-border);
-  color: var(--color-text-subtle);
-  background: var(--color-surface-strong);
+  border: 1px solid var(--border);
+  color: var(--text-subtle);
+  background: var(--surface-strong);
 }
 
 .queue-track div {
@@ -153,7 +161,7 @@ function formatDuration(durationMs: number) {
 }
 
 .queue-track span {
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 
@@ -174,13 +182,13 @@ function formatDuration(durationMs: number) {
   height: 44px;
   place-items: center;
   border: 0;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   background: transparent;
   cursor: pointer;
 }
 
 .row-action:hover:not(:disabled) {
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .row-action:disabled {
@@ -189,7 +197,7 @@ function formatDuration(durationMs: number) {
 }
 
 .remove-action:hover:not(:disabled) {
-  color: var(--color-error);
+  color: var(--danger);
 }
 
 @media (min-width: 72rem) {
@@ -213,13 +221,13 @@ function formatDuration(durationMs: number) {
   .queue-status {
     display: block;
     padding: 0 10px;
-    color: var(--color-text-muted);
+    color: var(--text-muted);
     font-size: 10px;
   }
 
   .queue-requester {
     overflow: hidden;
-    color: #c5b5ff;
+    color: var(--accent-tertiary);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -230,7 +238,7 @@ function formatDuration(durationMs: number) {
 
   .queue-status {
     width: fit-content;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-pill);
     padding: 4px 8px;
     font-family: 'Geist Mono Variable', monospace;
@@ -239,13 +247,13 @@ function formatDuration(durationMs: number) {
   }
 
   [data-status='playing'] .queue-status {
-    border-color: rgb(84 242 135 / 25%);
-    color: var(--color-mint);
+    border-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
+    color: var(--accent-primary);
   }
 
   [data-status='failed'] .queue-status {
-    border-color: rgb(255 107 134 / 25%);
-    color: var(--color-error);
+    border-color: color-mix(in srgb, var(--danger) 25%, transparent);
+    color: var(--danger);
   }
 
   .queue-actions {

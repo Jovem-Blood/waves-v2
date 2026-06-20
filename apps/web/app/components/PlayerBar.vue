@@ -120,10 +120,15 @@ function formatTime(value: number) {
 <style scoped>
 .player-panel {
   padding: 20px 18px 18px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border);
   background:
-    linear-gradient(155deg, rgb(6 17 31/96%), rgb(9 20 38/96%) 62%, rgb(18 12 37/96%)),
-    var(--color-background);
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--background) 96%, transparent),
+      color-mix(in srgb, var(--surface-strong) 96%, transparent) 62%,
+      color-mix(in srgb, var(--accent-tertiary) 4%, var(--background) 96%)
+    ),
+    var(--background);
 }
 .player-heading,
 .player-track,
@@ -148,7 +153,7 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-family: 'Geist Mono Variable', monospace;
   font-size: 9px;
   text-transform: uppercase;
@@ -157,8 +162,8 @@ h2 {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-mint);
-  box-shadow: 0 0 8px rgb(84 242 135/55%);
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 55%, transparent);
 }
 .player-content {
   display: grid;
@@ -176,14 +181,14 @@ h2 {
   object-fit: cover;
   box-shadow:
     0 12px 28px rgb(0 0 0/28%),
-    0 0 22px rgb(98 199 255/11%);
+    0 0 22px color-mix(in srgb, var(--accent-secondary) 11%, transparent);
 }
 .player-artwork-empty {
   display: grid;
   place-items: center;
-  border: 1px solid var(--color-border-strong);
-  color: var(--color-cyan);
-  background: linear-gradient(145deg, #0c2432, #161127);
+  border: 1px solid var(--border-strong);
+  color: var(--accent-secondary);
+  background: linear-gradient(145deg, var(--surface-muted), var(--surface-strong));
 }
 .player-metadata {
   display: grid;
@@ -201,29 +206,29 @@ h2 {
   font-size: 20px;
 }
 .player-metadata span {
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 12px;
 }
 .player-metadata small {
-  color: #c8b9ff;
+  color: var(--accent-tertiary);
   font-size: 10px;
 }
 .logical-progress {
   overflow: hidden;
   height: 5px;
   border-radius: 3px;
-  background: #17253a;
+  background: var(--surface-muted);
 }
 .logical-progress span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--color-mint), var(--color-cyan));
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
   transition: width 300ms linear;
 }
 .progress-labels {
   justify-content: space-between;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   font:
     10px 'Geist Mono Variable',
     monospace;
@@ -237,27 +242,27 @@ h2 {
 .volume-control {
   min-height: 44px;
   gap: 9px;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 11px;
 }
 .volume-control input {
   min-width: 0;
   flex: 1;
-  accent-color: var(--color-mint);
+  accent-color: var(--accent-primary);
 }
 .volume-control output {
   width: 38px;
-  color: var(--color-text);
+  color: var(--text);
   font-family: 'Geist Mono Variable', monospace;
   text-align: right;
 }
 .player-idle {
   min-height: 120px;
   gap: 14px;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
 }
 .player-idle strong {
-  color: var(--color-text);
+  color: var(--text);
 }
 .player-idle p {
   margin: 5px 0 0;
@@ -269,10 +274,10 @@ h2 {
   height: 64px;
   flex: none;
   place-items: center;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: 50%;
-  color: var(--color-text-subtle);
-  background: var(--color-surface-raised);
+  color: var(--text-subtle);
+  background: var(--surface-raised);
 }
 .player-error {
   margin: 12px 0 0;
@@ -283,9 +288,9 @@ h2 {
   .player-panel {
     min-height: 310px;
     padding: 16px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: var(--color-surface-raised);
+    background: var(--surface-raised);
   }
   .player-artwork {
     width: 150px;

@@ -76,8 +76,8 @@ const search = useSpotifySearch(config.public.apiBase)
 <style scoped>
 .search-panel {
   padding: 20px 18px 24px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .search-header,
@@ -102,7 +102,7 @@ h2 {
 
 .search-header p {
   margin: 4px 0 0;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 10px;
 }
 
@@ -111,8 +111,8 @@ h2 {
   gap: 6px;
   border-radius: var(--radius-pill);
   padding: 0 10px;
-  color: var(--color-mint);
-  background: rgb(84 242 135 / 8%);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   font-size: 10px;
   font-weight: 700;
 }
@@ -121,16 +121,16 @@ h2 {
   min-height: 50px;
   gap: 10px;
   margin-top: 14px;
-  border: 1px solid var(--color-mint);
+  border: 1px solid var(--accent-primary);
   border-radius: var(--radius-md);
   padding: 0 14px;
-  color: var(--color-mint);
-  background: var(--color-surface-raised);
-  box-shadow: 0 0 0 3px rgb(84 242 135 / 4%);
+  color: var(--accent-primary);
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 4%, transparent);
 }
 
 .search-input:focus-within {
-  box-shadow: 0 0 0 3px rgb(84 242 135 / 14%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .search-input input {
@@ -138,18 +138,18 @@ h2 {
   flex: 1;
   border: 0;
   outline: 0;
-  color: var(--color-text);
+  color: var(--text);
   background: transparent;
   font-size: 13px;
 }
 
 .search-input input::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
 }
 
 .results-heading {
   min-height: 34px;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   font-family: 'Geist Mono Variable', monospace;
   font-size: 8px;
   font-weight: 700;
@@ -171,7 +171,7 @@ h2 {
   min-height: 86px;
   place-items: center;
   gap: 7px;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 11px;
   text-align: center;
 }
@@ -181,9 +181,9 @@ h2 {
     overflow: auto;
     min-height: 0;
     padding: 16px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: var(--color-surface-raised);
+    background: var(--surface-raised);
   }
 
   .search-panel h2 {

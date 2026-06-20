@@ -41,10 +41,10 @@ function formatDuration(durationMs: number) {
   grid-template-columns: 52px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 8px;
-  background: var(--color-surface-raised);
+  background: var(--surface-raised);
 }
 
 .track-card img,
@@ -61,8 +61,8 @@ function formatDuration(durationMs: number) {
 .track-cover-empty {
   display: grid;
   place-items: center;
-  color: var(--color-text-subtle);
-  background: var(--color-surface-strong);
+  color: var(--text-subtle);
+  background: var(--surface-strong);
 }
 
 .track-copy {
@@ -84,7 +84,7 @@ function formatDuration(durationMs: number) {
 
 .track-copy span,
 .track-copy small {
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 9px;
 }
 
@@ -98,11 +98,11 @@ function formatDuration(durationMs: number) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid rgb(84 242 135 / 28%);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, transparent);
   border-radius: var(--radius-sm);
   padding: 0 10px;
-  color: var(--color-mint);
-  background: rgb(84 242 135 / 6%);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;

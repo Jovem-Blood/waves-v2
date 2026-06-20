@@ -106,7 +106,7 @@ function totalDuration(items: Queue) {
 <style scoped>
 .queue-panel {
   padding: 18px;
-  background: var(--color-surface);
+  background: var(--surface);
 }
 
 .queue-header,
@@ -131,7 +131,7 @@ function totalDuration(items: Queue) {
 
 .queue-title-row svg {
   flex: none;
-  color: var(--color-mint);
+  color: var(--accent-primary);
 }
 
 h1 {
@@ -142,12 +142,12 @@ h1 {
 
 .queue-header p {
   margin: 5px 0 0;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .queue-count {
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -157,17 +157,17 @@ h1 {
 
 .queue-alert {
   margin-top: 12px;
-  border: 1px solid rgb(255 107 134 / 24%);
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  background: rgb(255 107 134 / 6%);
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
   font-size: 11px;
 }
 
 .queue-table {
   overflow: hidden;
   margin-top: 14px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
 
@@ -180,7 +180,7 @@ h1 {
   justify-content: space-between;
   gap: 10px;
   padding: 0 12px;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   font-size: 8px;
 }
 
@@ -192,8 +192,8 @@ h1 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-mint);
-  box-shadow: 0 0 7px rgb(84 242 135 / 50%);
+  background: var(--success);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--success) 50%, transparent);
 }
 
 .state-message p {
@@ -205,9 +205,9 @@ h1 {
   .queue-panel {
     min-height: 100%;
     padding: 20px 20px 16px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: var(--color-surface-raised);
+    background: var(--surface-raised);
   }
 
   .queue-header {
@@ -219,7 +219,7 @@ h1 {
     grid-template-columns: repeat(3, 1fr);
     min-height: 58px;
     margin-top: 14px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
   }
 
@@ -227,15 +227,15 @@ h1 {
     height: 100%;
     gap: 10px;
     padding: 0 16px;
-    color: var(--color-cyan);
+    color: var(--accent-secondary);
   }
 
   .queue-summary div + div {
-    border-left: 1px solid var(--color-border);
+    border-left: 1px solid var(--border);
   }
 
   .queue-summary span {
-    color: var(--color-text);
+    color: var(--text);
     font-family: 'Geist Mono Variable', monospace;
     font-size: 11px;
     font-weight: 700;
@@ -244,7 +244,7 @@ h1 {
   .queue-summary small {
     display: block;
     margin-bottom: 2px;
-    color: var(--color-text-subtle);
+    color: var(--text-subtle);
     font-size: 8px;
   }
 
@@ -253,9 +253,9 @@ h1 {
     min-height: 38px;
     grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px;
     align-items: center;
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-subtle);
-    background: #07131e;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-subtle);
+    background: var(--surface-muted);
     font-family: 'Geist Mono Variable', monospace;
     font-size: 8px;
     font-weight: 700;
