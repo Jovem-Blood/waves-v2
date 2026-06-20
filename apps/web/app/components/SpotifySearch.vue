@@ -6,7 +6,9 @@ import { LoaderCircle, Music2, Search, Sparkles } from '@lucide/vue'
 import { useSpotifySearch } from '../composables/useSpotifySearch'
 import TrackCard from './TrackCard.vue'
 
-defineProps<{ addingTrackId?: string }>()
+const props = withDefaults(defineProps<{ addingTrackId?: string; activeTrackIds?: string[] }>(), {
+  activeTrackIds: () => [],
+})
 defineEmits<{ add: [track: TrackMetadata] }>()
 
 const config = useRuntimeConfig()
@@ -67,6 +69,7 @@ const search = useSpotifySearch(config.public.apiBase)
         :key="track.id"
         :track="track"
         :adding="addingTrackId === track.id"
+        :added="activeTrackIds.includes(track.id)"
         @add="$emit('add', $event)"
       />
     </div>

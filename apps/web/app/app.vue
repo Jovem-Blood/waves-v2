@@ -17,6 +17,12 @@ const isOnline = ref(false)
 const queue = useQueue(apiBase)
 const player = usePlayerState(apiBase)
 
+const activeTrackIds = computed(() =>
+  queue.items.value
+    .filter((item) => item.status === 'queued' || item.status === 'playing')
+    .map((item) => item.track.id),
+)
+
 const currentItem = computed(() => {
   const currentId = player.state.value?.currentQueueItemId
   return currentId ? queue.items.value.find((item) => item.id === currentId) : undefined
@@ -51,7 +57,7 @@ onMounted(() => void checkHealth())
 </script>
 
 <template>
-    <div class="min-h-dvh bg-(--background) text-(--text)">
+  <div class="min-h-dvh bg-(--background) text-(--text)">
     <header class="app-header">
       <div class="brand-lockup">
         <span class="brand-mark" aria-hidden="true">
@@ -108,6 +114,7 @@ onMounted(() => void checkHealth())
       <SpotifySearch
         class="dashboard-search"
         :adding-track-id="queue.addingTrackId.value"
+        :active-track-ids="activeTrackIds"
         @add="queue.add"
       />
     </main>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { TrackMetadata } from '@waves/shared'
-import { Disc3, LoaderCircle, Plus } from '@lucide/vue'
+import { Check, Disc3, LoaderCircle, Plus } from '@lucide/vue'
 
-defineProps<{ track: TrackMetadata; adding: boolean }>()
+defineProps<{ track: TrackMetadata; adding: boolean; added: boolean }>()
 defineEmits<{ add: [track: TrackMetadata] }>()
 
 function formatDuration(durationMs: number) {
@@ -23,13 +23,13 @@ function formatDuration(durationMs: number) {
     <button
       class="add-button"
       type="button"
-      :disabled="adding"
-      :aria-label="`Adicionar ${track.title} à fila`"
+      :disabled="adding || added"
+      :aria-label="added ? `${track.title} já está na fila` : `Adicionar ${track.title} à fila`"
       @click="$emit('add', track)"
     >
-      <LoaderCircle v-if="adding" class="spinner" :size="18" aria-hidden="true" />
+      <Check v-if="added" class="check-icon" :size="18" aria-hidden="true" />
+      <LoaderCircle v-else-if="adding" class="spinner" :size="18" aria-hidden="true" />
       <Plus v-else :size="19" aria-hidden="true" />
-      <span>{{ adding ? 'Adicionando' : 'Adicionar' }}</span>
     </button>
   </article>
 </template>
@@ -113,9 +113,7 @@ function formatDuration(durationMs: number) {
   opacity: 0.5;
 }
 
-@media (max-width: 380px) {
-  .add-button span {
-    display: none;
-  }
+.add-button:disabled .check-icon {
+  opacity: 0.7;
 }
 </style>
