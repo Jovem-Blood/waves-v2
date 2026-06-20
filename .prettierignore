@@ -1,0 +1,10 @@
+.nuxt
+.output
+coverage
+apps/web/drizzle
+dist
+node_modules
+pnpm-lock.yaml
+pencil.pen
+images
+DESIGN.md

@@ -1,0 +1,299 @@
+import { createServer, type Server } from 'node:http'
+import { fileURLToPath } from 'node:url'
+
+import { apiErrorSchema, type AddQueueItemInput, type TrackMetadata } from '@waves/shared'
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
+import { createApp, createRouter, toNodeListener } from 'h3'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { healthHandler } from '../../server/api/health.get'
+import { createPlayerGetHandler } from '../../server/api/player/index.get'
+import { createPlayerSkipHandler } from '../../server/api/player/skip.post'
+import { createQueueRemoveHandler } from '../../server/api/queue/[id].delete'
+import { createQueueMoveHandler } from '../../server/api/queue/[id]/move.post'
+import { createQueueListHandler } from '../../server/api/queue/index.get'
+import { createQueueAddHandler } from '../../server/api/queue/index.post'
+import { createSpotifySearchHandler } from '../../server/api/spotify/search.get'
+import { SpotifyUnavailableError } from '../../server/clients/spotify.errors'
+import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
+import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
+import { QueueRepository } from '../../server/repositories/queue.repository'
+import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
+import { PlayerStateService } from '../../server/services/player-state.service'
+import { QueueService } from '../../server/services/queue.service'
+import type {
+  PublicApiDependencies,
+  PublicSpotifyService,
+} from '../../server/utils/public-api-dependencies'
+
+const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
+const now = () => new Date('2026-06-18T16:00:00.000Z')
+
+const firstTrack: TrackMetadata = {
+  id: 'spotify:track-1',
+  provider: 'spotify',
+  providerTrackId: 'track-1',
+  title: 'Track One',
+  artists: ['Artist One'],
+  durationMs: 120_000,
+}
+
+const secondTrack: TrackMetadata = {
+  ...firstTrack,
+  id: 'spotify:track-2',
+  providerTrackId: 'track-2',
+  title: 'Track Two',
+}
+
+interface TestContext {
+  baseUrl: string
+  connection: DatabaseConnection
+  server: Server
+  spotifySearch: ReturnType<typeof vi.fn<(query: string) => Promise<TrackMetadata[]>>>
+}
+
+let context: TestContext | undefined
+
+async function startTestApi(): Promise<TestContext> {
+  const connection = createDatabaseConnection({ url: ':memory:' })
+  migrate(connection.db, { migrationsFolder })
+
+  const queueRepository = new QueueRepository(connection.db)
+  const playerStateRepository = new PlayerStateRepository(connection.db, now)
+  const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
+  let nextId = 0
+  const spotifySearch = vi
+    .fn<(query: string) => Promise<TrackMetadata[]>>()
+    .mockResolvedValue([firstTrack])
+  const spotifyService: PublicSpotifyService = {
+    searchTracks: spotifySearch,
+  }
+  const dependencies: PublicApiDependencies = {
+    queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
+    playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
+    spotifyService,
+  }
+  const getDependencies = () => dependencies
+  const router = createRouter()
+
+  router.get('/api/health', healthHandler)
+  router.get('/api/spotify/search', createSpotifySearchHandler(getDependencies))
+  router.get('/api/queue', createQueueListHandler(getDependencies))
+  router.post('/api/queue', createQueueAddHandler(getDependencies))
+  router.delete('/api/queue/:id', createQueueRemoveHandler(getDependencies))
+  router.post('/api/queue/:id/move', createQueueMoveHandler(getDependencies))
+  router.get('/api/player', createPlayerGetHandler(getDependencies))
+  router.post('/api/player/skip', createPlayerSkipHandler(getDependencies))
+
+  const app = createApp()
+  app.use(router.handler)
+  const server = createServer(toNodeListener(app))
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Test API did not bind to a TCP port')
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    connection,
+    server,
+    spotifySearch,
+  }
+}
+
+async function closeTestApi(testContext: TestContext): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    testContext.server.close((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    })
+  })
+  testContext.connection.close()
+}
+
+async function request(
+  path: string,
+  init?: RequestInit,
+): Promise<{ body: unknown; response: Response }> {
+  if (!context) {
+    throw new Error('Test API is not running')
+  }
+
+  const response = await fetch(`${context.baseUrl}${path}`, init)
+  return {
+    response,
+    body: await response.json(),
+  }
+}
+
+async function postJson(path: string, body: unknown) {
+  return request(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+async function addTrack(track: TrackMetadata) {
+  return postJson('/api/queue', { track } satisfies AddQueueItemInput)
+}
+
+beforeEach(async () => {
+  context = await startTestApi()
+})
+
+afterEach(async () => {
+  if (context) {
+    await closeTestApi(context)
+    context = undefined
+  }
+})
+
+describe('public API', () => {
+  it('returns health without consulting external dependencies', async () => {
+    const { response, body } = await request('/api/health')
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ ok: true })
+    expect(context?.spotifySearch).not.toHaveBeenCalled()
+  })
+
+  it.each(['/api/spotify/search', '/api/spotify/search?q=', '/api/spotify/search?q=a&q=b'])(
+    'rejects invalid Spotify query: %s',
+    async (path) => {
+      const { response, body } = await request(path)
+
+      expect(response.status).toBe(400)
+      expect(apiErrorSchema.parse(body)).toEqual(body)
+      expect(body).toEqual({
+        statusCode: 400,
+        statusMessage: 'Invalid request',
+        data: { code: 'VALIDATION_ERROR' },
+      })
+      expect(context?.spotifySearch).not.toHaveBeenCalled()
+    },
+  )
+
+  it('returns normalized Spotify tracks through HTTP', async () => {
+    const { response, body } = await request('/api/spotify/search?q=track%20one')
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual([firstTrack])
+    expect(context?.spotifySearch).toHaveBeenCalledWith('track one')
+  })
+
+  it('sanitizes Spotify failures', async () => {
+    context?.spotifySearch.mockRejectedValue(new SpotifyUnavailableError('search'))
+
+    const { response, body } = await request('/api/spotify/search?q=secret')
+
+    expect(response.status).toBe(503)
+    expect(apiErrorSchema.parse(body)).toEqual(body)
+    expect(JSON.stringify(body)).not.toContain('secret')
+    expect(body).toEqual({
+      statusCode: 503,
+      statusMessage: 'Spotify unavailable',
+      data: { code: 'SPOTIFY_UNAVAILABLE' },
+    })
+  })
+
+  it('adds and lists active queue items in order', async () => {
+    expect((await addTrack(firstTrack)).response.status).toBe(200)
+    expect((await addTrack(secondTrack)).response.status).toBe(200)
+
+    const { response, body } = await request('/api/queue')
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual([
+      expect.objectContaining({ id: 'queue-1', position: 0, track: firstTrack }),
+      expect.objectContaining({ id: 'queue-2', position: 1, track: secondTrack }),
+    ])
+  })
+
+  it('rejects invalid and extra queue fields', async () => {
+    const { response, body } = await postJson('/api/queue', {
+      track: firstTrack,
+      unexpected: true,
+    })
+
+    expect(response.status).toBe(400)
+    expect(apiErrorSchema.parse(body)).toEqual(body)
+  })
+
+  it('moves and removes queue items through HTTP', async () => {
+    await addTrack(firstTrack)
+    await addTrack(secondTrack)
+
+    const moved = await postJson('/api/queue/queue-2/move', { newPosition: 0 })
+    expect(moved.response.status).toBe(200)
+    expect(moved.body).toEqual([
+      expect.objectContaining({ id: 'queue-2', position: 0 }),
+      expect.objectContaining({ id: 'queue-1', position: 1 }),
+    ])
+
+    const removed = await request('/api/queue/queue-2', { method: 'DELETE' })
+    expect(removed.response.status).toBe(200)
+    expect(removed.body).toEqual([expect.objectContaining({ id: 'queue-1', position: 0 })])
+  })
+
+  it('returns contract errors for missing items and invalid moves', async () => {
+    const missingMove = await postJson('/api/queue/missing/move', { newPosition: 0 })
+    const missingDelete = await request('/api/queue/missing', { method: 'DELETE' })
+    const invalidMove = await postJson('/api/queue/missing/move', { newPosition: -1 })
+
+    expect(missingMove.response.status).toBe(404)
+    expect(missingDelete.response.status).toBe(404)
+    expect(invalidMove.response.status).toBe(400)
+
+    for (const body of [missingMove.body, missingDelete.body, invalidMove.body]) {
+      expect(apiErrorSchema.parse(body)).toEqual(body)
+    }
+  })
+
+  it('creates idle player state and performs a consistent logical skip', async () => {
+    const initial = await request('/api/player')
+    expect(initial.response.status).toBe(200)
+    expect(initial.body).toEqual({
+      status: 'idle',
+      updatedAt: '2026-06-18T16:00:00.000Z',
+    })
+
+    await addTrack(firstTrack)
+    await addTrack(secondTrack)
+
+    const skipped = await postJson('/api/player/skip', {})
+    expect(skipped.response.status).toBe(200)
+    expect(skipped.body).toEqual({
+      player: {
+        status: 'playing',
+        currentQueueItemId: 'queue-2',
+        updatedAt: '2026-06-18T16:00:00.000Z',
+      },
+      queue: [
+        expect.objectContaining({
+          id: 'queue-2',
+          position: 0,
+          status: 'playing',
+        }),
+      ],
+    })
+
+    const queue = await request('/api/queue')
+    expect(queue.body).toEqual([
+      expect.objectContaining({
+        id: 'queue-2',
+        position: 0,
+        status: 'playing',
+      }),
+    ])
+  })
+})

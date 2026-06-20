@@ -1,0 +1,121 @@
+<script setup lang="ts">
+import type { TrackMetadata } from '@waves/shared'
+import { Disc3, LoaderCircle, Plus } from '@lucide/vue'
+
+defineProps<{ track: TrackMetadata; adding: boolean }>()
+defineEmits<{ add: [track: TrackMetadata] }>()
+
+function formatDuration(durationMs: number) {
+  const totalSeconds = Math.round(durationMs / 1000)
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`
+}
+</script>
+
+<template>
+  <article class="track-card">
+    <img v-if="track.coverUrl" :src="track.coverUrl" :alt="`Capa de ${track.title}`" />
+    <span v-else class="track-cover-empty"><Disc3 :size="22" aria-hidden="true" /></span>
+    <div class="track-copy">
+      <strong>{{ track.title }}</strong>
+      <span>{{ track.artists.join(', ') }}</span>
+      <small>{{ formatDuration(track.durationMs) }}</small>
+    </div>
+    <button
+      class="add-button"
+      type="button"
+      :disabled="adding"
+      :aria-label="`Adicionar ${track.title} à fila`"
+      @click="$emit('add', track)"
+    >
+      <LoaderCircle v-if="adding" class="spinner" :size="18" aria-hidden="true" />
+      <Plus v-else :size="19" aria-hidden="true" />
+      <span>{{ adding ? 'Adicionando' : 'Adicionar' }}</span>
+    </button>
+  </article>
+</template>
+
+<style scoped>
+.track-card {
+  display: grid;
+  min-height: 78px;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: var(--color-surface-raised);
+}
+
+.track-card img,
+.track-cover-empty {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+}
+
+.track-card img {
+  object-fit: cover;
+}
+
+.track-cover-empty {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-subtle);
+  background: var(--color-surface-strong);
+}
+
+.track-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.track-copy strong,
+.track-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-copy strong {
+  font-size: 12px;
+}
+
+.track-copy span,
+.track-copy small {
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.track-copy small {
+  font-family: 'Geist Mono Variable', monospace;
+}
+
+.add-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgb(84 242 135 / 28%);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  color: var(--color-mint);
+  background: rgb(84 242 135 / 6%);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 380px) {
+  .add-button span {
+    display: none;
+  }
+}
+</style>
