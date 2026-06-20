@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 
 import type { QueueItem } from '@waves/shared'
+import { ActivityType } from 'discord.js'
+import type { Client } from 'discord.js'
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
@@ -280,11 +282,13 @@ const defaultRuntime: PlaybackRuntime = {
 export class AudioPlayerManager implements PlaybackManager {
   private readonly sessions = new Map<string, PlaybackSession>()
   private readonly startingGuilds = new Set<string>()
+  private lastActivityGuildId: string | undefined
 
   constructor(
     private readonly api: WavesApi,
     private readonly voiceManager: VoiceManager,
     private readonly logger: BotLogger,
+    private readonly client: Client,
     private readonly runtime: PlaybackRuntime = defaultRuntime,
   ) {}
 
@@ -373,6 +377,7 @@ export class AudioPlayerManager implements PlaybackManager {
     const next = result.queue[0]
     if (!next) {
       logger.info({ outcome: 'empty' }, 'Playback skip finished')
+      this.updateActivity(guildId)
       return 'empty'
     }
 
@@ -428,6 +433,7 @@ export class AudioPlayerManager implements PlaybackManager {
       session.current = undefined
       session.player.stop(true)
       session.settling = false
+      this.updateActivity(guildId)
       if (desired.currentQueueItemId) {
         const claim = await this.api.claimPlayback()
         if (claim.item) {
@@ -460,6 +466,7 @@ export class AudioPlayerManager implements PlaybackManager {
     current?.abortController.abort()
     session.current = undefined
     session.player.stop(true)
+    this.updateActivity(guildId)
     this.sessions.delete(guildId)
     this.logger.info(
       {
@@ -478,6 +485,18 @@ export class AudioPlayerManager implements PlaybackManager {
   destroyAll(): void {
     for (const guildId of [...this.sessions.keys()]) {
       this.destroyGuild(guildId)
+    }
+  }
+
+  private updateActivity(guildId: string, item?: QueueItem): void {
+    if (item) {
+      this.client.user?.setActivity(`🎵 Ouvindo ${item.track.title}`, {
+        type: ActivityType.Listening,
+      })
+      this.lastActivityGuildId = guildId
+    } else if (this.lastActivityGuildId === guildId) {
+      this.client.user?.setActivity()
+      this.lastActivityGuildId = undefined
     }
   }
 
@@ -599,6 +618,7 @@ export class AudioPlayerManager implements PlaybackManager {
       )
       session.player.play(resource)
       resource.volume?.setVolume((await this.api.getPlayer()).volume / 100)
+      this.updateActivity(guildId, item)
     } catch (error) {
       if (
         abortController.signal.aborted ||
@@ -806,6 +826,8 @@ export class AudioPlayerManager implements PlaybackManager {
       session.settling = false
       if (result.nextItem) {
         await this.playItem(guildId, session, result.nextItem, 0, randomUUID())
+      } else {
+        this.updateActivity(guildId)
       }
     } catch (error) {
       session.settling = false
@@ -853,6 +875,8 @@ export class AudioPlayerManager implements PlaybackManager {
       session.settling = false
       if (result.nextItem) {
         await this.playItem(guildId, session, result.nextItem, 0, randomUUID())
+      } else {
+        this.updateActivity(guildId)
       }
     } catch (error) {
       session.settling = false

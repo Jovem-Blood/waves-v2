@@ -188,10 +188,13 @@ function setup(connected = true) {
     warn: loggerWarn,
   }
   loggerChild.mockReturnValue(logger)
-  const manager = new AudioPlayerManager(api, voiceManager, logger as unknown as BotLogger, runtime)
+  const setActivity = vi.fn()
+  const client = { user: { setActivity } } as unknown as import('discord.js').Client
+  const manager = new AudioPlayerManager(api, voiceManager, logger as unknown as BotLogger, client, runtime)
 
   return {
     manager,
+    setActivity,
     player,
     mocks: {
       claimPlayback,

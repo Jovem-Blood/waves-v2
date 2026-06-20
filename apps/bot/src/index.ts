@@ -29,7 +29,7 @@ export async function startBot(): Promise<Client> {
       payload: { reason: 'unexpected' },
     })
   })
-  const playbackManager = new AudioPlayerManager(api, voiceManager, logger)
+  const playbackManager = new AudioPlayerManager(api, voiceManager, logger, client)
   playbackReference.current = playbackManager
   let reconciliationRunning = false
   const reconciliationTimer = setInterval(() => {
