@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { useRuntimeConfig } from '#imports'
+import { useHead, useRuntimeConfig } from '#imports'
 import { AudioWaveform, Headphones, Radio, Server } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
 import PlayerBar from './components/PlayerBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
 import SpotifySearch from './components/SpotifySearch.vue'
+import SettingsModal from './components/SettingsModal.vue'
 import { usePlayerState } from './composables/usePlayerState'
 import { useQueue } from './composables/useQueue'
 
@@ -20,6 +21,17 @@ const currentItem = computed(() => {
   const currentId = player.state.value?.currentQueueItemId
   return currentId ? queue.items.value.find((item) => item.id === currentId) : undefined
 })
+
+const pageTitle = computed(() => {
+  const item = currentItem.value
+  const status = player.state.value?.status
+  if (item && (status === 'playing' || status === 'paused')) {
+    return `Waves Panel | ${item.track.title}`
+  }
+  return 'Waves Panel'
+})
+
+useHead({ title: pageTitle })
 
 async function checkHealth() {
   try {
@@ -39,7 +51,7 @@ onMounted(() => void checkHealth())
 </script>
 
 <template>
-  <div class="min-h-dvh bg-(--color-background) text-(--color-text)">
+    <div class="min-h-dvh bg-(--background) text-(--text)">
     <header class="app-header">
       <div class="brand-lockup">
         <span class="brand-mark" aria-hidden="true">
@@ -62,9 +74,8 @@ onMounted(() => void checkHealth())
         </div>
       </div>
 
-      <div class="status-badge" :data-online="isOnline">
-        <span class="status-dot" aria-hidden="true" />
-        {{ isOnline ? 'BOT ONLINE' : 'BOT OFFLINE' }}
+      <div class="header-actions">
+        <SettingsModal :is-online="isOnline" />
       </div>
     </header>
 

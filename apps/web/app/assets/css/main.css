@@ -3,25 +3,56 @@
 @import '@fontsource-variable/inter';
 @import 'tailwindcss';
 
-:root {
+:root,
+[data-theme='waves'] {
   color-scheme: dark;
-  --color-background: #06111f;
-  --color-surface: #071522;
-  --color-surface-raised: #081724;
-  --color-surface-strong: #0a1825;
-  --color-border: #17303e;
-  --color-border-strong: #2d5160;
-  --color-text: #f7fafc;
-  --color-text-muted: #9eabba;
-  --color-text-subtle: #778597;
-  --color-mint: #54f287;
-  --color-cyan: #62c7ff;
-  --color-violet: #a879ff;
-  --color-error: #ff6b86;
-  --color-warning: #f0b84a;
+
+  --background: #06111f;
+  --background-elevated: #071522;
+
+  --surface: #071522;
+  --surface-raised: #081724;
+  --surface-strong: #0a1825;
+  --surface-muted: #0d1b2a;
+  --surface-active: color-mix(in srgb, var(--accent-primary) 12%, var(--surface));
+
+  --border: #17303e;
+  --border-strong: #2d5160;
+  --border-focus: #54f287;
+
+  --text: #f7fafc;
+  --text-muted: #9eabba;
+  --text-subtle: #778597;
+
+  --accent-primary: #54f287;
+  --accent-secondary: #62c7ff;
+  --accent-tertiary: #a879ff;
+
+  --success: #54f287;
+  --danger: #ff6b86;
+  --warning: #f0b84a;
+
+  --on-accent: #04120b;
+
+  --gradient-primary: linear-gradient(
+    90deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
+
+  --gradient-active-row: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent-primary) 16%, transparent),
+    transparent
+  );
+
+  --glow-primary: 0 0 24px color-mix(in srgb, var(--accent-primary) 28%, transparent);
+  --glow-secondary: 0 0 18px color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-pill: 999px;
 }
 
@@ -37,7 +68,7 @@
 }
 
 html {
-  background: var(--color-background);
+  background: var(--background);
 }
 
 body {
@@ -45,8 +76,12 @@ body {
   min-width: 320px;
   font-family: 'Inter Variable', 'Inter', sans-serif;
   background:
-    radial-gradient(circle at 82% 2%, rgb(168 121 255 / 8%), transparent 28rem),
-    var(--color-background);
+    radial-gradient(
+      circle at 82% 2%,
+      color-mix(in srgb, var(--accent-tertiary) 8%, transparent),
+      transparent 28rem
+    ),
+    var(--background);
 }
 
 button,
@@ -60,20 +95,28 @@ button {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--color-cyan);
+  outline: 2px solid var(--border-focus);
   outline-offset: 3px;
 }
 
 .app-header {
   display: flex;
-  min-height: 72px;
+  min-height: 60px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
-  border-bottom: 1px solid rgb(45 81 96 / 55%);
-  background: rgb(6 17 31 / 92%);
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-strong) 55%, transparent);
+  background: color-mix(in srgb, var(--background) 92%, transparent);
   backdrop-filter: blur(18px);
+}
+
+@media (width >= 48rem) {
+  .app-header {
+    min-height: 72px;
+    gap: 16px;
+    padding: 14px 18px;
+  }
 }
 
 .brand-lockup,
@@ -92,11 +135,15 @@ input:focus-visible {
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 1px solid rgb(84 242 135 / 28%);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, transparent);
   border-radius: 12px;
-  color: var(--color-mint);
-  background: linear-gradient(145deg, rgb(84 242 135 / 12%), rgb(98 199 255 / 5%));
-  box-shadow: 0 0 24px rgb(84 242 135 / 8%);
+  color: var(--accent-primary);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent-primary) 12%, transparent),
+    color-mix(in srgb, var(--accent-secondary) 5%, transparent)
+  );
+  box-shadow: var(--glow-primary);
 }
 
 .brand-name,
@@ -114,7 +161,7 @@ input:focus-visible {
 .brand-subtitle,
 .header-context small {
   margin-top: 2px;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   font-family: 'Geist Mono Variable', monospace;
   font-size: 8px;
   letter-spacing: 0.08em;
@@ -122,47 +169,15 @@ input:focus-visible {
 
 .header-context {
   gap: 8px;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .header-context svg {
-  color: var(--color-violet);
+  color: var(--accent-tertiary);
 }
 
-.status-badge {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  border: 1px solid rgb(255 107 134 / 25%);
-  border-radius: var(--radius-pill);
-  color: #ffc0cc;
-  background: rgb(255 107 134 / 7%);
-  font-family: 'Geist Mono Variable', monospace;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-}
 
-.status-badge[data-online='true'] {
-  border-color: rgb(84 242 135 / 28%);
-  color: #a9ffc5;
-  background: rgb(84 242 135 / 7%);
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-error);
-  box-shadow: 0 0 8px currentColor;
-}
-
-.status-badge[data-online='true'] .status-dot {
-  background: var(--color-mint);
-}
 
 .dashboard-layout {
   display: grid;
@@ -187,7 +202,7 @@ input:focus-visible {
   justify-content: space-between;
   gap: 8px;
   padding: 16px 20px 24px;
-  color: var(--color-text-subtle);
+  color: var(--text-subtle);
   font-size: 10px;
 }
 
@@ -196,12 +211,12 @@ input:focus-visible {
 }
 
 .surface {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
 }
 
 .eyebrow {
-  color: var(--color-cyan);
+  color: var(--accent-secondary);
   font-family: 'Geist Mono Variable', monospace;
   font-size: 9px;
   font-weight: 700;
@@ -210,7 +225,7 @@ input:focus-visible {
 }
 
 .muted {
-  color: var(--color-text-muted);
+  color: var(--text-muted);
 }
 
 .action-button {
@@ -222,11 +237,11 @@ input:focus-visible {
   border: 0;
   border-radius: var(--radius-sm);
   padding: 0 15px;
-  color: #04120b;
-  background: linear-gradient(100deg, var(--color-mint), #43e9c8 58%, var(--color-cyan));
+  color: var(--on-accent);
+  background: var(--gradient-primary);
   font-weight: 750;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgb(34 211 238 / 12%);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent-secondary) 12%, transparent);
   transition:
     filter 140ms ease,
     transform 140ms ease;
@@ -252,10 +267,10 @@ input:focus-visible {
   min-width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  background: rgb(7 21 34 / 75%);
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
   cursor: pointer;
   transition:
     color 140ms ease,
@@ -264,9 +279,9 @@ input:focus-visible {
 }
 
 .icon-button:hover {
-  border-color: var(--color-border-strong);
-  color: var(--color-text);
-  background: var(--color-surface-strong);
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-strong);
 }
 
 .state-message {
@@ -275,12 +290,12 @@ input:focus-visible {
   place-items: center;
   gap: 8px;
   padding: 24px;
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   text-align: center;
 }
 
 .error-message {
-  color: #ffb0bf;
+  color: var(--danger);
 }
 
 .spinner {
