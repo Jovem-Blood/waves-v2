@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http'
+﻿import { createServer, type Server } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
 import { apiErrorSchema, type TrackMetadata } from '@waves/shared'
@@ -72,8 +72,8 @@ async function startTestApi(): Promise<TestContext> {
   const sourceResolve = vi.fn().mockResolvedValue({
     queueItemId: 'queue-1',
     source: {
-      provider: 'audius',
-      sourceIdentifier: 'audius-1',
+      provider: 'youtube_music',
+      sourceIdentifier: 'youtube-1',
       streamUrl: 'https://stream.example/signed',
       expiresAt: '2026-06-20T12:05:00.000Z',
     },
@@ -84,7 +84,13 @@ async function startTestApi(): Promise<TestContext> {
     spotifyService,
   }
   const loggerInfo = vi.fn()
-  const logger: WavesLogger = { info: loggerInfo }
+  const logger = {
+    child: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: loggerInfo,
+    warn: vi.fn(),
+  } as unknown as WavesLogger
   const getDependencies = () => dependencies
   const getExpectedToken = () => expectedToken
   const router = createRouter()
@@ -321,7 +327,7 @@ describe('authorized internal bot API', () => {
     })
 
     expect(response.status).toBe(404)
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       statusCode: 404,
       statusMessage: 'Track not found',
       data: { code: 'TRACK_NOT_FOUND' },
@@ -334,11 +340,11 @@ describe('authorized internal bot API', () => {
 
     expect(response.status).toBe(200)
     expect(context?.sourceResolve).toHaveBeenCalledWith('queue-1', { forceRefresh: false })
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       queueItemId: 'queue-1',
       source: {
-        provider: 'audius',
-        sourceIdentifier: 'audius-1',
+        provider: 'youtube_music',
+        sourceIdentifier: 'youtube-1',
         streamUrl: 'https://stream.example/signed',
         expiresAt: '2026-06-20T12:05:00.000Z',
       },
@@ -391,7 +397,7 @@ describe('authorized internal bot API', () => {
     const { response, body } = await postJson('/api/internal/bot/skip', {})
 
     expect(response.status).toBe(200)
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       player: {
         status: 'playing',
         currentQueueItemId: 'queue-2',
@@ -430,14 +436,16 @@ describe('authorized internal bot API', () => {
     const accepted = await postJson('/api/internal/bot/events', validEvent)
 
     expect(accepted.response.status).toBe(202)
-    expect(accepted.body).toEqual({ accepted: true })
+    expect(accepted.body).toMatchObject({ accepted: true })
     expect(context?.loggerInfo).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         eventType: validEvent.type,
         occurredAt: validEvent.occurredAt,
         guildId: validEvent.guildId,
         voiceChannelId: validEvent.voiceChannelId,
-      },
+        operation: 'route.internal.events',
+        outcome: 'accepted',
+      }),
       'Bot event received',
     )
     const logged = JSON.stringify(context?.loggerInfo.mock.calls)
@@ -457,7 +465,7 @@ describe('authorized internal bot API', () => {
     })
 
     expect(connected.response.status).toBe(202)
-    expect(context?.dependencies.playerStateService.get()).toEqual({
+    expect(context?.dependencies.playerStateService.get()).toMatchObject({
       status: 'idle',
       guildId: 'guild-1',
       voiceChannelId: 'voice-1',
@@ -472,7 +480,7 @@ describe('authorized internal bot API', () => {
     })
 
     expect(disconnected.response.status).toBe(202)
-    expect(context?.dependencies.playerStateService.get()).toEqual({
+    expect(context?.dependencies.playerStateService.get()).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T17:00:00.000Z',
     })

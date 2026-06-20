@@ -13,7 +13,11 @@ const DEFAULT_TTL_MS = 5 * 60_000
 const DEFAULT_SEARCH_LIMIT = 10
 
 export interface AudioSourceResolver {
-  resolve(track: TrackMetadata): Promise<ResolvedAudioSource>
+  resolve(track: TrackMetadata, options?: AudioSourceResolveOptions): Promise<ResolvedAudioSource>
+}
+
+export interface AudioSourceResolveOptions {
+  preferredSource?: Pick<ResolvedAudioSource, 'provider' | 'sourceIdentifier'>
 }
 
 export interface AudiusAudioSourceResolverOptions {

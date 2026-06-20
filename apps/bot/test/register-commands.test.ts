@@ -10,6 +10,7 @@ const config: BotConfig = {
   discordGuildId: 'guild-id',
   internalApiToken: 'internal-token',
   apiBaseUrl: 'http://localhost:3000/api',
+  logLevel: 'info',
 }
 
 describe('registerCommands', () => {
@@ -23,6 +24,15 @@ describe('registerCommands', () => {
     expect(route).toBe(
       Routes.applicationGuildCommands(config.discordClientId, config.discordGuildId),
     )
-    expect(body.map(({ name }) => name)).toEqual(['play', 'queue', 'skip', 'join', 'leave'])
+    expect(body.map(({ name }) => name)).toEqual([
+      'play',
+      'queue',
+      'skip',
+      'join',
+      'leave',
+      'pause',
+      'resume',
+      'volume',
+    ])
   })
 })

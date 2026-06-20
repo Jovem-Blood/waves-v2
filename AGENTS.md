@@ -66,6 +66,9 @@ Antes de concluir trabalho de UI:
   a busca de metadados do Spotify.
 - Não introduza YouTube, yt-dlp, play-dl, Lavalink ou outra fonte sem decisão
   registrada em `docs/specs/12-decisoes.md`.
+- YouTube Music via `youtubei.js` foi autorizado em `D-015` para a continuação da
+  Etapa 12. Não substituir por `play-dl`, `@distube/ytdl-core`, yt-dlp ou Lavalink
+  sem nova decisão.
 - Trabalhe uma etapa da Fase 2 por vez.
 - A Etapa 11 está limitada à escolha documentada do provedor, contrato
   `AudioSourceResolver`, resolução, validação, cache, expiração e uso de
@@ -76,6 +79,10 @@ Antes de concluir trabalho de UI:
 - Não altere o schema de `resolved_sources` sem necessidade comprovada.
 - Não declare a Etapa 11 concluída sem validação real proporcional ao provedor
   escolhido.
+- A Etapa 12 foi concluída em 20 de junho de 2026 com YouTube Music como fonte
+  primária, Audius como fallback e smoke Discord de reprodução, avanço, skip,
+  leave, autojoin e retomada da fila.
+- A próxima etapa permitida é a Etapa 13: controles e interface.
 
 ## Forma de trabalho
 

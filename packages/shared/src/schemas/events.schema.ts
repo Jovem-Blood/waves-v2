@@ -39,7 +39,13 @@ export const botEventSchema = z
     }
 
     if (
-      ['playback.started', 'playback.finished', 'playback.failed'].includes(event.type)
+      [
+        'playback.started',
+        'playback.finished',
+        'playback.failed',
+        'playback.paused',
+        'playback.resumed',
+      ].includes(event.type)
     ) {
       if (!event.guildId) {
         context.addIssue({

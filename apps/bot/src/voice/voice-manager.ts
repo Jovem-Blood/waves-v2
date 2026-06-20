@@ -16,6 +16,8 @@ export interface VoiceManager {
   join(input: JoinVoiceInput): Promise<JoinVoiceResult>
   leave(guildId: string): boolean
   isConnected(guildId: string): boolean
+  getConnectedGuildIds(): string[]
+  getChannelId(guildId: string): string | undefined
   subscribe(guildId: string, player: AudioPlayer): PlayerSubscription | undefined
   destroyAll(): void
 }

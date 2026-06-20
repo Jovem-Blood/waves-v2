@@ -30,8 +30,9 @@ O script `bot:register` registra comandos no guild configurado por
 - Envia query e identidade do usuário à API interna.
 - Confirma título e artistas adicionados.
 - Trata ausência de resultado e indisponibilidade da API.
-- Quando o bot está conectado, solicita o claim autoritativo e inicia o
-  `AudioPlayer`.
+- Exige que o solicitante esteja em um canal de voz.
+- Quando necessário, conecta automaticamente ao canal do solicitante, publica
+  `voice.connected`, adiciona a faixa e inicia o `AudioPlayer`.
 - Quando já existe reprodução, apenas adiciona a faixa à fila.
 
 ### `/queue`
@@ -55,6 +56,7 @@ O script `bot:register` registra comandos no guild configurado por
 - Aguarda a conexão atingir estado pronto com timeout explícito.
 - Substitui de forma controlada uma conexão anterior da mesma guild.
 - Publica `voice.connected` somente após a conexão estar pronta.
+- Após conectar, tenta retomar uma fila autoritativa pendente.
 - Responde de forma ephemeral.
 
 ### `/leave`
@@ -80,13 +82,17 @@ O script `bot:register` registra comandos no guild configurado por
 - `AudioPlayerManager` mantém no máximo um `AudioPlayer` por guild conectada.
 - `VoiceManager` expõe apenas verificação de conexão e subscription; não conhece
   regras de fila.
-- URLs Audius `audio/mpeg` são entregues a `createAudioResource` e transcodificadas
-  pelo FFmpeg.
+- URLs normalizadas de YouTube Music ou Audius são entregues a
+  `createAudioResource`; FFmpeg normaliza WebM/Opus, M4A/AAC ou `audio/mpeg`.
+- O bot não importa `youtubei.js` e não possui branches específicos por provider.
 - `@discordjs/opus` codifica o áudio para o Discord.
 - transição natural para `Idle` conclui a faixa e solicita o próximo item à API;
 - erro renova a fonte uma vez e, se persistir, marca o item como `failed`;
 - skip e shutdown interrompem recursos sem tratar o `Idle` resultante como
   conclusão natural;
+- skip, leave, retry e shutdown abortam o range HTTP ativo;
+- enquanto conectado, o bot consulta a fila periodicamente e inicia itens
+  adicionados pela interface web quando o player está ocioso;
 - eventos observacionais nunca incluem `streamUrl`.
 
 ## Cliente da API

@@ -285,10 +285,20 @@ confirmou a necessidade de matching conservador e `SOURCE_NOT_FOUND`.
 - [x] tornar `/skip` capaz de interromper áudio e avançar atomicamente;
 - [x] adicionar `@discordjs/opus` e validar FFmpeg/libopus;
 - [x] validar pipeline real Audius → FFmpeg → recurso de voz;
-- [ ] validar reprodução, conclusão automática e skip em canal Discord.
+- [x] validar reprodução Audius em canal Discord;
+- [x] identificar cobertura Audius insuficiente no smoke de produto;
+- [x] implementar YouTube Music via `youtubei.js` como provedor primário;
+- [x] manter Audius como fallback;
+- [x] validar matching e áudio com amostra representativa de catálogo;
+- [x] validar conclusão automática e skip no Discord com o provedor primário;
+- [x] executar novamente todos os gates após a troca de provedor.
 
-**Status:** implementação concluída em 20 de junho de 2026; smoke manual no Discord
-pendente. A etapa não está encerrada até essa validação.
+**Status:** concluída em 20 de junho de 2026. O smoke Discord confirmou reprodução
+integral, avanço natural, autojoin por `/play`, retomada de fila adicionada pela web,
+`/skip`, `/leave` e cancelamento explícito dos ranges. Os gates finais passaram.
+
+**Spec de implementação:** seguir
+[`docs/implementation/etapa-12-youtube-music.md`](../implementation/etapa-12-youtube-music.md).
 
 ## Etapa 13 — Controles e interface
 

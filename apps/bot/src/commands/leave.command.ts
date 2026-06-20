@@ -15,6 +15,14 @@ export const leaveCommand: BotCommand = {
     await context.responder.ephemeral(
       disconnected ? 'Waves desconectado do canal de voz.' : 'O Waves já estava desconectado.',
     )
+    context.logger?.info(
+      {
+        operation: 'command.leave',
+        guildId: context.guildId,
+        outcome: disconnected ? 'disconnected' : 'already_disconnected',
+      },
+      'Leave command completed',
+    )
     await api
       .sendEvent({
         type: 'voice.disconnected',
@@ -22,6 +30,17 @@ export const leaveCommand: BotCommand = {
         guildId: context.guildId,
         payload: { reason: 'command' },
       })
-      .catch(() => undefined)
+      .catch(() => {
+        context.logger?.error(
+          {
+            operation: 'command.leave.event',
+            guildId: context.guildId,
+            eventType: 'voice.disconnected',
+            outcome: 'sync_failed',
+            errorCode: 'PLAYBACK_SYNC_FAILED',
+          },
+          'Leave event sync failed',
+        )
+      })
   },
 }

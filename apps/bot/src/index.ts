@@ -15,7 +15,7 @@ export function createDiscordClient(): Client {
 
 export async function startBot(): Promise<Client> {
   const config = parseBotConfig()
-  const logger = createBotLogger()
+  const logger = createBotLogger(config.logLevel)
   const api = new WavesApiClient(config)
   const client = createDiscordClient()
   const playbackReference: { current?: AudioPlayerManager } = {}
@@ -31,6 +31,38 @@ export async function startBot(): Promise<Client> {
   })
   const playbackManager = new AudioPlayerManager(api, voiceManager, logger)
   playbackReference.current = playbackManager
+  let reconciliationRunning = false
+  const reconciliationTimer = setInterval(() => {
+    if (reconciliationRunning) {
+      return
+    }
+    reconciliationRunning = true
+    void Promise.all(
+      voiceManager.getConnectedGuildIds().map(async (guildId) => {
+        try {
+          const queue = await api.getQueue()
+          if (queue.length === 0) {
+            return
+          }
+          await playbackManager.start(guildId)
+          await playbackManager.synchronize(guildId)
+        } catch {
+          logger.error(
+            {
+              operation: 'playback.reconcile',
+              guildId,
+              outcome: 'failed',
+              errorCode: 'PLAYBACK_SYNC_FAILED',
+            },
+            'Playback reconciliation failed',
+          )
+        }
+      }),
+    ).finally(() => {
+      reconciliationRunning = false
+    })
+  }, 2_500)
+  reconciliationTimer.unref()
 
   registerInteractionHandler(client, api, voiceManager, playbackManager, logger)
   client.once(Events.ClientReady, (readyClient) => {
@@ -42,6 +74,7 @@ export async function startBot(): Promise<Client> {
 
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Waves bot shutting down')
+    clearInterval(reconciliationTimer)
     playbackManager.destroyAll()
     voiceManager.destroyAll()
     void client.destroy()

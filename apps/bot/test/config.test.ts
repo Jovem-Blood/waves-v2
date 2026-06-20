@@ -18,6 +18,7 @@ describe('parseBotConfig', () => {
       discordGuildId: 'guild-id',
       internalApiToken: 'internal-token',
       apiBaseUrl: 'http://localhost:3000/api',
+      logLevel: 'info',
     })
   })
 

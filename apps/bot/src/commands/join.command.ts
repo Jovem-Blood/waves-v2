@@ -2,7 +2,7 @@ import type { BotCommand } from './types.js'
 
 export const joinCommand: BotCommand = {
   name: 'join',
-  async execute(context, api, voiceManager) {
+  async execute(context, api, voiceManager, playbackManager) {
     if (!context.guildId || !context.voiceChannelId || !context.voiceAdapterCreator) {
       await context.responder.ephemeral('Entre em um canal de voz antes de usar este comando.')
       return
@@ -34,11 +34,6 @@ export const joinCommand: BotCommand = {
       return
     }
 
-    await context.responder.ephemeral(
-      result === 'already-connected'
-        ? 'O Waves já está conectado ao seu canal de voz.'
-        : 'Waves conectado ao seu canal de voz.',
-    )
     await api
       .sendEvent({
         type: 'voice.connected',
@@ -48,5 +43,25 @@ export const joinCommand: BotCommand = {
         payload: { result },
       })
       .catch(() => undefined)
+    const playbackResult = await playbackManager.start(context.guildId)
+    const connectionMessage =
+      result === 'already-connected'
+        ? 'O Waves já está conectado ao seu canal de voz.'
+        : 'Waves conectado ao seu canal de voz.'
+    await context.responder.ephemeral(
+      playbackResult === 'started'
+        ? `${connectionMessage} A reprodução da fila começou.`
+        : connectionMessage,
+    )
+    context.logger?.info(
+      {
+        operation: 'command.join',
+        guildId: context.guildId,
+        voiceChannelId: context.voiceChannelId,
+        outcome: result,
+        playbackOutcome: playbackResult,
+      },
+      'Join command completed',
+    )
   },
 }

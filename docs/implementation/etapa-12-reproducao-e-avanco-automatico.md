@@ -16,6 +16,19 @@ verdade.
 - URLs assinadas têm TTL conservador e não podem ser logadas;
 - nenhuma reprodução foi antecipada.
 
+## Revisão de provedor
+
+O Audius foi implementado como provedor inicial e reproduziu áudio real. O teste
+manual, porém, mostrou que a cobertura e a qualidade dos candidatos não atendem ao
+catálogo esperado. Ele não é mais o alvo principal da Etapa 12.
+
+A continuação está definida em
+[`etapa-12-youtube-music.md`](etapa-12-youtube-music.md):
+
+- YouTube Music via `youtubei.js` como primário;
+- Audius preservado como fallback;
+- mesmos contratos internos e mesmo runtime de playback.
+
 ## Antes de implementar
 
 1. Consultar documentação atual de `@discordjs/voice`, FFmpeg e codec escolhido via
@@ -89,13 +102,107 @@ produziu 407 bytes na primeira leitura. A URL assinada não foi exibida ou logad
 
 1. iniciar web e bot;
 2. executar `/join` em um canal de teste;
-3. executar `/play` para uma faixa com correspondência Audius;
-4. confirmar áudio audível e `PlayerState.playing`;
+3. implementar e selecionar YouTube Music como provedor primário;
+4. executar `/play` para a amostra representativa de catálogo;
 5. aguardar conclusão e confirmar avanço automático;
 6. adicionar duas faixas, executar `/skip` e confirmar interrupção/avanço;
 7. executar `/leave` durante playback e confirmar cleanup.
 
 ## Estado
 
-Implementação concluída, mas a Etapa 12 permanece aberta até o smoke manual no
-Discord e a execução final dos gates após qualquer correção resultante.
+O runtime de playback e a cadeia YouTube Music → Audius foram implementados.
+O histórico abaixo registra as falhas encontradas antes do encerramento final.
+
+### Falha encontrada no smoke Discord
+
+O smoke de 20 de junho de 2026 mostrou `playback.started` seguido por
+`playback.finished` em aproximadamente 130–150 ms, sem áudio audível. A fila era
+consumida porque o `Idle` prematuro era interpretado como conclusão natural.
+
+Diagnóstico seguro:
+
+- a URL YouTube Music respondia `206` e bytes reais para ranges pequenos;
+- FFmpeg abrindo a URL diretamente recebia `403`;
+- o CDN rejeitava download aberto e ranges de 1 MiB;
+- ranges de até 512 KiB eram aceitos.
+
+Correção implementada:
+
+- o bot usa `fetch` segmentado em ranges de 512 KiB;
+- `demuxProbe` recebe o `Readable` local e escolhe o tipo do recurso;
+- FFmpeg não abre mais a URL HTTP diretamente;
+- `Idle` com menos de um segundo de playback aciona refresh/falha, nunca `played`;
+- testes cobrem transporte segmentado e conclusão prematura.
+
+O smoke Discord precisa ser repetido antes de encerrar a etapa.
+
+## Observabilidade estruturada
+
+Implementada em 20 de junho de 2026 sem alterar intencionalmente o comportamento
+funcional do playback:
+
+- `playbackAttemptId` por tentativa, preservado entre claim, resolve, transporte,
+  recurso, estados, retry e resultado;
+- logs de comandos, subscription, cleanup, desconexão e shutdown;
+- ranges de 512 KiB em `debug`, com offsets, bytes, status e total, sem URL;
+- probe, `streamType`, criação do recurso, transições e `missedFrames`;
+- classificação de `Idle` natural, prematuro e intencional;
+- cache, refresh, substituição e fallback YouTube Music → Audius;
+- matching sem query, título externo ou payload bruto;
+- transições de `PlayerState` e `QueueItem` no Nuxt;
+- redaction ampliada e erros externos convertidos para códigos seguros;
+- `LOG_LEVEL` validado com Zod, default `debug` em desenvolvimento e `info` fora.
+
+Testes automatizados cobrem sequência normal, retry, `Idle` prematuro, falha
+definitiva, skip, ranges sem URL, fallback, cache, redaction e nível configurável.
+
+## Encerramento final — 20 de junho de 2026
+
+A Etapa 12 foi concluída após diagnóstico orientado pelos logs estruturados do web
+e do bot.
+
+### Correções finais
+
+- transporte YouTube Music segmentado em ranges de 256 KiB;
+- validação estrita de `206`, `Content-Range`, total, tamanho e body;
+- tratamento seguro de `400`, `403`, `416`, range inválido, body vazio e timeout;
+- `AbortController` ligado ao lifecycle de playback;
+- skip, leave, retry e shutdown cancelam o fetch ativo;
+- cancelamento intencional usa `SOURCE_FETCH_CANCELLED`, sem erro `UNKNOWN`;
+- `voice.disconnected` limpa o player e devolve o item interrompido para `queued`
+  em uma transação;
+- `/play` conecta automaticamente ao canal do solicitante e inicia a fila;
+- `/join` retoma uma fila pendente;
+- um reconciliador limitado retoma itens adicionados pela web enquanto o bot está
+  conectado;
+- início de playback é serializado por guild;
+- uma instância antiga e duplicada do bot foi identificada e removida durante o
+  diagnóstico.
+
+### Smoke Discord observado
+
+- músicas completas tocaram e avançaram naturalmente;
+- item permaneceu `playing` durante reprodução;
+- `/skip` interrompeu a faixa e iniciou a próxima;
+- `/leave` interrompeu a segunda faixa e desconectou o bot;
+- ranges ativos foram cancelados explicitamente em skip e leave;
+- a faixa interrompida por leave voltou para `queued`;
+- `/play` sem `/join` executou autojoin e iniciou a fila;
+- adição pela interface web retomou playback ocioso em até um ciclo de 2,5 s;
+- a troca após skip levou aproximadamente 1,8 s para resolução e buffering da
+  próxima fonte, sem falha de transporte.
+
+### Gates finais
+
+- `pnpm test`: 185 testes aprovados;
+- `pnpm lint`: aprovado;
+- `pnpm typecheck`: aprovado;
+- `pnpm build`: aprovado;
+- `pnpm format:check`: aprovado;
+- dependency report: `@discordjs/voice` 0.19.2, `@discordjs/opus` 0.10.0 e FFmpeg
+  8.1.1 com `libopus`.
+
+Os logs estruturados não continham URL de mídia, bearer, assinatura, token, cookie
+ou dados de attestation. Duas ocorrências históricas de `visitorData` estavam em
+diagnósticos do `vue-tsc` no stderr, como nome de identificador no código, sem valor
+sensível.

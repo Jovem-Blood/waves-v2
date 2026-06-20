@@ -45,22 +45,25 @@ describe('trackMetadataSchema', () => {
 })
 
 describe('audio source contracts', () => {
-  it('accepts a normalized internal source response', () => {
-    expect(
-      queueItemAudioSourceSchema.parse({
+  it.each(['youtube_music', 'audius'] as const)(
+    'accepts a normalized %s source response',
+    (provider) => {
+      expect(
+        queueItemAudioSourceSchema.parse({
+          queueItemId: 'queue-1',
+          source: {
+            provider,
+            sourceIdentifier: 'source-1',
+            streamUrl: 'https://stream.example/signed',
+            expiresAt: '2026-06-20T12:05:00.000Z',
+          },
+        }),
+      ).toMatchObject({
         queueItemId: 'queue-1',
-        source: {
-          provider: 'audius',
-          sourceIdentifier: 'audius-1',
-          streamUrl: 'https://stream.example/signed',
-          expiresAt: '2026-06-20T12:05:00.000Z',
-        },
-      }),
-    ).toMatchObject({
-      queueItemId: 'queue-1',
-      source: { provider: 'audius' },
-    })
-  })
+        source: { provider },
+      })
+    },
+  )
 
   it('rejects unsupported providers, invalid URLs and extra fields', () => {
     expect(

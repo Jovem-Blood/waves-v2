@@ -9,6 +9,7 @@ export function usePlayerState(apiBase: string) {
   const state = ref<PlayerState>()
   const loading = ref(true)
   const skipping = ref(false)
+  const mutating = ref(false)
   const error = ref<string>()
   let pollingTimer: ReturnType<typeof setInterval> | undefined
   let requestInFlight = false
@@ -44,6 +45,34 @@ export function usePlayerState(apiBase: string) {
     }
   }
 
+  async function control(action: 'pause' | 'resume') {
+    mutating.value = true
+    try {
+      state.value = playerStateSchema.parse(
+        await $fetch(`${apiBase}/player/${action}`, { method: 'POST' }),
+      )
+      error.value = undefined
+    } catch {
+      error.value = action === 'pause' ? 'Não foi possível pausar.' : 'Não foi possível retomar.'
+    } finally {
+      mutating.value = false
+    }
+  }
+
+  async function setVolume(volume: number) {
+    mutating.value = true
+    try {
+      state.value = playerStateSchema.parse(
+        await $fetch(`${apiBase}/player/volume`, { method: 'POST', body: { volume } }),
+      )
+      error.value = undefined
+    } catch {
+      error.value = 'Não foi possível ajustar o volume.'
+    } finally {
+      mutating.value = false
+    }
+  }
+
   onMounted(() => {
     void load()
     pollingTimer = setInterval(() => void load(), POLLING_INTERVAL_MS)
@@ -53,5 +82,5 @@ export function usePlayerState(apiBase: string) {
     if (pollingTimer) clearInterval(pollingTimer)
   })
 
-  return { state, loading, skipping, error, refresh: load, skip }
+  return { state, loading, skipping, mutating, error, refresh: load, skip, control, setVolume }
 }

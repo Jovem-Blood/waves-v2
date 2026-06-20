@@ -47,7 +47,10 @@ function setup() {
   }
   const onUnexpectedDisconnect = vi.fn().mockResolvedValue(undefined)
   const logger = {
+    debug: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
   } as unknown as BotLogger
   const manager = new DiscordVoiceManager(logger, onUnexpectedDisconnect, runtime, 100)
   const adapterCreator = vi.fn() as unknown as DiscordGatewayAdapterCreator
@@ -91,11 +94,13 @@ describe('DiscordVoiceManager', () => {
     expect(test.runtime.join).toHaveBeenCalledTimes(2)
     expect(test.connections[0]?.destroy).toHaveBeenCalledOnce()
     expect(test.manager.isConnected('guild-1')).toBe(true)
+    expect(test.manager.getConnectedGuildIds()).toEqual(['guild-1'])
     const player = {} as AudioPlayer
     expect(test.manager.subscribe('guild-1', player)).toBeDefined()
     expect(test.connections[1]?.subscribe).toHaveBeenCalledWith(player)
     expect(test.manager.leave('guild-1')).toBe(true)
     expect(test.manager.isConnected('guild-1')).toBe(false)
+    expect(test.manager.getConnectedGuildIds()).toEqual([])
     expect(test.manager.leave('guild-1')).toBe(false)
   })
 

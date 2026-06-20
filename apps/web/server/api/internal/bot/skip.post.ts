@@ -6,6 +6,8 @@ import {
   type PublicApiDependencies,
   usePublicApiDependencies,
 } from '../../../utils/public-api-dependencies'
+import { useLogger } from '../../../utils/logger'
+import { loggedOperation } from '../../../utils/observability'
 
 const skipResultSchema = z.strictObject({
   player: playerStateSchema,
@@ -17,7 +19,10 @@ export function createInternalSkipHandler(
   getExpectedToken?: () => string,
 ) {
   return defineInternalApiHandler(
-    () => skipResultSchema.parse(getDependencies().playerStateService.skip()),
+    () =>
+      loggedOperation(useLogger(), { operation: 'route.internal.skip' }, () =>
+        skipResultSchema.parse(getDependencies().playerStateService.skip()),
+      ),
     getExpectedToken,
   )
 }

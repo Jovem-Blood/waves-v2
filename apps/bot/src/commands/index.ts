@@ -5,6 +5,9 @@ import { leaveCommand } from './leave.command.js'
 import { playCommand } from './play.command.js'
 import { queueCommand } from './queue.command.js'
 import { skipCommand } from './skip.command.js'
+import { pauseCommand } from './pause.command.js'
+import { resumeCommand } from './resume.command.js'
+import { volumeCommand } from './volume.command.js'
 import type { BotCommand } from './types.js'
 import type { CommandContext } from './types.js'
 import type { WavesApi } from '../api/waves-api.client.js'
@@ -26,13 +29,32 @@ export const commandDefinitions = [
   new SlashCommandBuilder().setName('skip').setDescription('Pula a faixa atual'),
   new SlashCommandBuilder().setName('join').setDescription('Conecta o Waves ao seu canal de voz'),
   new SlashCommandBuilder().setName('leave').setDescription('Desconecta o Waves do canal de voz'),
+  new SlashCommandBuilder().setName('pause').setDescription('Pausa a faixa atual'),
+  new SlashCommandBuilder().setName('resume').setDescription('Retoma a faixa pausada'),
+  new SlashCommandBuilder()
+    .setName('volume')
+    .setDescription('Ajusta o volume da reprodução')
+    .addIntegerOption((option) =>
+      option
+        .setName('valor')
+        .setDescription('Volume entre 0 e 100')
+        .setMinValue(0)
+        .setMaxValue(100)
+        .setRequired(true),
+    ),
 ] as const
 
 export const commands = new Map<string, BotCommand>(
-  [playCommand, queueCommand, skipCommand, joinCommand, leaveCommand].map((command) => [
-    command.name,
-    command,
-  ]),
+  [
+    playCommand,
+    queueCommand,
+    skipCommand,
+    joinCommand,
+    leaveCommand,
+    pauseCommand,
+    resumeCommand,
+    volumeCommand,
+  ].map((command) => [command.name, command]),
 )
 
 export async function executeCommand(

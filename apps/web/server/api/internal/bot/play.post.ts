@@ -8,6 +8,8 @@ import {
   type PublicApiDependencies,
   usePublicApiDependencies,
 } from '../../../utils/public-api-dependencies'
+import { useLogger } from '../../../utils/logger'
+import { loggedOperation } from '../../../utils/observability'
 
 const playResultSchema = z.strictObject({
   item: queueItemSchema,
@@ -19,20 +21,26 @@ export function createInternalPlayHandler(
   getExpectedToken?: () => string,
 ) {
   return defineInternalApiHandler(async (event) => {
-    const input = botPlayInputSchema.parse(await readBody(event))
-    const track = (await getDependencies().spotifyService.searchTracks(input.query))[0]
+    return loggedOperation(useLogger(), { operation: 'route.internal.play' }, async () => {
+      const input = botPlayInputSchema.parse(await readBody(event))
+      const track = (await getDependencies().spotifyService.searchTracks(input.query))[0]
 
-    if (!track) {
-      throw new TrackNotFoundError()
-    }
+      if (!track) {
+        throw new TrackNotFoundError()
+      }
 
-    const item = getDependencies().queueService.add({
-      track,
-      requestedByDiscordUserId: input.requestedByDiscordUserId,
-      requestedByDisplayName: input.requestedByDisplayName,
+      const item = getDependencies().queueService.add({
+        track,
+        requestedByDiscordUserId: input.requestedByDiscordUserId,
+        requestedByDisplayName: input.requestedByDisplayName,
+      })
+      useLogger().info(
+        { operation: 'route.internal.play', queueItemId: item.id, outcome: 'added' },
+        'Internal play added queue item',
+      )
+
+      return playResultSchema.parse({ item, track })
     })
-
-    return playResultSchema.parse({ item, track })
   }, getExpectedToken)
 }
 

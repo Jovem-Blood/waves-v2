@@ -47,17 +47,28 @@ function setup() {
   const setTime = (value: string) => {
     currentTime = new Date(value)
   }
+  const loggerInfo = vi.fn()
+  const logger = {
+    child: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: loggerInfo,
+    warn: vi.fn(),
+  }
+  logger.child.mockReturnValue(logger)
   const service = new AudioSourceService(
     queueRepository,
     new ResolvedSourceRepository(connection.db),
     resolver,
     () => currentTime,
     () => 'source-1',
+    logger,
   )
   return {
     resolve,
     service,
     setTime,
+    loggerInfo,
   }
 }
 
@@ -69,7 +80,7 @@ afterEach(() => {
 
 describe('AudioSourceService', () => {
   it('persists a new resolution and reuses it while valid', async () => {
-    const { resolve, service } = setup()
+    const { resolve, service, loggerInfo } = setup()
 
     await expect(service.resolve('queue-1')).resolves.toEqual({
       queueItemId: 'queue-1',
@@ -80,6 +91,18 @@ describe('AudioSourceService', () => {
       source,
     })
     expect(resolve).toHaveBeenCalledOnce()
+    expect(loggerInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'cache_miss' }),
+      'Audio source cache requires resolution',
+    )
+    expect(loggerInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'cache_hit',
+        provider: 'audius',
+        sourceIdentifier: 'audius-1',
+      }),
+      'Audio source cache hit',
+    )
   })
 
   it('renews an expired resolution', async () => {
@@ -97,6 +120,15 @@ describe('AudioSourceService', () => {
       source: { sourceIdentifier: 'audius-2' },
     })
     expect(resolve).toHaveBeenCalledTimes(2)
+    expect(resolve).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        preferredSource: {
+          provider: 'audius',
+          sourceIdentifier: 'audius-1',
+        },
+      }),
+    )
   })
 
   it('fails before contacting the provider for a missing queue item', async () => {

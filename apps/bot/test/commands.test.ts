@@ -6,6 +6,7 @@ import { WavesApiError } from '../src/api/waves-api.errors.js'
 import { commandDefinitions, commands, executeCommand } from '../src/commands/index.js'
 import { formatQueue } from '../src/commands/queue.command.js'
 import type { CommandContext, CommandResponder } from '../src/commands/types.js'
+import type { BotLogger } from '../src/logger.js'
 import type { PlaybackManager } from '../src/playback/audio-player-manager.js'
 import type { VoiceManager } from '../src/voice/voice-manager.js'
 
@@ -48,10 +49,22 @@ function setup(overrides: Partial<CommandContext> = {}) {
   const sendEvent = vi.fn().mockResolvedValue(undefined)
   const joinVoice = vi.fn().mockResolvedValue('connected' as const)
   const leaveVoice = vi.fn().mockReturnValue(true)
+  const isConnected = vi.fn().mockReturnValue(true)
+  const loggerError = vi.fn()
+  const logger = {
+    child: vi.fn(),
+    debug: vi.fn(),
+    error: loggerError,
+    fatal: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  }
   const voiceManager: VoiceManager = {
     join: joinVoice,
     leave: leaveVoice,
-    isConnected: vi.fn().mockReturnValue(true),
+    getConnectedGuildIds: vi.fn().mockReturnValue(['guild-1']),
+    getChannelId: vi.fn().mockReturnValue('voice-1'),
+    isConnected,
     subscribe: vi.fn(),
     destroyAll: vi.fn(),
   }
@@ -63,6 +76,10 @@ function setup(overrides: Partial<CommandContext> = {}) {
     skip: skipPlayback,
     destroyGuild: destroyPlaybackGuild,
     destroyAll: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    setVolume: vi.fn(),
+    synchronize: vi.fn(),
   }
   const api: WavesApi = {
     claimPlayback,
@@ -72,11 +89,14 @@ function setup(overrides: Partial<CommandContext> = {}) {
     resolveSource,
     skip,
     sendEvent,
+    getPlayer: vi.fn(),
+    updateProgress: vi.fn(),
   }
   const context: CommandContext = {
     name: 'test',
     userId: 'user-1',
     displayName: 'Luis',
+    logger: logger as unknown as BotLogger,
     responder,
     ...overrides,
   }
@@ -98,27 +118,36 @@ function setup(overrides: Partial<CommandContext> = {}) {
       skip,
       joinVoice,
       leaveVoice,
+      isConnected,
+      loggerError,
     },
   }
 }
 
 describe('bot commands', () => {
-  it('defines exactly the five phase-one commands', () => {
+  it('defines the phase two control commands', () => {
     expect(commandDefinitions.map((definition) => definition.toJSON().name)).toEqual([
       'play',
       'queue',
       'skip',
       'join',
       'leave',
+      'pause',
+      'resume',
+      'volume',
     ])
-    expect(commands.size).toBe(5)
+    expect(commands.size).toBe(8)
   })
 
   it('play sends query and requester identity', async () => {
     const { api, context, mocks, playbackManager, voiceManager } = setup({
       name: 'play',
       query: 'track',
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+      voiceAdapterCreator: vi.fn(),
     })
+    mocks.startPlayback.mockResolvedValue('started')
 
     await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
 
@@ -129,7 +158,7 @@ describe('bot commands', () => {
       requestedByDisplayName: 'Luis',
     })
     expect(mocks.publicReply).toHaveBeenCalledWith(
-      'Adicionada à fila: **Track One** — Artist One. Use `/join` para iniciar a reprodução.',
+      'Adicionada à fila: **Track One** — Artist One. Reprodução iniciada.',
     )
   })
 
@@ -137,6 +166,9 @@ describe('bot commands', () => {
     const { api, context, mocks, playbackManager, voiceManager } = setup({
       name: 'play',
       query: 'missing',
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+      voiceAdapterCreator: vi.fn(),
     })
     mocks.play.mockRejectedValue(new WavesApiError('TRACK_NOT_FOUND', 404))
 
@@ -147,10 +179,58 @@ describe('bot commands', () => {
     )
   })
 
+  it('play connects to the member voice channel before adding and starting playback', async () => {
+    const { api, context, mocks, playbackManager, voiceManager } = setup({
+      name: 'play',
+      query: 'track',
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+      voiceAdapterCreator: vi.fn(),
+    })
+    mocks.isConnected.mockReturnValue(false)
+    mocks.startPlayback.mockResolvedValue('started')
+
+    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+
+    expect(mocks.joinVoice).toHaveBeenCalledWith({
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      adapterCreator: context.voiceAdapterCreator,
+    })
+    expect(mocks.sendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'voice.connected',
+        guildId: 'guild-1',
+        voiceChannelId: 'voice-1',
+      }),
+    )
+    expect(mocks.sendEvent.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.play.mock.invocationCallOrder[0]!,
+    )
+  })
+
+  it('play requires the member to be in a voice channel', async () => {
+    const { api, context, mocks, playbackManager, voiceManager } = setup({
+      name: 'play',
+      query: 'track',
+      guildId: 'guild-1',
+    })
+
+    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+
+    expect(mocks.ephemeralReply).toHaveBeenCalledWith(
+      'Entre em um canal de voz antes de usar este comando.',
+    )
+    expect(mocks.play).not.toHaveBeenCalled()
+  })
+
   it('play handles API unavailability without technical details', async () => {
     const { api, context, mocks, playbackManager, voiceManager } = setup({
       name: 'play',
       query: 'track',
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+      voiceAdapterCreator: vi.fn(),
     })
     mocks.play.mockRejectedValue(new Error('http://internal/token-secret'))
 
@@ -224,8 +304,8 @@ describe('bot commands', () => {
       }),
     )
     expect(inside.mocks.ephemeralReply).toHaveBeenCalledWith('Waves conectado ao seu canal de voz.')
-    expect(inside.mocks.ephemeralReply.mock.invocationCallOrder[0]).toBeLessThan(
-      inside.mocks.sendEvent.mock.invocationCallOrder[0]!,
+    expect(inside.mocks.sendEvent.mock.invocationCallOrder[0]).toBeLessThan(
+      inside.mocks.ephemeralReply.mock.invocationCallOrder[0]!,
     )
 
     const leave = setup({ name: 'leave', guildId: 'guild-1' })
@@ -273,6 +353,13 @@ describe('bot commands', () => {
         .execute(leave.context, leave.api, leave.voiceManager, leave.playbackManager),
     ).resolves.toBeUndefined()
     expect(leave.mocks.ephemeralReply).toHaveBeenCalledWith('Waves desconectado do canal de voz.')
+    expect(leave.mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'command.leave.event',
+        outcome: 'sync_failed',
+      }),
+      'Leave event sync failed',
+    )
   })
 
   it('ignores unknown commands without executing the API', async () => {

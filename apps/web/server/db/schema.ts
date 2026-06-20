@@ -47,9 +47,15 @@ export const playerState = sqliteTable(
     currentQueueItemId: text('current_queue_item_id').references(() => queueItems.id),
     voiceChannelId: text('voice_channel_id'),
     guildId: text('guild_id'),
+    volume: integer('volume').notNull().default(100),
+    progressMs: integer('progress_ms').notNull().default(0),
     updatedAt: text('updated_at').notNull(),
   },
-  (table) => [check('player_state_singleton_id', sql`${table.id} = 1`)],
+  (table) => [
+    check('player_state_singleton_id', sql`${table.id} = 1`),
+    check('player_state_volume_range', sql`${table.volume} between 0 and 100`),
+    check('player_state_progress_nonnegative', sql`${table.progressMs} >= 0`),
+  ],
 )
 
 export const resolvedSources = sqliteTable(

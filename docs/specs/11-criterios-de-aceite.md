@@ -162,6 +162,20 @@ fluxo navegador → API → banco e Discord → bot → API → banco tiver sido
 - [x] Eventos de playback não incluem URL assinada.
 - [x] `@discordjs/opus`, FFmpeg e `libopus` foram detectados no runtime Windows.
 - [x] Pipeline Audius → FFmpeg → `AudioResource` produziu bytes reais.
-- [ ] Reprodução audível foi validada em canal Discord.
-- [ ] Conclusão natural iniciou a próxima faixa no Discord.
-- [ ] `/skip` interrompeu o áudio e iniciou a próxima faixa no Discord.
+- [x] Reprodução Audius foi validada em canal Discord.
+- [x] O smoke documentou que a cobertura Audius é insuficiente para uso principal.
+- [x] Conclusão natural iniciou a próxima faixa no Discord.
+- [x] `/skip` interrompeu o áudio e iniciou a próxima faixa no Discord.
+- [x] YouTube Music é o primeiro resolvedor da cadeia.
+- [x] Audius permanece como fallback funcional.
+- [x] `source.provider` aceita `youtube_music` e `audius`.
+- [x] Resultados do YouTube Music são validados e ranqueados conservadoramente.
+- [x] Covers, remixes e versões incorretas são rejeitados quando não solicitados.
+- [x] O resolvedor persiste video ID e TTL, sem expor URL de mídia.
+- [x] Pelo menos dez faixas representativas atingem a taxa de acerto definida na
+      spec de implementação.
+- [x] O pipeline YouTube Music → FFmpeg → Discord é validado manualmente.
+- [x] `/leave` durante playback cancela o transporte e devolve o item interrompido
+      para `queued`.
+- [x] Adição pela web retoma automaticamente uma fila ociosa quando o bot permanece
+      conectado.

@@ -175,7 +175,7 @@ Contrato interno adicionado na Etapa 11:
 {
   queueItemId: string
   source: {
-    provider: 'audius'
+    provider: 'youtube_music' | 'audius'
     sourceIdentifier: string
     streamUrl: string
     expiresAt: string
@@ -185,3 +185,14 @@ Contrato interno adicionado na Etapa 11:
 
 `streamUrl` é dado sensível de runtime: pode trafegar somente pela API interna e
 nunca deve aparecer em logs. `expiresAt` é ISO 8601 e determina a validade do cache.
+
+Regras planejadas para YouTube Music:
+
+- `sourceIdentifier` contém somente o video ID, nunca a URL completa;
+- `streamUrl` é obtida imediatamente antes do playback e possui TTL curto;
+- a resposta bruta do InnerTube não cruza a fronteira do resolver;
+- cookies, visitor data, PO tokens e player scripts não fazem parte do contrato;
+- o matching continua baseado em metadados Spotify normalizados.
+
+Essas regras foram implementadas na Etapa 12. O provider final indica
+`youtube_music` ou `audius` conforme a fonte realmente usada.

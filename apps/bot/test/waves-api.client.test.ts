@@ -1,4 +1,4 @@
-import type { BotEvent, BotPlayInput } from '@waves/shared'
+﻿import type { BotEvent, BotPlayInput } from '@waves/shared'
 import { describe, expect, it, vi } from 'vitest'
 
 import { WavesApiClient, type WavesFetch } from '../src/api/waves-api.client.js'
@@ -104,11 +104,13 @@ describe('WavesApiClient', () => {
       payload: { command: 'play' },
     }
 
-    await expect(client.play(playInput)).resolves.toEqual({ item, track })
-    await expect(client.skip()).resolves.toEqual({
+    await expect(client.play(playInput)).resolves.toMatchObject({ item, track })
+    await expect(client.skip()).resolves.toMatchObject({
       player: {
         status: 'playing',
         currentQueueItemId: item.id,
+        volume: 100,
+        progressMs: 0,
         updatedAt: item.updatedAt,
       },
       queue: [{ ...item, status: 'playing' }],

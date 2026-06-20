@@ -61,12 +61,32 @@ export class DiscordVoiceManager implements VoiceManager {
   ) {}
 
   async join(input: JoinVoiceInput): Promise<JoinVoiceResult> {
+    const startedAt = Date.now()
+    this.logger.info(
+      {
+        operation: 'voice.join',
+        guildId: input.guildId,
+        voiceChannelId: input.channelId,
+        outcome: 'requested',
+      },
+      'Voice join requested',
+    )
     const existing = this.sessions.get(input.guildId)
     if (
       existing?.channelId === input.channelId &&
       existing.connection.state.status !== VoiceConnectionStatus.Destroyed
     ) {
       await this.runtime.waitUntilReady(existing.connection, this.readyTimeoutMs)
+      this.logger.info(
+        {
+          operation: 'voice.join',
+          guildId: input.guildId,
+          voiceChannelId: input.channelId,
+          outcome: 'already_connected',
+          durationMs: Date.now() - startedAt,
+        },
+        'Voice join completed',
+      )
       return 'already-connected'
     }
 
@@ -88,9 +108,30 @@ export class DiscordVoiceManager implements VoiceManager {
 
     try {
       await this.runtime.waitUntilReady(connection, this.readyTimeoutMs)
+      this.logger.info(
+        {
+          operation: 'voice.join',
+          guildId: input.guildId,
+          voiceChannelId: input.channelId,
+          outcome: 'connected',
+          durationMs: Date.now() - startedAt,
+        },
+        'Voice join completed',
+      )
       return 'connected'
     } catch {
       this.destroySession(input.guildId, session)
+      this.logger.error(
+        {
+          operation: 'voice.join',
+          guildId: input.guildId,
+          voiceChannelId: input.channelId,
+          outcome: 'failed',
+          errorCode: 'VOICE_CONNECTION_FAILED',
+          durationMs: Date.now() - startedAt,
+        },
+        'Voice join failed',
+      )
       throw new VoiceConnectionError()
     }
   }
@@ -98,15 +139,34 @@ export class DiscordVoiceManager implements VoiceManager {
   leave(guildId: string): boolean {
     const session = this.sessions.get(guildId)
     if (!session) {
+      this.logger.info(
+        { operation: 'voice.leave', guildId, outcome: 'already_disconnected' },
+        'Voice leave completed',
+      )
       return false
     }
 
+    const voiceChannelId = session.channelId
     this.destroySession(guildId, session)
+    this.logger.info(
+      { operation: 'voice.leave', guildId, voiceChannelId, outcome: 'disconnected' },
+      'Voice leave completed',
+    )
     return true
   }
 
   isConnected(guildId: string): boolean {
     return this.sessions.get(guildId)?.connection.state.status === VoiceConnectionStatus.Ready
+  }
+
+  getConnectedGuildIds(): string[] {
+    return [...this.sessions.entries()]
+      .filter(([, session]) => session.connection.state.status === VoiceConnectionStatus.Ready)
+      .map(([guildId]) => guildId)
+  }
+
+  getChannelId(guildId: string): string | undefined {
+    return this.sessions.get(guildId)?.channelId
   }
 
   subscribe(guildId: string, player: AudioPlayer): PlayerSubscription | undefined {
@@ -118,9 +178,17 @@ export class DiscordVoiceManager implements VoiceManager {
   }
 
   destroyAll(): void {
+    this.logger.info(
+      { operation: 'voice.shutdown', activeConnections: this.sessions.size, outcome: 'started' },
+      'Voice shutdown started',
+    )
     for (const [guildId, session] of this.sessions) {
       this.destroySession(guildId, session)
     }
+    this.logger.info(
+      { operation: 'voice.shutdown', activeConnections: 0, outcome: 'completed' },
+      'Voice shutdown completed',
+    )
   }
 
   private destroySession(guildId: string, session: VoiceSession): void {
@@ -138,6 +206,15 @@ export class DiscordVoiceManager implements VoiceManager {
     session: VoiceSession,
     nextState: VoiceConnectionState,
   ): void {
+    this.logger.debug(
+      {
+        operation: 'voice.state_change',
+        guildId,
+        voiceChannelId: session.channelId,
+        playerStatusTo: nextState.status,
+      },
+      'Voice connection state changed',
+    )
     if (
       nextState.status === VoiceConnectionStatus.Disconnected &&
       !session.intentionalDestroy &&
@@ -155,6 +232,16 @@ export class DiscordVoiceManager implements VoiceManager {
             return
           }
           this.destroySession(guildId, session)
+          this.logger.warn(
+            {
+              operation: 'voice.disconnect',
+              guildId,
+              voiceChannelId: session.channelId,
+              outcome: 'unexpected',
+              errorCode: 'VOICE_CONNECTION_FAILED',
+            },
+            'Voice connection disconnected unexpectedly',
+          )
           void this.notifyUnexpectedDisconnect(guildId, session.channelId)
         })
       return

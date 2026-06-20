@@ -8,6 +8,13 @@
       "when": 1781808800197,
       "tag": "0000_naive_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781985600000,
+      "tag": "0001_player_controls",
+      "breakpoints": true
     }
   ]
 }

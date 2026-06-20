@@ -1,0 +1,167 @@
+{
+  "executedAt": "2026-06-20T05:48:24.299Z",
+  "youtubeiVersion": "17.0.1",
+  "catalogResults": [
+    {
+      "expected": {
+        "title": "APT.",
+        "artists": ["ROSÉ", "Bruno Mars"],
+        "durationMs": 169000
+      },
+      "selected": {
+        "videoId": "DiTd771WumE",
+        "durationMs": 170000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "Blinding Lights",
+        "artists": ["The Weeknd"],
+        "durationMs": 200000
+      },
+      "selected": {
+        "videoId": "H64a2ggVIWc",
+        "durationMs": 201000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "Evidências",
+        "artists": ["Chitãozinho & Xororó"],
+        "durationMs": 279000
+      },
+      "selected": {
+        "videoId": "dlkhI-1ujOk",
+        "durationMs": 280000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "Die With A Smile",
+        "artists": ["Lady Gaga", "Bruno Mars"],
+        "durationMs": 251000
+      },
+      "selected": {
+        "videoId": "DlFXDl_ROAM",
+        "durationMs": 252000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "Águas de Março",
+        "artists": ["Elis Regina", "Antônio Carlos Jobim"],
+        "durationMs": 212000
+      },
+      "selected": {
+        "videoId": "3dVe9WiZa2c",
+        "durationMs": 212000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "WAP",
+        "artists": ["Cardi B", "Megan Thee Stallion"],
+        "durationMs": 187000
+      },
+      "selected": {
+        "videoId": "Y3SKjM_2M5k",
+        "durationMs": 188000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "I Will Always Love You",
+        "artists": ["Whitney Houston"],
+        "durationMs": 271000
+      },
+      "selected": {
+        "videoId": "tP0zj220CbQ",
+        "durationMs": 272000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "Espresso",
+        "artists": ["Sabrina Carpenter"],
+        "durationMs": 175000
+      },
+      "selected": {
+        "videoId": "kIft-LUHHVA",
+        "durationMs": 176000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "Bohemian Rhapsody",
+        "artists": ["Queen"],
+        "durationMs": 354000
+      },
+      "selected": {
+        "videoId": "bSnlKl_PoQU",
+        "durationMs": 355000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    },
+    {
+      "expected": {
+        "title": "bad guy",
+        "artists": ["Billie Eilish"],
+        "durationMs": 194000
+      },
+      "selected": {
+        "videoId": "ZD6rXLXZOEI",
+        "durationMs": 195000,
+        "classification": "official"
+      },
+      "provider": "youtube_music",
+      "success": true,
+      "streamOpened": true
+    }
+  ],
+  "totals": {
+    "candidatesCorrect": 10,
+    "streamsOpened": 10,
+    "total": 10,
+    "knownIncorrectCoversOrRemixes": 0
+  },
+  "audiusFallback": {
+    "success": true,
+    "provider": "audius",
+    "sourceIdentifier": "6xNml"
+  }
+}

@@ -75,8 +75,11 @@ onMounted(() => void checkHealth())
         :current-item="currentItem"
         :loading="player.loading.value"
         :skipping="player.skipping.value"
+        :mutating="player.mutating.value"
         :error="player.error.value"
         @skip="handleSkip"
+        @control="player.control"
+        @volume="player.setVolume"
       />
 
       <QueuePanel

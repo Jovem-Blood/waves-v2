@@ -20,17 +20,40 @@ export function createInternalEventsHandler(
     usePublicApiDependencies().playerStateService,
 ) {
   return defineInternalApiHandler(async (event) => {
+    const startedAt = Date.now()
     const botEvent = botEventSchema.parse(await readBody(event))
+    getLogger().info(
+      {
+        operation: 'route.internal.events',
+        eventType: botEvent.type,
+        guildId: botEvent.guildId,
+        voiceChannelId: botEvent.voiceChannelId,
+        outcome: 'received',
+      },
+      'Bot event route received event',
+    )
 
     if (botEvent.type === 'voice.connected') {
       getPlayerStateService().voiceConnected(botEvent.guildId!, botEvent.voiceChannelId!)
     } else if (botEvent.type === 'voice.disconnected') {
       getPlayerStateService().voiceDisconnected(botEvent.guildId!)
+    } else if (botEvent.type === 'playback.paused') {
+      getPlayerStateService().pause()
+    } else if (botEvent.type === 'playback.resumed') {
+      getPlayerStateService().resume()
+    } else if (
+      botEvent.type === 'playback.volume_changed' &&
+      typeof botEvent.payload.volume === 'number'
+    ) {
+      getPlayerStateService().setVolume({ volume: botEvent.payload.volume })
     }
 
     getLogger().info(
       {
         eventType: botEvent.type,
+        operation: 'route.internal.events',
+        outcome: 'accepted',
+        durationMs: Date.now() - startedAt,
         occurredAt: botEvent.occurredAt,
         ...(botEvent.guildId === undefined ? {} : { guildId: botEvent.guildId }),
         ...(botEvent.voiceChannelId === undefined

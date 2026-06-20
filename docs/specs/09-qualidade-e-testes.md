@@ -22,6 +22,9 @@
 - Matching de fonte por título, artista e duração.
 - Rejeição de versões alteradas, streams gated e respostas externas inválidas.
 - Cache e renovação de `resolved_sources`.
+- ranking de candidatos YouTube Music e rejeição de versões incorretas;
+- fallback YouTube Music → Audius;
+- seleção e expiração de formato de áudio do YouTube.
 - lifecycle do `AudioPlayerManager`, retry único, conclusão e skip intencional.
 - claim, conclusão/falha e promoção atômica do próximo item.
 
@@ -33,7 +36,22 @@
 - Fluxo adicionar → mover → remover → skip.
 - Eventos de voz atualizando `PlayerState` pela API interna.
 - Endpoint interno de resolução com bearer e contrato validado.
+- respostas InnerTube mockadas e validadas sem rede nos testes automatizados.
+
+### Smoke de provedor
+
+- pesquisar ao menos dez faixas representativas do catálogo esperado;
+- incluir música popular, antiga, brasileira, colaboração, versão explícita e título
+  com caracteres especiais;
+- confirmar que o video ID escolhido corresponde à gravação pretendida;
+- confirmar bytes de áudio reais para pelo menos três candidatos;
+- confirmar fallback Audius com candidato controlado;
+- não imprimir URLs, cookies ou tokens durante o smoke.
 - Endpoints internos de claim e complete com bearer.
+
+O smoke de YouTube Music de 20 de junho de 2026 obteve 10/10 candidatos corretos,
+10/10 streams com bytes reais, zero cover/remix incorreto conhecido e fallback
+Audius com bytes reais.
 
 ### Interface
 
@@ -69,6 +87,23 @@
 - Banco de testes deve usar arquivo temporário ou memória compatível.
 
 ## Gates por etapa
+
+## Observabilidade de playback
+
+Testes automatizados cobrem sequência normal, `Idle` prematuro, retry, falha
+definitiva, skip sem conclusão natural, ranges sem URL, fallback, cache hit/miss,
+redaction e configuração de `LOG_LEVEL`.
+
+O smoke manual inicia web e bot com stdout/stderr em arquivos `*.log` ignorados,
+executa `/join`, adição, `/skip` e `/leave`, reconstrói a sequência pelo
+`playbackAttemptId` e busca por `streamUrl`, `Authorization`, `signature`, `token`,
+`cookie`, `visitorData`, `poToken` e URLs de mídia. Os arquivos não são versionados.
+
+O smoke final de 20 de junho de 2026 também validou autojoin por `/play`, retomada
+de fila adicionada pela web, cancelamento explícito em skip/leave e reparação do
+item interrompido para `queued`. Os testes automatizados incluem status HTTP
+400/403/416, range inválido, body vazio, timeout inicial e posterior, cancelamento
+e corrida entre resolução e leave.
 
 Antes de concluir uma etapa:
 

@@ -11,6 +11,8 @@ export interface PlayerStateUpdate {
   currentQueueItemId?: string | null
   voiceChannelId?: string | null
   guildId?: string | null
+  volume?: number
+  progressMs?: number
   updatedAt?: string
 }
 
@@ -20,6 +22,8 @@ function mapRow(row: PlayerStateRow): PlayerState {
     ...(row.currentQueueItemId === null ? {} : { currentQueueItemId: row.currentQueueItemId }),
     ...(row.voiceChannelId === null ? {} : { voiceChannelId: row.voiceChannelId }),
     ...(row.guildId === null ? {} : { guildId: row.guildId }),
+    volume: row.volume,
+    progressMs: row.progressMs,
     updatedAt: row.updatedAt,
   })
 }
@@ -36,6 +40,8 @@ export class PlayerStateRepository {
       .values({
         id: 1,
         status: 'idle',
+        volume: 100,
+        progressMs: 0,
         updatedAt: this.now().toISOString(),
       })
       .onConflictDoNothing({ target: playerState.id })

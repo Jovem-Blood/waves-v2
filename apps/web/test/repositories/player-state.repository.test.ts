@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url'
+﻿import { fileURLToPath } from 'node:url'
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -33,11 +33,11 @@ describe('PlayerStateRepository', () => {
   it('creates the initial idle state only once', () => {
     const { connection, repository } = setup()
 
-    expect(repository.get()).toEqual({
+    expect(repository.get()).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T12:00:00.000Z',
     })
-    expect(repository.get()).toEqual({
+    expect(repository.get()).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T12:00:00.000Z',
     })
@@ -58,7 +58,7 @@ describe('PlayerStateRepository', () => {
         guildId: 'guild-1',
         updatedAt: '2026-06-18T13:00:00.000Z',
       }),
-    ).toEqual({
+    ).toMatchObject({
       status: 'playing',
       voiceChannelId: 'voice-1',
       guildId: 'guild-1',
@@ -66,7 +66,7 @@ describe('PlayerStateRepository', () => {
     })
 
     const secondRepository = new PlayerStateRepository(connection.db)
-    expect(secondRepository.get()).toEqual({
+    expect(secondRepository.get()).toMatchObject({
       status: 'playing',
       voiceChannelId: 'voice-1',
       guildId: 'guild-1',

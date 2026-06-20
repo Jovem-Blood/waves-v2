@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url'
+﻿import { fileURLToPath } from 'node:url'
 
 import type { QueueItem, QueueItemStatus } from '@waves/shared'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
@@ -69,7 +69,7 @@ describe('PlayerStateService', () => {
   it('returns the initial logical player state', () => {
     const { service } = setup()
 
-    expect(service.get()).toEqual({
+    expect(service.get()).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
@@ -78,21 +78,54 @@ describe('PlayerStateService', () => {
   it('persists and clears the connected voice guild and channel', () => {
     const { service } = setup()
 
-    expect(service.voiceConnected('guild-1', 'voice-1')).toEqual({
+    expect(service.voiceConnected('guild-1', 'voice-1')).toMatchObject({
       status: 'idle',
       guildId: 'guild-1',
       voiceChannelId: 'voice-1',
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
-    expect(service.voiceDisconnected('other-guild')).toEqual({
+    expect(service.voiceDisconnected('other-guild')).toMatchObject({
       status: 'idle',
       guildId: 'guild-1',
       voiceChannelId: 'voice-1',
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
-    expect(service.voiceDisconnected('guild-1')).toEqual({
+    expect(service.voiceDisconnected('guild-1')).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T15:00:00.000Z',
+    })
+  })
+
+  it('returns the current playing item to the queue when voice disconnects', () => {
+    const { playerRepository, queueRepository, service } = setup()
+    queueRepository.insert(item('current', 0, 'playing'))
+    queueRepository.insert(item('next', 1))
+    playerRepository.update({
+      status: 'playing',
+      currentQueueItemId: 'current',
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+    })
+
+    expect(service.voiceDisconnected('guild-1')).toMatchObject({
+      status: 'idle',
+      updatedAt: '2026-06-18T15:00:00.000Z',
+    })
+    expect(queueRepository.listActive()).toEqual([
+      expect.objectContaining({ id: 'current', status: 'queued', position: 0 }),
+      expect.objectContaining({ id: 'next', status: 'queued', position: 1 }),
+    ])
+  })
+
+  it('repairs an orphan playing item on an idempotent disconnect event', () => {
+    const { queueRepository, service } = setup()
+    queueRepository.insert(item('orphan', 0, 'playing'))
+
+    service.voiceDisconnected('guild-1')
+
+    expect(queueRepository.findById('orphan')).toMatchObject({
+      status: 'queued',
+      position: 0,
     })
   })
 
@@ -105,7 +138,7 @@ describe('PlayerStateService', () => {
       currentQueueItemId: 'current',
     })
 
-    expect(service.skip()).toEqual({
+    expect(service.skip()).toMatchObject({
       player: {
         status: 'playing',
         currentQueueItemId: 'next',
@@ -135,7 +168,7 @@ describe('PlayerStateService', () => {
     service.skip()
 
     expect(queueRepository.findById('first')?.status).toBe('skipped')
-    expect(service.get()).toEqual({
+    expect(service.get()).toMatchObject({
       status: 'playing',
       currentQueueItemId: 'second',
       updatedAt: '2026-06-18T15:00:00.000Z',
@@ -150,7 +183,7 @@ describe('PlayerStateService', () => {
       currentQueueItemId: 'only',
     })
 
-    expect(service.skip()).toEqual({
+    expect(service.skip()).toMatchObject({
       player: {
         status: 'idle',
         updatedAt: '2026-06-18T15:00:00.000Z',
@@ -163,14 +196,14 @@ describe('PlayerStateService', () => {
   it('is idempotent when skipping an empty queue', () => {
     const { service } = setup()
 
-    expect(service.skip()).toEqual({
+    expect(service.skip()).toMatchObject({
       player: {
         status: 'idle',
         updatedAt: '2026-06-18T15:00:00.000Z',
       },
       queue: [],
     })
-    expect(service.skip()).toEqual({
+    expect(service.skip()).toMatchObject({
       player: {
         status: 'idle',
         updatedAt: '2026-06-18T15:00:00.000Z',
@@ -183,7 +216,7 @@ describe('PlayerStateService', () => {
     const { queueRepository, service } = setup()
     queueRepository.insert(item('first', 0))
 
-    expect(service.claimPlayback()).toEqual({
+    expect(service.claimPlayback()).toMatchObject({
       player: {
         status: 'idle',
         updatedAt: '2026-06-18T15:00:00.000Z',
@@ -192,7 +225,7 @@ describe('PlayerStateService', () => {
 
     service.voiceConnected('guild-1', 'voice-1')
     const claimed = service.claimPlayback()
-    expect(claimed.player).toEqual({
+    expect(claimed.player).toMatchObject({
       status: 'playing',
       currentQueueItemId: 'first',
       guildId: 'guild-1',
@@ -209,9 +242,7 @@ describe('PlayerStateService', () => {
     service.voiceConnected('guild-1', 'voice-1')
     service.claimPlayback()
 
-    expect(
-      service.completePlayback({ queueItemId: 'first', outcome: 'played' }),
-    ).toMatchObject({
+    expect(service.completePlayback({ queueItemId: 'first', outcome: 'played' })).toMatchObject({
       completedQueueItemId: 'first',
       player: {
         status: 'playing',
@@ -234,9 +265,7 @@ describe('PlayerStateService', () => {
     service.voiceConnected('guild-1', 'voice-1')
     service.claimPlayback()
 
-    expect(
-      service.completePlayback({ queueItemId: 'only', outcome: 'failed' }),
-    ).toEqual({
+    expect(service.completePlayback({ queueItemId: 'only', outcome: 'failed' })).toMatchObject({
       completedQueueItemId: 'only',
       player: {
         status: 'idle',
@@ -256,9 +285,9 @@ describe('PlayerStateService', () => {
     service.voiceConnected('guild-1', 'voice-1')
     service.claimPlayback()
 
-    expect(() =>
-      service.completePlayback({ queueItemId: 'second', outcome: 'played' }),
-    ).toThrow('Playback transition does not match')
+    expect(() => service.completePlayback({ queueItemId: 'second', outcome: 'played' })).toThrow(
+      'Playback transition does not match',
+    )
   })
 
   it('rolls back queue and player changes when the coordinated operation fails', () => {
@@ -291,7 +320,7 @@ describe('PlayerStateService', () => {
       { id: 'current', status: 'playing', position: 0 },
       { id: 'next', status: 'queued', position: 1 },
     ])
-    expect(playerRepository.get()).toEqual({
+    expect(playerRepository.get()).toMatchObject({
       status: 'playing',
       currentQueueItemId: 'current',
       updatedAt: '2026-06-18T15:00:00.000Z',

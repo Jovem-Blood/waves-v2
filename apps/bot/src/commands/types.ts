@@ -3,6 +3,7 @@ import type { DiscordGatewayAdapterCreator } from '@discordjs/voice'
 
 import type { VoiceManager } from '../voice/voice-manager.js'
 import type { PlaybackManager } from '../playback/audio-player-manager.js'
+import type { BotLogger } from '../logger.js'
 
 export interface CommandResponder {
   deferEphemeral(): Promise<void>
@@ -14,10 +15,12 @@ export interface CommandContext {
   name: string
   guildId?: string
   query?: string
+  volume?: number
   userId: string
   displayName: string
   voiceChannelId?: string
   voiceAdapterCreator?: DiscordGatewayAdapterCreator
+  logger?: BotLogger
   responder: CommandResponder
 }
 

@@ -36,6 +36,11 @@ fila ou do estado persistido:
 
 A implementação começa pela Etapa 10, fundação de voz, sem áudio real.
 
+Na Etapa 12, o runtime de playback foi implementado e validado inicialmente com
+Audius. Após a cobertura insuficiente desse catálogo, YouTube Music via
+`youtubei.js` 17.0.1 foi implementado como provedor primário, mantendo Audius como
+fallback. O smoke de catálogo atingiu 10/10 candidatos corretos e streams abertos.
+
 ## Documentos
 
 1. [Visão e escopo](docs/specs/01-visao-e-escopo.md)

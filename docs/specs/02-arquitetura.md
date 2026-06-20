@@ -112,5 +112,10 @@ VoiceManager
 - `AudioSourceResolver` recebe metadados normalizados e retorna uma fonte
   reproduzível temporária.
 - Spotify continua responsável somente por busca e metadados.
-- O provedor de áudio será escolhido e registrado antes da etapa de resolução.
+- A cadeia de resolução tenta YouTube Music primeiro e Audius como fallback.
+- Cada provedor permanece atrás do mesmo contrato e pode falhar sem conhecer fila,
+  HTTP, Discord ou persistência.
+- YouTube.js existe somente no bundle servidor Nitro; não aparece no cliente nem no
+  processo do bot.
+- A decifração do player é executada em contexto `node:vm` mínimo e temporizado.
 - Falhas de voz ou fonte são traduzidas em eventos; não alteram o banco diretamente.

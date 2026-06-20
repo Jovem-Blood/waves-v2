@@ -41,7 +41,9 @@ export async function handleInteraction(
   api: WavesApi,
   voiceManager: VoiceManager,
   playbackManager: PlaybackManager,
+  logger?: BotLogger,
 ): Promise<void> {
+  const startedAt = Date.now()
   const member = interaction.member
   const displayName =
     member instanceof GuildMember
@@ -50,6 +52,17 @@ export async function handleInteraction(
   const voiceChannelId =
     member instanceof GuildMember ? (member.voice.channelId ?? undefined) : undefined
 
+  logger?.info(
+    {
+      operation: 'command.execute',
+      commandName: interaction.commandName,
+      guildId: interaction.guildId,
+      voiceChannelId,
+      discordUserId: interaction.user.id,
+      outcome: 'received',
+    },
+    'Discord command received',
+  )
   await executeCommand(
     {
       name: interaction.commandName,
@@ -57,17 +70,33 @@ export async function handleInteraction(
       ...(interaction.commandName === 'play'
         ? { query: interaction.options.getString('query', true) }
         : {}),
+      ...(interaction.commandName === 'volume'
+        ? { volume: interaction.options.getInteger('valor', true) }
+        : {}),
       userId: interaction.user.id,
       displayName,
       ...(voiceChannelId === undefined ? {} : { voiceChannelId }),
       ...(interaction.guild === null
         ? {}
         : { voiceAdapterCreator: interaction.guild.voiceAdapterCreator }),
+      ...(logger === undefined ? {} : { logger }),
       responder: createResponder(interaction),
     },
     api,
     voiceManager,
     playbackManager,
+  )
+  logger?.info(
+    {
+      operation: 'command.execute',
+      commandName: interaction.commandName,
+      guildId: interaction.guildId,
+      voiceChannelId,
+      discordUserId: interaction.user.id,
+      outcome: 'completed',
+      durationMs: Date.now() - startedAt,
+    },
+    'Discord command completed',
   )
 }
 
@@ -83,13 +112,15 @@ export function registerInteractionHandler(
       return
     }
 
-    void handleInteraction(interaction, api, voiceManager, playbackManager).catch(
+    void handleInteraction(interaction, api, voiceManager, playbackManager, logger).catch(
       (error: unknown) => {
         logger.error(
           {
+            operation: 'command.execute',
             commandName: interaction.commandName,
             discordUserId: interaction.user.id,
             errorName: error instanceof Error ? error.name : 'UnknownError',
+            outcome: 'failed',
           },
           'Command handler failed',
         )

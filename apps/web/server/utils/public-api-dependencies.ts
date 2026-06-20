@@ -27,12 +27,16 @@ export interface PublicQueueService {
 export interface PublicPlayerStateService {
   get(): PlayerState
   skip(): SkipResult
+  pause(): PlayerState
+  resume(): PlayerState
+  setVolume(input: { volume: number }): PlayerState
+  updateProgress(input: { queueItemId: string; progressMs: number }): PlayerState
   voiceConnected(guildId: string, voiceChannelId: string): PlayerState
   voiceDisconnected(guildId: string): PlayerState
   claimPlayback(): ReturnType<PlayerStateService['claimPlayback']>
-  completePlayback(input: Parameters<PlayerStateService['completePlayback']>[0]): ReturnType<
-    PlayerStateService['completePlayback']
-  >
+  completePlayback(
+    input: Parameters<PlayerStateService['completePlayback']>[0],
+  ): ReturnType<PlayerStateService['completePlayback']>
 }
 
 export interface PublicSpotifyService {

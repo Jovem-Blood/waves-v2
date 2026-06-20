@@ -35,6 +35,17 @@ function mapRow(row: ResolvedSourceRow): PersistedResolvedSource {
 export class ResolvedSourceRepository {
   constructor(private readonly db: WavesDatabase) {}
 
+  findLatest(queueItemId: string): PersistedResolvedSource | undefined {
+    const row = this.db
+      .select()
+      .from(resolvedSources)
+      .where(eq(resolvedSources.queueItemId, queueItemId))
+      .orderBy(desc(resolvedSources.updatedAt))
+      .get()
+
+    return row ? mapRow(row) : undefined
+  }
+
   findReusable(queueItemId: string, nowIso: string): PersistedResolvedSource | undefined {
     const row = this.db
       .select()

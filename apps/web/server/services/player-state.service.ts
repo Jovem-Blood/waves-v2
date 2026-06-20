@@ -1,5 +1,7 @@
 import {
   completePlaybackInputSchema,
+  setPlayerVolumeInputSchema,
+  updatePlayerProgressInputSchema,
   type CompletePlaybackInput,
   type PlaybackClaimResult,
   type PlaybackTransitionResult,
@@ -11,6 +13,7 @@ import {
 import type { PlayerStateRepository } from '../repositories/player-state.repository'
 import type { UnitOfWork } from '../repositories/unit-of-work'
 import { PlaybackConflictError, QueueItemNotFoundError } from './domain-errors'
+import { type WavesLogger, useLogger } from '../utils/logger'
 
 export interface SkipResult {
   player: PlayerState
@@ -22,39 +25,113 @@ export class PlayerStateService {
     private readonly playerStateRepository: PlayerStateRepository,
     private readonly unitOfWork: UnitOfWork,
     private readonly now: () => Date = () => new Date(),
+    private readonly logger: WavesLogger = useLogger(),
   ) {}
 
   get(): PlayerState {
     return this.playerStateRepository.get()
   }
 
-  voiceConnected(guildId: string, voiceChannelId: string): PlayerState {
+  pause(): PlayerState {
+    const player = this.playerStateRepository.get()
+    if (player.status === 'paused') return player
+    if (player.status !== 'playing' || !player.currentQueueItemId) {
+      throw new PlaybackConflictError()
+    }
     return this.playerStateRepository.update({
+      status: 'paused',
+      updatedAt: this.now().toISOString(),
+    })
+  }
+
+  resume(): PlayerState {
+    const player = this.playerStateRepository.get()
+    if (player.status !== 'paused' || !player.currentQueueItemId) {
+      throw new PlaybackConflictError()
+    }
+    return this.playerStateRepository.update({
+      status: 'playing',
+      updatedAt: this.now().toISOString(),
+    })
+  }
+
+  setVolume(input: { volume: number }): PlayerState {
+    const parsed = setPlayerVolumeInputSchema.parse(input)
+    return this.playerStateRepository.update({
+      volume: parsed.volume,
+      updatedAt: this.now().toISOString(),
+    })
+  }
+
+  updateProgress(input: { queueItemId: string; progressMs: number }): PlayerState {
+    const parsed = updatePlayerProgressInputSchema.parse(input)
+    const player = this.playerStateRepository.get()
+    if (player.currentQueueItemId !== parsed.queueItemId || player.status === 'idle') {
+      throw new PlaybackConflictError()
+    }
+    const current = this.unitOfWork.run(({ queue }) => queue.findById(parsed.queueItemId))
+    if (!current) throw new QueueItemNotFoundError(parsed.queueItemId)
+    return this.playerStateRepository.update({
+      progressMs: Math.min(
+        Math.max(player.progressMs, parsed.progressMs),
+        current.track.durationMs,
+      ),
+      updatedAt: this.now().toISOString(),
+    })
+  }
+
+  voiceConnected(guildId: string, voiceChannelId: string): PlayerState {
+    const previous = this.playerStateRepository.get()
+    const next = this.playerStateRepository.update({
       status: 'idle',
       currentQueueItemId: null,
+      progressMs: 0,
       guildId,
       voiceChannelId,
       updatedAt: this.now().toISOString(),
     })
+    this.logPlayerTransition('voice.connected', previous, next, { guildId, voiceChannelId })
+    return next
   }
 
   voiceDisconnected(guildId: string): PlayerState {
-    const player = this.playerStateRepository.get()
-    if (player.guildId !== guildId) {
-      return player
-    }
+    const result = this.unitOfWork.run(({ playerState, queue }) => {
+      const player = playerState.get()
+      if (player.guildId && player.guildId !== guildId) {
+        return { previous: player, next: player }
+      }
 
-    return this.playerStateRepository.update({
-      status: 'idle',
-      currentQueueItemId: null,
-      guildId: null,
-      voiceChannelId: null,
-      updatedAt: this.now().toISOString(),
+      const timestamp = this.now().toISOString()
+      const currentItem =
+        queue.listActive().find((item) => item.id === player.currentQueueItemId) ??
+        queue.listActive().find((item) => item.status === 'playing')
+
+      if (currentItem?.status === 'playing') {
+        queue.updateStatusAndPosition(currentItem.id, {
+          status: 'queued',
+          position: currentItem.position,
+          updatedAt: timestamp,
+        })
+      }
+
+      return {
+        previous: player,
+        next: playerState.update({
+          status: 'idle',
+          currentQueueItemId: null,
+          progressMs: 0,
+          guildId: null,
+          voiceChannelId: null,
+          updatedAt: timestamp,
+        }),
+      }
     })
+    this.logPlayerTransition('voice.disconnected', result.previous, result.next, { guildId })
+    return result.next
   }
 
   skip(): SkipResult {
-    return this.unitOfWork.run(({ playerState, queue }) => {
+    const result = this.unitOfWork.run(({ playerState, queue }) => {
       const player = playerState.get()
       const activeItems = queue.listActive()
       const currentItem =
@@ -66,6 +143,7 @@ export class PlayerStateService {
           player: playerState.update({
             status: 'idle',
             currentQueueItemId: null,
+            progressMs: 0,
             updatedAt: timestamp,
           }),
           queue: [],
@@ -109,15 +187,27 @@ export class PlayerStateService {
         player: playerState.update({
           status: 'playing',
           currentQueueItemId: nextItem.id,
+          progressMs: 0,
           updatedAt: timestamp,
         }),
         queue: queue.listActive(),
       }
     })
+    this.logger.info(
+      {
+        operation: 'player.skip',
+        outcome: 'skipped',
+        playerStatusTo: result.player.status,
+        queueItemId: result.player.currentQueueItemId,
+        promotedQueueItemId: result.queue[0]?.id,
+      },
+      'Player skip transition completed',
+    )
+    return result
   }
 
   claimPlayback(): PlaybackClaimResult {
-    return this.unitOfWork.run(({ playerState, queue }) => {
+    const result = this.unitOfWork.run(({ playerState, queue }) => {
       const player = playerState.get()
       const activeItems = queue.listActive()
       const current = activeItems.find(
@@ -135,6 +225,7 @@ export class PlayerStateService {
           player: playerState.update({
             status: 'idle',
             currentQueueItemId: null,
+            progressMs: 0,
             updatedAt: timestamp,
           }),
         }
@@ -153,11 +244,24 @@ export class PlayerStateService {
         player: playerState.update({
           status: 'playing',
           currentQueueItemId: claimed.id,
+          progressMs: 0,
           updatedAt: timestamp,
         }),
         item: claimed,
       }
     })
+    this.logger.info(
+      {
+        operation: 'player.claim',
+        guildId: result.player.guildId,
+        voiceChannelId: result.player.voiceChannelId,
+        queueItemId: result.item?.id,
+        playerStatusTo: result.player.status,
+        outcome: result.item ? 'claimed' : 'empty',
+      },
+      'Playback claim transition completed',
+    )
+    return result
   }
 
   completePlayback(input: CompletePlaybackInput): PlaybackTransitionResult {
@@ -169,7 +273,7 @@ export class PlayerStateService {
     queueItemId: string,
     outcome: Extract<QueueItemStatus, 'played' | 'failed'>,
   ): PlaybackTransitionResult {
-    return this.unitOfWork.run(({ playerState, queue }) => {
+    const result = this.unitOfWork.run(({ playerState, queue }) => {
       const timestamp = this.now().toISOString()
       const player = playerState.get()
       const current = queue.findById(queueItemId)
@@ -214,6 +318,7 @@ export class PlayerStateService {
       const nextPlayer = playerState.update({
         status: nextItem ? 'playing' : 'idle',
         currentQueueItemId: nextItem?.id ?? null,
+        progressMs: 0,
         updatedAt: timestamp,
       })
 
@@ -224,5 +329,37 @@ export class PlayerStateService {
         ...(nextItem === undefined ? {} : { nextItem }),
       }
     })
+    this.logger.info(
+      {
+        operation: 'player.complete',
+        queueItemId,
+        outcome,
+        completedQueueItemId: result.completedQueueItemId,
+        promotedQueueItemId: result.nextItem?.id,
+        playerStatusTo: result.player.status,
+      },
+      'Playback queue transition completed',
+    )
+    return result
+  }
+
+  private logPlayerTransition(
+    operation: string,
+    previous: PlayerState,
+    next: PlayerState,
+    context: Record<string, unknown>,
+  ): void {
+    this.logger.info(
+      {
+        service: 'web',
+        operation,
+        ...context,
+        playerStatusFrom: previous.status,
+        playerStatusTo: next.status,
+        queueItemId: next.currentQueueItemId,
+        outcome: 'completed',
+      },
+      'Player state transitioned',
+    )
   }
 }

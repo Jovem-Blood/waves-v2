@@ -10,6 +10,14 @@ export const skipCommand: BotCommand = {
         return
       }
       const result = await playbackManager.skip(context.guildId)
+      context.logger?.info(
+        {
+          operation: 'command.skip',
+          guildId: context.guildId,
+          outcome: result,
+        },
+        'Skip command completed',
+      )
       await context.responder.public(
         result === 'skipped'
           ? 'Faixa pulada. A próxima faixa começou.'

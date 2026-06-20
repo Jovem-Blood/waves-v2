@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 
 const httpUrlSchema = z.url({ protocol: /^https?$/ })
+const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error'])
 const botConfigSchema = z.strictObject({
   discordToken: z.string().trim().min(1),
   discordClientId: z.string().trim().min(1),
   discordGuildId: z.string().trim().min(1),
   internalApiToken: z.string().trim().min(1),
   apiBaseUrl: httpUrlSchema,
+  logLevel: logLevelSchema,
 })
 
 export interface BotConfig {
@@ -18,6 +20,7 @@ export interface BotConfig {
   discordGuildId: string
   internalApiToken: string
   apiBaseUrl: string
+  logLevel: z.infer<typeof logLevelSchema>
 }
 
 export class BotConfigurationError extends Error {
@@ -33,6 +36,7 @@ const variableNames = {
   discordGuildId: 'DISCORD_GUILD_ID',
   internalApiToken: 'INTERNAL_API_TOKEN',
   apiBaseUrl: 'BOT_API_BASE_URL',
+  logLevel: 'LOG_LEVEL',
 } as const
 
 export function parseBotConfig(environment?: Record<string, string | undefined>): BotConfig {
@@ -55,6 +59,7 @@ export function parseBotConfig(environment?: Record<string, string | undefined>)
     discordGuildId: source.DISCORD_GUILD_ID,
     internalApiToken: source.INTERNAL_API_TOKEN,
     apiBaseUrl: source.BOT_API_BASE_URL,
+    logLevel: source.LOG_LEVEL ?? (source.NODE_ENV === 'development' ? 'debug' : 'info'),
   })
 
   if (!result.success) {

@@ -56,7 +56,7 @@ describe('Queue Social components', () => {
       },
     })
     expect(playing.text()).toContain('Luz da Madrugada')
-    expect(playing.get('button').text()).toContain('PULAR FAIXA')
+    expect(playing.get('.action-button').text()).toContain('PULAR FAIXA')
   })
 
   it('renders an empty queue and emits accessible queue actions', async () => {

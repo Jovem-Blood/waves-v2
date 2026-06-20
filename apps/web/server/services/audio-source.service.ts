@@ -8,6 +8,8 @@ import type { QueueRepository } from '../repositories/queue.repository'
 import type { ResolvedSourceRepository } from '../repositories/resolved-source.repository'
 import type { AudioSourceResolver } from './audio-source-resolver'
 import { QueueItemNotFoundError } from './domain-errors'
+import { type WavesLogger, useLogger } from '../utils/logger'
+import { classifyExternalError } from '../utils/observability'
 
 export class AudioSourceService {
   constructor(
@@ -16,14 +18,23 @@ export class AudioSourceService {
     private readonly resolver: AudioSourceResolver,
     private readonly now: () => Date = () => new Date(),
     private readonly createId: () => string = randomUUID,
+    private readonly logger: WavesLogger = useLogger(),
   ) {}
 
   async resolve(
     queueItemId: string,
     options: { forceRefresh?: boolean } = {},
   ): Promise<QueueItemAudioSource> {
+    const startedAt = Date.now()
+    const log = this.logger.child({
+      service: 'web',
+      operation: 'audio_source.resolve',
+      queueItemId,
+      forceRefresh: options.forceRefresh ?? false,
+    })
     const queueItem = this.queueRepository.findById(queueItemId)
     if (!queueItem) {
+      log.warn({ outcome: 'queue_item_not_found' }, 'Audio source resolution rejected')
       throw new QueueItemNotFoundError(queueItemId)
     }
 
@@ -34,6 +45,16 @@ export class AudioSourceService {
     let source: ResolvedAudioSource
 
     if (cached) {
+      log.info(
+        {
+          outcome: 'cache_hit',
+          provider: cached.provider,
+          sourceIdentifier: cached.sourceIdentifier,
+          expiresAt: cached.expiresAt,
+          durationMs: Date.now() - startedAt,
+        },
+        'Audio source cache hit',
+      )
       source = {
         provider: cached.provider,
         sourceIdentifier: cached.sourceIdentifier,
@@ -41,7 +62,46 @@ export class AudioSourceService {
         expiresAt: cached.expiresAt,
       }
     } else {
-      source = await this.resolver.resolve(queueItem.track)
+      const previous = this.resolvedSourceRepository.findLatest(queueItemId)
+      log.info(
+        {
+          outcome: previous
+            ? options.forceRefresh
+              ? 'force_refresh'
+              : 'cache_expired'
+            : 'cache_miss',
+          ...(previous
+            ? {
+                provider: previous.provider,
+                sourceIdentifier: previous.sourceIdentifier,
+                expiresAt: previous.expiresAt,
+              }
+            : {}),
+        },
+        'Audio source cache requires resolution',
+      )
+      try {
+        source = await this.resolver.resolve(queueItem.track, {
+          ...(previous
+            ? {
+                preferredSource: {
+                  provider: previous.provider,
+                  sourceIdentifier: previous.sourceIdentifier,
+                },
+              }
+            : {}),
+        })
+      } catch (error) {
+        log.error(
+          {
+            outcome: 'failed',
+            durationMs: Date.now() - startedAt,
+            ...classifyExternalError(error),
+          },
+          'Audio source resolution failed',
+        )
+        throw error
+      }
       this.resolvedSourceRepository.replace({
         id: this.createId(),
         queueItemId,
@@ -49,6 +109,18 @@ export class AudioSourceService {
         createdAt: timestamp,
         updatedAt: timestamp,
       })
+      log.info(
+        {
+          outcome: previous ? 'replaced' : 'resolved',
+          provider: source.provider,
+          sourceIdentifier: source.sourceIdentifier,
+          expiresAt: source.expiresAt,
+          previousProvider: previous?.provider,
+          previousSourceIdentifier: previous?.sourceIdentifier,
+          durationMs: Date.now() - startedAt,
+        },
+        'Audio source resolution persisted',
+      )
     }
 
     return queueItemAudioSourceSchema.parse({ queueItemId, source })

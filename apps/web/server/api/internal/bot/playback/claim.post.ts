@@ -5,13 +5,18 @@ import {
   type PublicApiDependencies,
   usePublicApiDependencies,
 } from '../../../../utils/public-api-dependencies'
+import { useLogger } from '../../../../utils/logger'
+import { loggedOperation } from '../../../../utils/observability'
 
 export function createInternalPlaybackClaimHandler(
   getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
   getExpectedToken?: () => string,
 ) {
   return defineInternalApiHandler(
-    () => playbackClaimResultSchema.parse(getDependencies().playerStateService.claimPlayback()),
+    () =>
+      loggedOperation(useLogger(), { operation: 'route.internal.playback.claim' }, () =>
+        playbackClaimResultSchema.parse(getDependencies().playerStateService.claimPlayback()),
+      ),
     getExpectedToken,
   )
 }

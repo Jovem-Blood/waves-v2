@@ -21,9 +21,14 @@ Este diretório contém o handoff operacional da próxima etapa do Waves.
 
 - [x] [Etapa 10 — Fundação de voz](etapa-10-fundacao-de-voz.md).
 - [x] [Etapa 11 — Resolução de fonte](etapa-11-resolucao-de-fonte.md).
-- [ ] [Etapa 12 — Reprodução e avanço automático](etapa-12-reproducao-e-avanco-automatico.md)
-      — implementação concluída, smoke Discord pendente.
-- [ ] Etapa 13 — Controles e interface.
+- [x] [Etapa 12 — Reprodução e avanço automático](etapa-12-reproducao-e-avanco-automatico.md)
+      — concluída e validada no Discord em 20 de junho de 2026.
+  - [x] [YouTube Music como fonte primária](etapa-12-youtube-music.md).
+  - [x] [Prompt completo de implementação](prompt-etapa-12-youtube-music.md).
+  - [x] [Prompt de observabilidade do playback](prompt-etapa-12-observabilidade-playback.md).
+  - [x] [Prompt de diagnóstico e correção do playback](prompt-etapa-12-diagnostico-correcao-playback.md).
+- [ ] [Etapa 13 — Controles e interface](etapa-13-controles-e-interface.md).
+  - [ ] [Prompt de execução da Etapa 13](prompt-etapa-13-controles-interface.md).
 - [ ] Etapa 14 — End-to-end de voz.
 
 Ao concluir uma etapa:

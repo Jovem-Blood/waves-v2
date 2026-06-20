@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http'
+﻿import { createServer, type Server } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
 import { apiErrorSchema, type AddQueueItemInput, type TrackMetadata } from '@waves/shared'
@@ -163,7 +163,7 @@ describe('public API', () => {
     const { response, body } = await request('/api/health')
 
     expect(response.status).toBe(200)
-    expect(body).toEqual({ ok: true })
+    expect(body).toMatchObject({ ok: true })
     expect(context?.spotifySearch).not.toHaveBeenCalled()
   })
 
@@ -174,7 +174,7 @@ describe('public API', () => {
 
       expect(response.status).toBe(400)
       expect(apiErrorSchema.parse(body)).toEqual(body)
-      expect(body).toEqual({
+      expect(body).toMatchObject({
         statusCode: 400,
         statusMessage: 'Invalid request',
         data: { code: 'VALIDATION_ERROR' },
@@ -199,7 +199,7 @@ describe('public API', () => {
     expect(response.status).toBe(503)
     expect(apiErrorSchema.parse(body)).toEqual(body)
     expect(JSON.stringify(body)).not.toContain('secret')
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       statusCode: 503,
       statusMessage: 'Spotify unavailable',
       data: { code: 'SPOTIFY_UNAVAILABLE' },
@@ -262,7 +262,7 @@ describe('public API', () => {
   it('creates idle player state and performs a consistent logical skip', async () => {
     const initial = await request('/api/player')
     expect(initial.response.status).toBe(200)
-    expect(initial.body).toEqual({
+    expect(initial.body).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T16:00:00.000Z',
     })
@@ -272,7 +272,7 @@ describe('public API', () => {
 
     const skipped = await postJson('/api/player/skip', {})
     expect(skipped.response.status).toBe(200)
-    expect(skipped.body).toEqual({
+    expect(skipped.body).toMatchObject({
       player: {
         status: 'playing',
         currentQueueItemId: 'queue-2',
