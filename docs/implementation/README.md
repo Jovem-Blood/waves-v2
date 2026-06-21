@@ -27,9 +27,10 @@ Este diretório contém o handoff operacional da próxima etapa do Waves.
   - [x] [Prompt completo de implementação](prompt-etapa-12-youtube-music.md).
   - [x] [Prompt de observabilidade do playback](prompt-etapa-12-observabilidade-playback.md).
   - [x] [Prompt de diagnóstico e correção do playback](prompt-etapa-12-diagnostico-correcao-playback.md).
-- [ ] [Etapa 13 — Controles e interface](etapa-13-controles-e-interface.md).
-  - [ ] [Prompt de execução da Etapa 13](prompt-etapa-13-controles-interface.md).
-- [ ] Etapa 14 — End-to-end de voz.
+- [x] [Etapa 13 — Controles e interface](etapa-13-controles-e-interface.md)
+      — concluída e validada em 20 de junho de 2026.
+  - [x] [Prompt de execução da Etapa 13](prompt-etapa-13-controles-interface.md).
+- [ ] [Etapa 14 — End-to-end de voz](etapa-14-end-to-end-de-voz.md).
 
 Ao concluir uma etapa:
 

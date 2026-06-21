@@ -82,7 +82,8 @@ Antes de concluir trabalho de UI:
 - A Etapa 12 foi concluída em 20 de junho de 2026 com YouTube Music como fonte
   primária, Audius como fallback e smoke Discord de reprodução, avanço, skip,
   leave, autojoin e retomada da fila.
-- A próxima etapa permitida é a Etapa 13: controles e interface.
+- A Etapa 13 foi concluída em 20 de junho de 2026.
+- A próxima etapa permitida é a Etapa 14: end-to-end de voz.
 
 ## Forma de trabalho
 

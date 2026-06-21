@@ -302,11 +302,17 @@ integral, avanço natural, autojoin por `/play`, retomada de fila adicionada pel
 
 ## Etapa 13 — Controles e interface
 
-- pause e resume;
-- volume;
-- progresso observado;
-- atualizar textos e estados do painel Queue Social;
-- preservar controles acessíveis e mobile-first.
+- [x] pause e resume;
+- [x] volume;
+- [x] progresso observado;
+- [x] atualizar textos e estados do painel Queue Social;
+- [x] preservar controles acessíveis e mobile-first.
+
+**Status:** concluída em 20 de junho de 2026 após gates, validação visual e smoke
+Discord real.
+
+**Handoff:** seguir
+[`docs/implementation/etapa-14-end-to-end-de-voz.md`](../implementation/etapa-14-end-to-end-de-voz.md).
 
 ## Etapa 14 — End-to-end de voz
 

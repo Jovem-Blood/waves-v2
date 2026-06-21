@@ -109,6 +109,7 @@ onMounted(() => void checkHealth())
         @refresh="queue.refresh"
         @remove="queue.remove"
         @move="queue.move"
+        @move-to-position="queue.moveToPosition"
       />
 
       <SpotifySearch

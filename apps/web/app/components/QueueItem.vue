@@ -7,6 +7,8 @@ defineProps<{
   index: number
   total: number
   mutating: boolean
+  canMoveUp: boolean
+  canMoveDown: boolean
 }>()
 
 defineEmits<{
@@ -23,8 +25,16 @@ function formatDuration(durationMs: number) {
 </script>
 
 <template>
-  <article class="queue-item" :data-status="item.status">
-    <div class="queue-order">
+  <article class="queue-item" :data-status="item.status" :data-drag-item-id="item.id">
+    <div
+      class="queue-order"
+      :class="{ 'queue-order-disabled': item.status !== 'queued' || mutating }"
+      :aria-label="
+        item.status === 'queued'
+          ? `Arraste para reordenar ${item.track.title}`
+          : `${item.track.title} está tocando e não pode ser reordenada`
+      "
+    >
       <GripVertical :size="16" aria-hidden="true" />
       <span>{{ String(index + 1).padStart(2, '0') }}</span>
     </div>
@@ -50,7 +60,7 @@ function formatDuration(durationMs: number) {
       <button
         class="row-action"
         type="button"
-        :disabled="mutating || index === 0"
+        :disabled="mutating || !canMoveUp"
         :aria-label="`Mover ${item.track.title} para cima`"
         @click="$emit('move', item, -1)"
       >
@@ -59,7 +69,7 @@ function formatDuration(durationMs: number) {
       <button
         class="row-action"
         type="button"
-        :disabled="mutating || index === total - 1"
+        :disabled="mutating || !canMoveDown"
         :aria-label="`Mover ${item.track.title} para baixo`"
         @click="$emit('move', item, 1)"
       >
@@ -114,6 +124,27 @@ function formatDuration(durationMs: number) {
   color: var(--text-subtle);
   font-family: 'Geist Mono Variable', monospace;
   font-size: 9px;
+  cursor: grab;
+  user-select: none;
+}
+
+.queue-order-disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@media (pointer: coarse) {
+  .queue-order {
+    cursor: default;
+  }
+}
+
+.queue-item:not([data-status='playing']) .queue-order:active {
+  cursor: grabbing;
+}
+
+.queue-item[data-status='queued'] .queue-order {
+  touch-action: manipulation;
 }
 
 .queue-track {

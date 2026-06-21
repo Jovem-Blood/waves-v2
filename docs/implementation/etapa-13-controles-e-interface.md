@@ -68,17 +68,17 @@ painel Queue Social sem transferir ao bot a propriedade persistida do player.
 - Context7 resolveu os IDs atuais de Nuxt 4 e `@discordjs/voice`, mas a consulta
   dos documentos foi bloqueada por quota mensal.
 
-### Pendências obrigatórias
+### Validação final
 
-1. `pnpm build` não concluiu: cliente e SSR compilam, mas a etapa Nitro permanece
-   ativa por mais de cinco minutos até o timeout. Investigar antes de encerrar.
-2. Validar visualmente em mobile, largura intermediária e desktop contra
-   `DESIGN.md` e `pencil.pen`.
-3. Executar smoke Discord real de pause idempotente, resume, volume mínimo/máximo,
-   progresso, conclusão após resume, skip/leave pausado e retomada após restart.
-4. Confirmar ausência de secrets nos logs do smoke.
+- `pnpm build`: aprovado após resolução do bloqueio operacional;
+- validação visual mobile, intermediária e desktop: aprovada;
+- smoke Discord: pause idempotente, resume, volume mínimo/máximo, progresso,
+  conclusão após resume, skip/leave pausado e retomada aprovados;
+- logs do smoke revisados sem secrets.
 
 ## Estado
 
-Implementação automatizada pronta, mas Etapa 13 não concluída. Não iniciar Etapa
-14 até resolver build, validação visual e smoke Discord.
+Etapa 13 concluída em 20 de junho de 2026.
+
+**Handoff:** seguir
+[`etapa-14-end-to-end-de-voz.md`](etapa-14-end-to-end-de-voz.md).

@@ -135,6 +135,29 @@ describe('QueueService', () => {
     expect(service.move('queue-2', { newPosition: 1 })).toEqual(before)
   })
 
+  it('keeps the playing item fixed while queued items are reordered', () => {
+    const { repository, service } = setup()
+    service.add(input)
+    service.add({ track: { ...input.track, id: 'spotify:track-2' } })
+    service.add({ track: { ...input.track, id: 'spotify:track-3' } })
+    repository.updateStatusAndPosition('queue-1', {
+      status: 'playing',
+      position: 0,
+      updatedAt: now().toISOString(),
+    })
+
+    expect(service.move('queue-1', { newPosition: 2 }).map(({ id }) => id)).toEqual([
+      'queue-1',
+      'queue-2',
+      'queue-3',
+    ])
+    expect(service.move('queue-3', { newPosition: 0 }).map(({ id }) => id)).toEqual([
+      'queue-1',
+      'queue-3',
+      'queue-2',
+    ])
+  })
+
   it.each([
     ['first', 'queue-1'],
     ['middle', 'queue-2'],

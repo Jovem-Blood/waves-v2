@@ -75,7 +75,13 @@ export class QueueService {
         throw new QueueItemNotFoundError(id)
       }
 
-      const targetIndex = Math.min(newPosition, activeItems.length - 1)
+      const currentItem = activeItems[currentIndex]
+      if (!currentItem || currentItem.status === 'playing') {
+        return activeItems
+      }
+
+      const playingOffset = activeItems[0]?.status === 'playing' ? 1 : 0
+      const targetIndex = Math.max(playingOffset, Math.min(newPosition, activeItems.length - 1))
       if (targetIndex === currentIndex) {
         return activeItems
       }

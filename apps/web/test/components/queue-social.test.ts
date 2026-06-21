@@ -29,6 +29,14 @@ const queueItem: QueueItem = {
   updatedAt: '2026-06-18T12:00:00.000Z',
 }
 
+const queuedItem: QueueItem = {
+  ...queueItem,
+  id: 'queue-2',
+  status: 'queued',
+  position: 1,
+  track: { ...track, id: 'track-2', title: 'Cidade Lunar' },
+}
+
 const player: PlayerState = {
   status: 'playing',
   currentQueueItemId: queueItem.id,
@@ -70,6 +78,24 @@ describe('Queue Social components', () => {
     })
     await filled.get('[aria-label="Remover Luz da Madrugada da fila"]').trigger('click')
     expect(filled.emitted('remove')).toEqual([[queueItem.id]])
+  })
+
+  it('keeps the playing row fixed and exposes a handle only for queued rows', () => {
+    const wrapper = mount(QueuePanel, {
+      props: {
+        items: [queueItem, queuedItem],
+        loading: false,
+        refreshing: false,
+      },
+    })
+
+    expect(
+      wrapper.get('[aria-label="Luz da Madrugada está tocando e não pode ser reordenada"]'),
+    ).toBeDefined()
+    expect(wrapper.get('[aria-label="Arraste para reordenar Cidade Lunar"]')).toBeDefined()
+    expect(
+      wrapper.get('[aria-label="Mover Cidade Lunar para cima"]').attributes('disabled'),
+    ).toBeDefined()
   })
 
   it('debounces Spotify search and renders validated results', async () => {

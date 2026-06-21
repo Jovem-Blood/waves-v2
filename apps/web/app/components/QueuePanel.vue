@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { Queue, QueueItem } from '@waves/shared'
 import { Clock3, ListMusic, LoaderCircle, Radio, RefreshCw, Users } from '@lucide/vue'
+import Sortable, { type SortableEvent } from 'sortablejs'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import QueueItemRow from './QueueItem.vue'
 
-defineProps<{
+const props = defineProps<{
   items: Queue
   loading: boolean
   refreshing: boolean
@@ -12,16 +14,58 @@ defineProps<{
   mutatingId?: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   refresh: []
   remove: [id: string]
   move: [item: QueueItem, direction: -1 | 1]
+  moveToPosition: [fromIndex: number, toIndex: number]
 }>()
+
+const queueItemsRef = ref<HTMLElement | null>(null)
+let sortable: Sortable | undefined
 
 function totalDuration(items: Queue) {
   const minutes = Math.round(items.reduce((sum, item) => sum + item.track.durationMs, 0) / 60000)
   return `${minutes} min`
 }
+
+function initializeSortable() {
+  sortable?.destroy()
+  sortable = undefined
+  if (!queueItemsRef.value) return
+
+  sortable = Sortable.create(queueItemsRef.value, {
+    animation: 180,
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
+    handle: '.queue-order',
+    draggable: '.queue-item[data-status="queued"]',
+    ghostClass: 'queue-item-ghost',
+    chosenClass: 'queue-item-chosen',
+    dragClass: 'queue-item-drag',
+    forceFallback: true,
+    fallbackClass: 'queue-item-fallback',
+    fallbackOnBody: true,
+    fallbackTolerance: 4,
+    delay: 180,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    onEnd(event: SortableEvent) {
+      if (event.oldIndex === undefined || event.newIndex === undefined) return
+      emit('moveToPosition', event.oldIndex, event.newIndex)
+    },
+  })
+}
+
+watch(
+  () => [props.loading, props.items.length] as const,
+  async () => {
+    await nextTick()
+    initializeSortable()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => sortable?.destroy())
 </script>
 
 <template>
@@ -82,7 +126,7 @@ function totalDuration(items: Queue) {
         </div>
       </div>
 
-      <div v-else>
+      <div v-else ref="queueItemsRef" class="queue-items">
         <QueueItemRow
           v-for="(item, index) in items"
           :key="item.id"
@@ -90,6 +134,10 @@ function totalDuration(items: Queue) {
           :index="index"
           :total="items.length"
           :mutating="mutatingId === item.id"
+          :can-move-up="
+            item.status === 'queued' && index > 0 && items[index - 1]?.status !== 'playing'
+          "
+          :can-move-down="item.status === 'queued' && index < items.length - 1"
           @remove="$emit('remove', $event)"
           @move="(movedItem, direction) => $emit('move', movedItem, direction)"
         />
@@ -263,6 +311,37 @@ h1 {
 
   .queue-table-header span {
     padding: 0 10px;
+  }
+}
+
+.queue-items {
+  position: relative;
+}
+
+.queue-items :deep(.queue-item-ghost) {
+  opacity: 0.24;
+  border: 1px dashed var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--surface-raised));
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.queue-items :deep(.queue-item-chosen) {
+  border-color: var(--accent-primary);
+}
+
+.queue-items :deep(.queue-item-drag),
+:global(.queue-item-fallback) {
+  opacity: 0.92;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow: var(--glow-primary);
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-items :deep(.queue-item) {
+    transition: none !important;
   }
 }
 </style>

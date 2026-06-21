@@ -18,9 +18,10 @@ export function useQueue(apiBase: string) {
   const addingTrackId = ref<string>()
   let pollingTimer: ReturnType<typeof setInterval> | undefined
   let requestInFlight = false
+  let mutationInFlight = false
 
   async function load(isPolling = false) {
-    if (requestInFlight) return
+    if (requestInFlight || mutationInFlight) return
     requestInFlight = true
     if (isPolling) refreshing.value = true
     else loading.value = true
@@ -75,9 +76,17 @@ export function useQueue(apiBase: string) {
   async function move(item: QueueItem, direction: -1 | 1) {
     const currentIndex = items.value.findIndex(({ id }) => id === item.id)
     const newPosition = currentIndex + direction
-    if (currentIndex < 0 || newPosition < 0 || newPosition >= items.value.length) return
+    if (
+      item.status !== 'queued' ||
+      currentIndex < 0 ||
+      newPosition < 0 ||
+      newPosition >= items.value.length ||
+      items.value[newPosition]?.status === 'playing'
+    )
+      return
 
     mutatingId.value = item.id
+    mutationInFlight = true
     try {
       replace(
         queueSchema.parse(
@@ -90,6 +99,47 @@ export function useQueue(apiBase: string) {
     } catch {
       error.value = 'Não foi possível mover essa faixa.'
     } finally {
+      mutationInFlight = false
+      mutatingId.value = undefined
+    }
+  }
+
+  async function moveToPosition(fromIndex: number, targetIndex: number) {
+    if (
+      fromIndex < 0 ||
+      fromIndex >= items.value.length ||
+      targetIndex < 0 ||
+      targetIndex >= items.value.length
+    )
+      return
+
+    const snapshot = [...items.value]
+    const item = items.value[fromIndex]
+    if (!item || item.status !== 'queued') return
+    const playingOffset = items.value[0]?.status === 'playing' ? 1 : 0
+    const adjustedToIndex = Math.max(playingOffset, targetIndex)
+    if (adjustedToIndex === fromIndex) return
+
+    const moved = items.value.splice(fromIndex, 1)[0]
+    if (!moved) return
+    items.value.splice(adjustedToIndex, 0, moved)
+
+    mutatingId.value = item.id
+    mutationInFlight = true
+    try {
+      replace(
+        queueSchema.parse(
+          await $fetch(`${apiBase}/queue/${encodeURIComponent(item.id)}/move`, {
+            method: 'POST',
+            body: { newPosition: adjustedToIndex },
+          }),
+        ),
+      )
+    } catch {
+      items.value = snapshot
+      error.value = 'Não foi possível reordenar a fila.'
+    } finally {
+      mutationInFlight = false
       mutatingId.value = undefined
     }
   }
@@ -115,5 +165,6 @@ export function useQueue(apiBase: string) {
     add,
     remove,
     move,
+    moveToPosition,
   }
 }
