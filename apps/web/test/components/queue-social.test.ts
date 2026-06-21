@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { PlayerState, QueueItem, TrackMetadata } from '@waves/shared'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -152,5 +152,58 @@ describe('queue polling', () => {
     resolveRequest?.([])
     await vi.advanceTimersByTimeAsync(5000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('defers a polling response while the queue is being dragged', async () => {
+    vi.useFakeTimers()
+    const staleItem = {
+      ...queuedItem,
+      track: { ...queuedItem.track, title: 'Resposta antiga' },
+    }
+    const freshItem = {
+      ...queuedItem,
+      track: { ...queuedItem.track, title: 'Resposta atual' },
+    }
+    let resolvePollingRequest: ((value: QueueItem[]) => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce([queueItem, queuedItem])
+      .mockImplementationOnce(
+        () =>
+          new Promise<QueueItem[]>((resolve) => {
+            resolvePollingRequest = resolve
+          }),
+      )
+      .mockResolvedValueOnce([queueItem, freshItem])
+    vi.stubGlobal('$fetch', fetchMock)
+
+    let queue: ReturnType<typeof useQueue> | undefined
+    const Harness = defineComponent({
+      setup() {
+        queue = useQueue('/api')
+        return {}
+      },
+      template: '<div />',
+    })
+
+    const wrapper = mount(Harness)
+    await flushPromises()
+    expect(queue?.items.value[1]?.track.title).toBe('Cidade Lunar')
+
+    vi.advanceTimersByTime(2500)
+    await nextTick()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    queue?.setInteractionLocked(true)
+    resolvePollingRequest?.([queueItem, staleItem])
+    await flushPromises()
+    expect(queue?.items.value[1]?.track.title).toBe('Cidade Lunar')
+
+    queue?.setInteractionLocked(false)
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(queue?.items.value[1]?.track.title).toBe('Resposta atual')
+
+    wrapper.unmount()
   })
 })

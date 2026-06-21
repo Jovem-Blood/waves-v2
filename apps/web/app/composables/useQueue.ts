@@ -19,16 +19,32 @@ export function useQueue(apiBase: string) {
   let pollingTimer: ReturnType<typeof setInterval> | undefined
   let requestInFlight = false
   let mutationInFlight = false
+  let interactionLocked = false
+  let refreshAfterInteraction = false
+
+  function applyQueue(queue: Queue) {
+    if (interactionLocked) {
+      refreshAfterInteraction = true
+      return false
+    }
+
+    items.value = queueSchema.parse(queue)
+    error.value = undefined
+    return true
+  }
 
   async function load(isPolling = false) {
+    if (interactionLocked) {
+      refreshAfterInteraction = true
+      return
+    }
     if (requestInFlight || mutationInFlight) return
     requestInFlight = true
     if (isPolling) refreshing.value = true
     else loading.value = true
 
     try {
-      items.value = queueSchema.parse(await $fetch(`${apiBase}/queue`))
-      error.value = undefined
+      applyQueue(queueSchema.parse(await $fetch(`${apiBase}/queue`)))
     } catch {
       error.value = 'Não foi possível atualizar a fila.'
     } finally {
@@ -39,8 +55,19 @@ export function useQueue(apiBase: string) {
   }
 
   function replace(queue: Queue) {
-    items.value = queueSchema.parse(queue)
-    error.value = undefined
+    return applyQueue(queue)
+  }
+
+  function refreshPendingQueue() {
+    if (!refreshAfterInteraction || interactionLocked || mutationInFlight) return
+
+    refreshAfterInteraction = false
+    void load(true)
+  }
+
+  function setInteractionLocked(locked: boolean) {
+    interactionLocked = locked
+    refreshPendingQueue()
   }
 
   async function add(track: TrackMetadata) {
@@ -49,8 +76,7 @@ export function useQueue(apiBase: string) {
       const item = queueItemSchema.parse(
         await $fetch(`${apiBase}/queue`, { method: 'POST', body: { track } }),
       )
-      items.value = [...items.value, item].sort((a, b) => a.position - b.position)
-      error.value = undefined
+      applyQueue([...items.value, item].sort((a, b) => a.position - b.position))
     } catch {
       error.value = 'Não foi possível adicionar essa faixa.'
     } finally {
@@ -88,7 +114,7 @@ export function useQueue(apiBase: string) {
     mutatingId.value = item.id
     mutationInFlight = true
     try {
-      replace(
+      const applied = replace(
         queueSchema.parse(
           await $fetch(`${apiBase}/queue/${encodeURIComponent(item.id)}/move`, {
             method: 'POST',
@@ -96,11 +122,13 @@ export function useQueue(apiBase: string) {
           }),
         ),
       )
+      if (applied) refreshAfterInteraction = false
     } catch {
       error.value = 'Não foi possível mover essa faixa.'
     } finally {
       mutationInFlight = false
       mutatingId.value = undefined
+      refreshPendingQueue()
     }
   }
 
@@ -127,7 +155,7 @@ export function useQueue(apiBase: string) {
     mutatingId.value = item.id
     mutationInFlight = true
     try {
-      replace(
+      const applied = replace(
         queueSchema.parse(
           await $fetch(`${apiBase}/queue/${encodeURIComponent(item.id)}/move`, {
             method: 'POST',
@@ -135,12 +163,14 @@ export function useQueue(apiBase: string) {
           }),
         ),
       )
+      if (applied) refreshAfterInteraction = false
     } catch {
       items.value = snapshot
       error.value = 'Não foi possível reordenar a fila.'
     } finally {
       mutationInFlight = false
       mutatingId.value = undefined
+      refreshPendingQueue()
     }
   }
 
@@ -166,5 +196,6 @@ export function useQueue(apiBase: string) {
     remove,
     move,
     moveToPosition,
+    setInteractionLocked,
   }
 }

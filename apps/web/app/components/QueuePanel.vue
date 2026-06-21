@@ -2,11 +2,11 @@
 import type { Queue, QueueItem } from '@waves/shared'
 import { Clock3, ListMusic, LoaderCircle, Radio, RefreshCw, Users } from '@lucide/vue'
 import Sortable, { type SortableEvent } from 'sortablejs'
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 
 import QueueItemRow from './QueueItem.vue'
 
-const props = defineProps<{
+defineProps<{
   items: Queue
   loading: boolean
   refreshing: boolean
@@ -19,10 +19,12 @@ const emit = defineEmits<{
   remove: [id: string]
   move: [item: QueueItem, direction: -1 | 1]
   moveToPosition: [fromIndex: number, toIndex: number]
+  dragStateChange: [dragging: boolean]
 }>()
 
 const queueItemsRef = ref<HTMLElement | null>(null)
 let sortable: Sortable | undefined
+let dragging = false
 
 function totalDuration(items: Queue) {
   const minutes = Math.round(items.reduce((sum, item) => sum + item.track.durationMs, 0) / 60000)
@@ -30,6 +32,7 @@ function totalDuration(items: Queue) {
 }
 
 function initializeSortable() {
+  if (sortable?.el === queueItemsRef.value) return
   sortable?.destroy()
   sortable = undefined
   if (!queueItemsRef.value) return
@@ -49,23 +52,41 @@ function initializeSortable() {
     delay: 180,
     delayOnTouchOnly: true,
     touchStartThreshold: 5,
+    onStart() {
+      dragging = true
+      emit('dragStateChange', true)
+    },
     onEnd(event: SortableEvent) {
-      if (event.oldIndex === undefined || event.newIndex === undefined) return
-      emit('moveToPosition', event.oldIndex, event.newIndex)
+      if (event.oldIndex !== undefined && event.newIndex !== undefined) {
+        emit('moveToPosition', event.oldIndex, event.newIndex)
+      }
+      finishDragging()
+    },
+    onUnchoose() {
+      queueMicrotask(finishDragging)
     },
   })
 }
 
-watch(
-  () => [props.loading, props.items.length] as const,
-  async () => {
-    await nextTick()
-    initializeSortable()
-  },
-  { immediate: true },
-)
+function finishDragging() {
+  if (!dragging) return
+  dragging = false
+  emit('dragStateChange', false)
+}
 
-onBeforeUnmount(() => sortable?.destroy())
+function removeOrphanedFallback() {
+  document
+    .querySelectorAll<HTMLElement>('body > .queue-item-fallback')
+    .forEach((element) => element.remove())
+}
+
+watch(queueItemsRef, initializeSortable, { flush: 'post' })
+
+onBeforeUnmount(() => {
+  finishDragging()
+  sortable?.destroy()
+  removeOrphanedFallback()
+})
 </script>
 
 <template>

@@ -110,6 +110,7 @@ onMounted(() => void checkHealth())
         @remove="queue.remove"
         @move="queue.move"
         @move-to-position="queue.moveToPosition"
+        @drag-state-change="queue.setInteractionLocked"
       />
 
       <SpotifySearch
