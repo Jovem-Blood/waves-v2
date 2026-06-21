@@ -2,12 +2,8 @@
 
 ## Projeto
 
-Waves é um sistema privado, mobile-first, para controlar a fila de músicas de um
-bot Discord. O nome técnico do monorepo é `discord-music-panel`.
-
-Leia [`SPEC.md`](SPEC.md) antes de implementar mudanças de produto ou arquitetura.
-O plano incremental está em
-[`docs/specs/10-plano-de-implementacao.md`](docs/specs/10-plano-de-implementacao.md).
+Waves é um sistema privado, mobile-first, para controlar a fila e o player de
+músicas de um bot Discord. O nome técnico do monorepo é `discord-music-panel`.
 
 ## Interface web e design
 
@@ -18,8 +14,6 @@ pela leitura integral de:
    tipografia, componentes, responsividade, estados e acessibilidade.
 2. [`pencil.pen`](pencil.pen), fonte visual complementar com os frames e
    componentes desenhados no Pencil.
-3. [`docs/specs/07-interface-web.md`](docs/specs/07-interface-web.md), fonte dos
-   requisitos funcionais e da hierarquia Queue Social.
 
 Não implemente a interface apenas a partir do `.pen`: use o `DESIGN.md` para
 interpretar corretamente os detalhes visuais e transformar o desenho em componentes
@@ -28,10 +22,9 @@ composição, proporções ou comparação visual.
 
 Ordem de precedência para decisões de UI:
 
-1. Requisitos funcionais e restrições de `SPEC.md` e das specs.
+1. Requisitos e restrições já implementados no código e nos testes.
 2. Regras explícitas de `DESIGN.md`.
 3. Composição e aparência do `pencil.pen`.
-4. Convenções já implementadas em `apps/web`.
 
 Se houver divergência material entre `DESIGN.md` e `pencil.pen`, não invente uma
 terceira direção. Registre a divergência e solicite decisão antes de alterar a
@@ -55,45 +48,28 @@ Antes de concluir trabalho de UI:
 - O bot nunca acessa SQLite ou Drizzle diretamente.
 - O Nuxt é a fonte da verdade da fila e do player.
 
-## Estado das fases
+## Arquitetura e limites
 
-- Fase 1 concluída em 19 de junho de 2026.
-- Etapa 10, fundação de voz, concluída em 20 de junho de 2026.
-- A Fase 2 deve preservar Nuxt como fonte da verdade da fila e do player.
-- O bot pode manter apenas recursos efêmeros de runtime, como `VoiceConnection` e
-  `AudioPlayer`; estado observável continua sincronizado pela API interna.
-- Resolução de fonte deve ficar atrás de um adaptador e não pode ser confundida com
-  a busca de metadados do Spotify.
-- Não introduza YouTube, yt-dlp, play-dl, Lavalink ou outra fonte sem decisão
-  registrada em `docs/specs/12-decisoes.md`.
-- YouTube Music via `youtubei.js` foi autorizado em `D-015` para a continuação da
-  Etapa 12. Não substituir por `play-dl`, `@distube/ytdl-core`, yt-dlp ou Lavalink
-  sem nova decisão.
-- Trabalhe uma etapa da Fase 2 por vez.
-- A Etapa 11 está limitada à escolha documentada do provedor, contrato
-  `AudioSourceResolver`, resolução, validação, cache, expiração e uso de
-  `resolved_sources`.
-- A Etapa 11 não inclui `AudioPlayer`, `AudioResource`, reprodução, avanço
-  automático, skip real do stream, pause, resume, volume, progresso ou mudanças de
-  UI.
-- Não altere o schema de `resolved_sources` sem necessidade comprovada.
-- Não declare a Etapa 11 concluída sem validação real proporcional ao provedor
-  escolhido.
-- A Etapa 12 foi concluída em 20 de junho de 2026 com YouTube Music como fonte
-  primária, Audius como fallback e smoke Discord de reprodução, avanço, skip,
-  leave, autojoin e retomada da fila.
-- A Etapa 13 foi concluída em 20 de junho de 2026.
-- A próxima etapa permitida é a Etapa 14: end-to-end de voz.
+- Nuxt é a fonte da verdade da fila e do player.
+- O bot mantém somente recursos efêmeros de runtime, como `VoiceConnection`,
+  `AudioPlayer`, subscriptions e streams.
+- Estado observável é sincronizado pela API interna.
+- Resolução de fonte fica atrás de `AudioSourceResolver` e é separada da busca de
+  metadados do Spotify.
+- YouTube Music via `youtubei.js` é a fonte primária; Audius é fallback.
+- Não substituir o provedor nem introduzir `play-dl`, `@distube/ytdl-core`, yt-dlp
+  ou Lavalink sem decisão arquitetural explícita.
+- Não alterar o schema de `resolved_sources` sem necessidade comprovada.
+- O painel não possui autenticação própria e não deve ser exposto publicamente sem
+  proteção externa.
 
 ## Forma de trabalho
 
-1. Trabalhe uma etapa por vez.
-2. Preserve TypeScript strict e `exactOptionalPropertyTypes`.
-3. Use Zod para env, payloads e respostas externas.
-4. Mantenha rotas finas, regras em services e persistência em repositories.
-5. Antes de concluir uma etapa, execute os gates aplicáveis.
-6. Marque apenas itens efetivamente verificados.
-7. Crie ou atualize o handoff da etapa seguinte em `docs/implementation`.
+1. Preserve TypeScript strict e `exactOptionalPropertyTypes`.
+2. Use Zod para env, payloads e respostas externas.
+3. Mantenha rotas finas, regras em services e persistência em repositories.
+4. Preserve compatibilidade entre painel, API e comandos Discord.
+5. Execute os gates aplicáveis antes de concluir mudanças.
 
 ## Documentação atual
 

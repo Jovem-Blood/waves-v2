@@ -4,9 +4,13 @@
 .nuxt
 .output
 coverage
-dev.db
-dev.db-*
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 dist
 node_modules
 *.log
-
+artifacts/
