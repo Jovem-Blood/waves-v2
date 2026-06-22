@@ -10,11 +10,12 @@ const config: BotConfig = {
   discordGuildId: 'guild-id',
   internalApiToken: 'internal-token',
   apiBaseUrl: 'http://localhost:3000/api',
+  appHostname: 'http://localhost:3000',
   logLevel: 'info',
 }
 
 describe('registerCommands', () => {
-  it('registers exactly five commands in the configured guild', async () => {
+  it('registers exactly eight commands in the configured guild', async () => {
     const putCommands = vi.fn().mockResolvedValue([])
 
     await registerCommands(config, putCommands)

@@ -78,10 +78,12 @@ describe('PlayerStateService', () => {
   it('persists and clears the connected voice guild and channel', () => {
     const { service } = setup()
 
-    expect(service.voiceConnected('guild-1', 'voice-1')).toMatchObject({
+    expect(service.voiceConnected('guild-1', 'Waves', 'voice-1', 'ondas-da-noite')).toMatchObject({
       status: 'idle',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
     expect(service.voiceDisconnected('other-guild')).toMatchObject({
@@ -90,10 +92,15 @@ describe('PlayerStateService', () => {
       voiceChannelId: 'voice-1',
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
-    expect(service.voiceDisconnected('guild-1')).toMatchObject({
+    const disconnected = service.voiceDisconnected('guild-1')
+    expect(disconnected).toMatchObject({
       status: 'idle',
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
+    expect(disconnected).not.toHaveProperty('guildId')
+    expect(disconnected).not.toHaveProperty('guildName')
+    expect(disconnected).not.toHaveProperty('voiceChannelId')
+    expect(disconnected).not.toHaveProperty('voiceChannelName')
   })
 
   it('returns the current playing item to the queue when voice disconnects', () => {
@@ -223,7 +230,7 @@ describe('PlayerStateService', () => {
       },
     })
 
-    service.voiceConnected('guild-1', 'voice-1')
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'ondas-da-noite')
     const claimed = service.claimPlayback()
     expect(claimed.player).toMatchObject({
       status: 'playing',
@@ -239,7 +246,7 @@ describe('PlayerStateService', () => {
     const { queueRepository, service } = setup()
     queueRepository.insert(item('first', 0))
     queueRepository.insert(item('second', 1))
-    service.voiceConnected('guild-1', 'voice-1')
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'ondas-da-noite')
     service.claimPlayback()
 
     expect(service.completePlayback({ queueItemId: 'first', outcome: 'played' })).toMatchObject({
@@ -262,7 +269,7 @@ describe('PlayerStateService', () => {
   it('marks a failed last item and leaves the connected player idle', () => {
     const { queueRepository, service } = setup()
     queueRepository.insert(item('only', 0))
-    service.voiceConnected('guild-1', 'voice-1')
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'ondas-da-noite')
     service.claimPlayback()
 
     expect(service.completePlayback({ queueItemId: 'only', outcome: 'failed' })).toMatchObject({
@@ -282,7 +289,7 @@ describe('PlayerStateService', () => {
     const { queueRepository, service } = setup()
     queueRepository.insert(item('first', 0))
     queueRepository.insert(item('second', 1))
-    service.voiceConnected('guild-1', 'voice-1')
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'ondas-da-noite')
     service.claimPlayback()
 
     expect(() => service.completePlayback({ queueItemId: 'second', outcome: 'played' })).toThrow(

@@ -5,7 +5,7 @@ import type { WavesApi } from '../src/api/waves-api.client.js'
 import { WavesApiError } from '../src/api/waves-api.errors.js'
 import { commandDefinitions, commands, executeCommand } from '../src/commands/index.js'
 import { formatQueue } from '../src/commands/queue.command.js'
-import type { CommandContext, CommandResponder } from '../src/commands/types.js'
+import type { CommandContext, CommandMessage, CommandResponder } from '../src/commands/types.js'
 import type { BotLogger } from '../src/logger.js'
 import type { PlaybackManager } from '../src/playback/audio-player-manager.js'
 import type { VoiceManager } from '../src/voice/voice-manager.js'
@@ -31,10 +31,14 @@ const item: QueueItem = {
 function setup(overrides: Partial<CommandContext> = {}) {
   const deferEphemeral = vi.fn().mockResolvedValue(undefined)
   const publicReply = vi.fn().mockResolvedValue(undefined)
+  const followUpPublic = vi
+    .fn<(message: CommandMessage) => Promise<void>>()
+    .mockResolvedValue(undefined)
   const ephemeralReply = vi.fn().mockResolvedValue(undefined)
   const responder: CommandResponder = {
     deferEphemeral,
     public: publicReply,
+    followUpPublic,
     ephemeral: ephemeralReply,
   }
   const getQueue = vi.fn().mockResolvedValue([item])
@@ -94,6 +98,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
   }
   const context: CommandContext = {
     name: 'test',
+    appHostname: 'https://waves.example.com',
     userId: 'user-1',
     displayName: 'Luis',
     logger: logger as unknown as BotLogger,
@@ -108,6 +113,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
     mocks: {
       deferEphemeral,
       ephemeralReply,
+      followUpPublic,
       getQueue,
       play,
       publicReply,
@@ -144,7 +150,9 @@ describe('bot commands', () => {
       name: 'play',
       query: 'track',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       voiceAdapterCreator: vi.fn(),
     })
     mocks.startPlayback.mockResolvedValue('started')
@@ -167,7 +175,9 @@ describe('bot commands', () => {
       name: 'play',
       query: 'missing',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       voiceAdapterCreator: vi.fn(),
     })
     mocks.play.mockRejectedValue(new WavesApiError('TRACK_NOT_FOUND', 404))
@@ -184,7 +194,9 @@ describe('bot commands', () => {
       name: 'play',
       query: 'track',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       voiceAdapterCreator: vi.fn(),
     })
     mocks.isConnected.mockReturnValue(false)
@@ -201,7 +213,9 @@ describe('bot commands', () => {
       expect.objectContaining({
         type: 'voice.connected',
         guildId: 'guild-1',
+        guildName: 'Waves',
         voiceChannelId: 'voice-1',
+        voiceChannelName: 'ondas-da-noite',
       }),
     )
     expect(mocks.sendEvent.mock.invocationCallOrder[0]).toBeLessThan(
@@ -229,7 +243,9 @@ describe('bot commands', () => {
       name: 'play',
       query: 'track',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       voiceAdapterCreator: vi.fn(),
     })
     mocks.play.mockRejectedValue(new Error('http://internal/token-secret'))
@@ -284,7 +300,9 @@ describe('bot commands', () => {
     const inside = setup({
       name: 'join',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       voiceAdapterCreator: vi.fn(),
     })
     await commands
@@ -300,10 +318,17 @@ describe('bot commands', () => {
       expect.objectContaining({
         type: 'voice.connected',
         guildId: 'guild-1',
+        guildName: 'Waves',
         voiceChannelId: 'voice-1',
+        voiceChannelName: 'ondas-da-noite',
       }),
     )
     expect(inside.mocks.ephemeralReply).toHaveBeenCalledWith('Waves conectado ao seu canal de voz.')
+    expect(inside.mocks.followUpPublic).toHaveBeenCalledOnce()
+    const qrMessage = inside.mocks.followUpPublic.mock.calls[0]![0]
+    expect(qrMessage.content).toBe('Controle essa Jam pelo link/qrcode:\nhttps://waves.example.com')
+    expect(qrMessage.files?.[0]?.name).toBe('waves-qrcode.png')
+    expect(Buffer.isBuffer(qrMessage.files?.[0]?.attachment)).toBe(true)
     expect(inside.mocks.sendEvent.mock.invocationCallOrder[0]).toBeLessThan(
       inside.mocks.ephemeralReply.mock.invocationCallOrder[0]!,
     )
@@ -331,7 +356,9 @@ describe('bot commands', () => {
     const join = setup({
       name: 'join',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       voiceAdapterCreator: vi.fn(),
     })
     join.mocks.sendEvent.mockRejectedValue(new Error('web unavailable'))

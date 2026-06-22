@@ -11,6 +11,7 @@ const botConfigSchema = z.strictObject({
   discordGuildId: z.string().trim().min(1),
   internalApiToken: z.string().trim().min(1),
   apiBaseUrl: httpUrlSchema,
+  appHostname: httpUrlSchema,
   logLevel: logLevelSchema,
 })
 
@@ -20,6 +21,7 @@ export interface BotConfig {
   discordGuildId: string
   internalApiToken: string
   apiBaseUrl: string
+  appHostname: string
   logLevel: z.infer<typeof logLevelSchema>
 }
 
@@ -36,6 +38,7 @@ const variableNames = {
   discordGuildId: 'DISCORD_GUILD_ID',
   internalApiToken: 'INTERNAL_API_TOKEN',
   apiBaseUrl: 'BOT_API_BASE_URL',
+  appHostname: 'APP_HOSTNAME',
   logLevel: 'LOG_LEVEL',
 } as const
 
@@ -59,6 +62,7 @@ export function parseBotConfig(environment?: Record<string, string | undefined>)
     discordGuildId: source.DISCORD_GUILD_ID,
     internalApiToken: source.INTERNAL_API_TOKEN,
     apiBaseUrl: source.BOT_API_BASE_URL,
+    appHostname: source.APP_HOSTNAME,
     logLevel: source.LOG_LEVEL ?? (source.NODE_ENV === 'development' ? 'debug' : 'info'),
   })
 

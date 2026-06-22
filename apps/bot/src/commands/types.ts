@@ -8,17 +8,31 @@ import type { BotLogger } from '../logger.js'
 export interface CommandResponder {
   deferEphemeral(): Promise<void>
   public(content: string): Promise<void>
+  followUpPublic(message: CommandMessage): Promise<void>
   ephemeral(content: string): Promise<void>
+}
+
+export interface CommandMessage {
+  content: string
+  files?: readonly CommandAttachment[]
+}
+
+export interface CommandAttachment {
+  attachment: Buffer
+  name: string
 }
 
 export interface CommandContext {
   name: string
+  appHostname: string
   guildId?: string
   query?: string
   volume?: number
   userId: string
   displayName: string
+  guildName?: string
   voiceChannelId?: string
+  voiceChannelName?: string
   voiceAdapterCreator?: DiscordGatewayAdapterCreator
   logger?: BotLogger
   responder: CommandResponder

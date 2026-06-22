@@ -32,6 +32,8 @@ Copie `.env.example` para `.env` na raiz e preencha:
 - Discord: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID` e `DISCORD_GUILD_ID`;
 - API interna: o mesmo `INTERNAL_API_TOKEN` para web e bot;
 - `BOT_API_BASE_URL`, normalmente `http://localhost:3000/api`.
+- `APP_HOSTNAME`, a URL HTTP(S) pública do painel incluída no link e QR code
+  enviados pelo bot.
 - `LOG_LEVEL`, com `debug`, `info`, `warn` ou `error`. O default é `debug` em
   desenvolvimento e `info` nos demais ambientes.
 
@@ -66,13 +68,14 @@ aplicada e que `DATABASE_URL` aponta para um caminho gravável.
 Com o `.env` configurado e o bot adicionado ao guild:
 
 ```bash
-pnpm --filter bot bot:register
 pnpm dev:web
 pnpm dev:bot
 ```
 
 O registro é feito por guild e cria os comandos `/play`, `/queue`, `/skip`, `/join`,
-`/leave`, `/pause`, `/resume` e `/volume`.
+`/leave`, `/pause`, `/resume` e `/volume`. O bot atualiza esses comandos
+automaticamente antes de fazer login. Use `pnpm --filter bot bot:register` apenas
+quando precisar registrar sem iniciar o processo do bot.
 
 ## Smoke test local
 

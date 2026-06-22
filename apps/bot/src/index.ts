@@ -5,12 +5,22 @@ import { parseBotConfig } from './config.js'
 import { registerInteractionHandler } from './interaction-handler.js'
 import { createBotLogger } from './logger.js'
 import { AudioPlayerManager } from './playback/audio-player-manager.js'
+import { registerCommands } from './register-commands.js'
 import { DiscordVoiceManager } from './voice/discord-voice.manager.js'
 
 export function createDiscordClient(): Client {
   return new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
   })
+}
+
+export async function registerCommandsAndLogin(
+  config: ReturnType<typeof parseBotConfig>,
+  client: Pick<Client, 'login'>,
+  register: (config: ReturnType<typeof parseBotConfig>) => Promise<void> = registerCommands,
+): Promise<void> {
+  await register(config)
+  await client.login(config.discordToken)
 }
 
 export async function startBot(): Promise<Client> {
@@ -64,7 +74,7 @@ export async function startBot(): Promise<Client> {
   }, 2_500)
   reconciliationTimer.unref()
 
-  registerInteractionHandler(client, api, voiceManager, playbackManager, logger)
+  registerInteractionHandler(client, api, voiceManager, playbackManager, config.appHostname, logger)
   client.once(Events.ClientReady, (readyClient) => {
     logger.info({ discordUserId: readyClient.user.id }, 'Waves bot ready')
   })
@@ -82,7 +92,7 @@ export async function startBot(): Promise<Client> {
   process.once('SIGINT', () => shutdown('SIGINT'))
   process.once('SIGTERM', () => shutdown('SIGTERM'))
 
-  await client.login(config.discordToken)
+  await registerCommandsAndLogin(config, client)
   return client
 }
 

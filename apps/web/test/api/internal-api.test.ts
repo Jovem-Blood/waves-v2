@@ -354,7 +354,12 @@ describe('authorized internal bot API', () => {
   it('claims and completes playback through atomic internal endpoints', async () => {
     context?.dependencies.queueService.add({ track: firstTrack })
     context?.dependencies.queueService.add({ track: secondTrack })
-    context?.dependencies.playerStateService.voiceConnected('guild-1', 'voice-1')
+    context?.dependencies.playerStateService.voiceConnected(
+      'guild-1',
+      'Waves',
+      'voice-1',
+      'ondas-da-noite',
+    )
 
     const claimed = await postJson('/api/internal/bot/playback/claim', {})
     expect(claimed.response.status).toBe(200)
@@ -460,7 +465,9 @@ describe('authorized internal bot API', () => {
       type: 'voice.connected',
       occurredAt: '2026-06-18T17:00:00.000Z',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       payload: { result: 'connected' },
     })
 
@@ -468,7 +475,9 @@ describe('authorized internal bot API', () => {
     expect(context?.dependencies.playerStateService.get()).toMatchObject({
       status: 'idle',
       guildId: 'guild-1',
+      guildName: 'Waves',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       updatedAt: '2026-06-18T17:00:00.000Z',
     })
 

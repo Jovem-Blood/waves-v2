@@ -26,6 +26,12 @@ function createResponder(interaction: ChatInputCommandInteraction): CommandRespo
       }
       await interaction.reply({ content })
     },
+    async followUpPublic(message) {
+      await interaction.followUp({
+        content: message.content,
+        ...(message.files === undefined ? {} : { files: [...message.files] }),
+      })
+    },
     async ephemeral(content) {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content })
@@ -41,6 +47,7 @@ export async function handleInteraction(
   api: WavesApi,
   voiceManager: VoiceManager,
   playbackManager: PlaybackManager,
+  appHostname: string,
   logger?: BotLogger,
 ): Promise<void> {
   const startedAt = Date.now()
@@ -51,6 +58,8 @@ export async function handleInteraction(
       : (interaction.user.globalName ?? interaction.user.username)
   const voiceChannelId =
     member instanceof GuildMember ? (member.voice.channelId ?? undefined) : undefined
+  const voiceChannelName =
+    member instanceof GuildMember ? (member.voice.channel?.name ?? undefined) : undefined
 
   logger?.info(
     {
@@ -66,7 +75,9 @@ export async function handleInteraction(
   await executeCommand(
     {
       name: interaction.commandName,
+      appHostname,
       ...(interaction.guildId === null ? {} : { guildId: interaction.guildId }),
+      ...(interaction.guild === null ? {} : { guildName: interaction.guild.name }),
       ...(interaction.commandName === 'play'
         ? { query: interaction.options.getString('query', true) }
         : {}),
@@ -76,6 +87,7 @@ export async function handleInteraction(
       userId: interaction.user.id,
       displayName,
       ...(voiceChannelId === undefined ? {} : { voiceChannelId }),
+      ...(voiceChannelName === undefined ? {} : { voiceChannelName }),
       ...(interaction.guild === null
         ? {}
         : { voiceAdapterCreator: interaction.guild.voiceAdapterCreator }),
@@ -105,6 +117,7 @@ export function registerInteractionHandler(
   api: WavesApi,
   voiceManager: VoiceManager,
   playbackManager: PlaybackManager,
+  appHostname: string,
   logger: BotLogger,
 ): void {
   client.on('interactionCreate', (interaction) => {
@@ -112,19 +125,24 @@ export function registerInteractionHandler(
       return
     }
 
-    void handleInteraction(interaction, api, voiceManager, playbackManager, logger).catch(
-      (error: unknown) => {
-        logger.error(
-          {
-            operation: 'command.execute',
-            commandName: interaction.commandName,
-            discordUserId: interaction.user.id,
-            errorName: error instanceof Error ? error.name : 'UnknownError',
-            outcome: 'failed',
-          },
-          'Command handler failed',
-        )
-      },
-    )
+    void handleInteraction(
+      interaction,
+      api,
+      voiceManager,
+      playbackManager,
+      appHostname,
+      logger,
+    ).catch((error: unknown) => {
+      logger.error(
+        {
+          operation: 'command.execute',
+          commandName: interaction.commandName,
+          discordUserId: interaction.user.id,
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          outcome: 'failed',
+        },
+        'Command handler failed',
+      )
+    })
   })
 }

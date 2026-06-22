@@ -15,6 +15,13 @@
       "when": 1781985600000,
       "tag": "0001_player_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782162000000,
+      "tag": "0002_player_connection_names",
+      "breakpoints": true
     }
   ]
 }

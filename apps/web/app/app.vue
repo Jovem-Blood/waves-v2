@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from '#imports'
-import { AudioWaveform, Headphones, Radio, Server } from '@lucide/vue'
+import { AudioWaveform, Headphones } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
 import PlayerBar from './components/PlayerBar.vue'
+import HeaderConnectionStatus from './components/HeaderConnectionStatus.vue'
 import QueuePanel from './components/QueuePanel.vue'
 import SpotifySearch from './components/SpotifySearch.vue'
 import SettingsModal from './components/SettingsModal.vue'
@@ -69,16 +70,11 @@ onMounted(() => void checkHealth())
         </span>
       </div>
 
-      <div class="hidden items-center gap-6 md:flex">
-        <div class="header-context">
-          <Server :size="16" aria-hidden="true" />
-          <span><small>SERVIDOR</small>Waves</span>
-        </div>
-        <div class="header-context">
-          <Radio :size="16" aria-hidden="true" />
-          <span><small>CANAL DE VOZ</small>ondas-da-noite</span>
-        </div>
-      </div>
+      <HeaderConnectionStatus
+        :player="player.state.value"
+        :loading="player.loading.value"
+        :error="player.error.value"
+      />
 
       <div class="header-actions">
         <SettingsModal :is-online="isOnline" />

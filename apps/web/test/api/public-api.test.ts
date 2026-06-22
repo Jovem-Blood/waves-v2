@@ -48,6 +48,7 @@ const secondTrack: TrackMetadata = {
 interface TestContext {
   baseUrl: string
   connection: DatabaseConnection
+  dependencies: PublicApiDependencies
   server: Server
   spotifySearch: ReturnType<typeof vi.fn<(query: string) => Promise<TrackMetadata[]>>>
 }
@@ -102,6 +103,7 @@ async function startTestApi(): Promise<TestContext> {
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
     connection,
+    dependencies,
     server,
     spotifySearch,
   }
@@ -295,5 +297,23 @@ describe('public API', () => {
         status: 'playing',
       }),
     ])
+  })
+
+  it('returns current Discord connection names without exposing name fallbacks from IDs', async () => {
+    context?.dependencies.playerStateService.voiceConnected(
+      'guild-1',
+      'Waves',
+      'voice-1',
+      'ondas-da-noite',
+    )
+
+    const connected = await request('/api/player')
+    expect(connected.response.status).toBe(200)
+    expect(connected.body).toMatchObject({
+      guildId: 'guild-1',
+      guildName: 'Waves',
+      voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
+    })
   })
 })

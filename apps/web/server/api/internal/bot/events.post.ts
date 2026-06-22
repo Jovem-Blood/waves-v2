@@ -34,7 +34,12 @@ export function createInternalEventsHandler(
     )
 
     if (botEvent.type === 'voice.connected') {
-      getPlayerStateService().voiceConnected(botEvent.guildId!, botEvent.voiceChannelId!)
+      getPlayerStateService().voiceConnected(
+        botEvent.guildId!,
+        botEvent.guildName!,
+        botEvent.voiceChannelId!,
+        botEvent.voiceChannelName!,
+      )
     } else if (botEvent.type === 'voice.disconnected') {
       getPlayerStateService().voiceDisconnected(botEvent.guildId!)
     } else if (botEvent.type === 'playback.paused') {

@@ -80,14 +80,21 @@ export class PlayerStateService {
     })
   }
 
-  voiceConnected(guildId: string, voiceChannelId: string): PlayerState {
+  voiceConnected(
+    guildId: string,
+    guildName: string,
+    voiceChannelId: string,
+    voiceChannelName: string,
+  ): PlayerState {
     const previous = this.playerStateRepository.get()
     const next = this.playerStateRepository.update({
       status: 'idle',
       currentQueueItemId: null,
       progressMs: 0,
       guildId,
+      guildName,
       voiceChannelId,
+      voiceChannelName,
       updatedAt: this.now().toISOString(),
     })
     this.logPlayerTransition('voice.connected', previous, next, { guildId, voiceChannelId })
@@ -121,7 +128,9 @@ export class PlayerStateService {
           currentQueueItemId: null,
           progressMs: 0,
           guildId: null,
+          guildName: null,
           voiceChannelId: null,
+          voiceChannelName: null,
           updatedAt: timestamp,
         }),
       }

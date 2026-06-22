@@ -1,9 +1,16 @@
+import { createBrandedQrCode } from '../qr-code.js'
 import type { BotCommand } from './types.js'
 
 export const joinCommand: BotCommand = {
   name: 'join',
   async execute(context, api, voiceManager, playbackManager) {
-    if (!context.guildId || !context.voiceChannelId || !context.voiceAdapterCreator) {
+    if (
+      !context.guildId ||
+      !context.guildName ||
+      !context.voiceChannelId ||
+      !context.voiceChannelName ||
+      !context.voiceAdapterCreator
+    ) {
       await context.responder.ephemeral('Entre em um canal de voz antes de usar este comando.')
       return
     }
@@ -39,7 +46,9 @@ export const joinCommand: BotCommand = {
         type: 'voice.connected',
         occurredAt: new Date().toISOString(),
         guildId: context.guildId,
+        guildName: context.guildName,
         voiceChannelId: context.voiceChannelId,
+        voiceChannelName: context.voiceChannelName,
         payload: { result },
       })
       .catch(() => undefined)
@@ -53,6 +62,11 @@ export const joinCommand: BotCommand = {
         ? `${connectionMessage} A reprodução da fila começou.`
         : connectionMessage,
     )
+    const qrCode = await createBrandedQrCode(context.appHostname)
+    await context.responder.followUpPublic({
+      content: `Controle essa Jam pelo link/qrcode:\n${context.appHostname}`,
+      files: [{ attachment: qrCode, name: 'waves-qrcode.png' }],
+    })
     context.logger?.info(
       {
         operation: 'command.join',

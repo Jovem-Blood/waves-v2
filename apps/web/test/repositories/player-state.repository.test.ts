@@ -55,13 +55,17 @@ describe('PlayerStateRepository', () => {
       repository.update({
         status: 'playing',
         voiceChannelId: 'voice-1',
+        voiceChannelName: 'ondas-da-noite',
         guildId: 'guild-1',
+        guildName: 'Waves',
         updatedAt: '2026-06-18T13:00:00.000Z',
       }),
     ).toMatchObject({
       status: 'playing',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       guildId: 'guild-1',
+      guildName: 'Waves',
       updatedAt: '2026-06-18T13:00:00.000Z',
     })
 
@@ -69,7 +73,9 @@ describe('PlayerStateRepository', () => {
     expect(secondRepository.get()).toMatchObject({
       status: 'playing',
       voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
       guildId: 'guild-1',
+      guildName: 'Waves',
       updatedAt: '2026-06-18T13:00:00.000Z',
     })
   })

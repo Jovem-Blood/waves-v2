@@ -4,7 +4,13 @@ import { friendlyApiError } from './errors.js'
 export const playCommand: BotCommand = {
   name: 'play',
   async execute(context, api, voiceManager, playbackManager) {
-    if (!context.guildId || !context.voiceChannelId || !context.voiceAdapterCreator) {
+    if (
+      !context.guildId ||
+      !context.guildName ||
+      !context.voiceChannelId ||
+      !context.voiceChannelName ||
+      !context.voiceAdapterCreator
+    ) {
       await context.responder.ephemeral('Entre em um canal de voz antes de usar este comando.')
       return
     }
@@ -22,7 +28,9 @@ export const playCommand: BotCommand = {
           type: 'voice.connected',
           occurredAt: new Date().toISOString(),
           guildId: context.guildId,
+          guildName: context.guildName,
           voiceChannelId: context.voiceChannelId,
+          voiceChannelName: context.voiceChannelName,
           payload: { result: connectionResult },
         })
       }

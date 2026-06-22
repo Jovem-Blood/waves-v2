@@ -10,7 +10,9 @@ export interface PlayerStateUpdate {
   status?: PlayerStatus
   currentQueueItemId?: string | null
   voiceChannelId?: string | null
+  voiceChannelName?: string | null
   guildId?: string | null
+  guildName?: string | null
   volume?: number
   progressMs?: number
   updatedAt?: string
@@ -21,7 +23,9 @@ function mapRow(row: PlayerStateRow): PlayerState {
     status: row.status,
     ...(row.currentQueueItemId === null ? {} : { currentQueueItemId: row.currentQueueItemId }),
     ...(row.voiceChannelId === null ? {} : { voiceChannelId: row.voiceChannelId }),
+    ...(row.voiceChannelName === null ? {} : { voiceChannelName: row.voiceChannelName }),
     ...(row.guildId === null ? {} : { guildId: row.guildId }),
+    ...(row.guildName === null ? {} : { guildName: row.guildName }),
     volume: row.volume,
     progressMs: row.progressMs,
     updatedAt: row.updatedAt,

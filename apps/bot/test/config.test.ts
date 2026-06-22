@@ -8,6 +8,7 @@ const validEnvironment = {
   DISCORD_GUILD_ID: 'guild-id',
   INTERNAL_API_TOKEN: 'internal-token',
   BOT_API_BASE_URL: 'http://localhost:3000/api',
+  APP_HOSTNAME: 'http://localhost:3000',
 }
 
 describe('parseBotConfig', () => {
@@ -18,6 +19,7 @@ describe('parseBotConfig', () => {
       discordGuildId: 'guild-id',
       internalApiToken: 'internal-token',
       apiBaseUrl: 'http://localhost:3000/api',
+      appHostname: 'http://localhost:3000',
       logLevel: 'info',
     })
   })
@@ -25,7 +27,12 @@ describe('parseBotConfig', () => {
   it('rejects invalid fields without exposing values', () => {
     let error: unknown
     try {
-      parseBotConfig({ ...validEnvironment, DISCORD_TOKEN: '', BOT_API_BASE_URL: 'invalid' })
+      parseBotConfig({
+        ...validEnvironment,
+        DISCORD_TOKEN: '',
+        BOT_API_BASE_URL: 'invalid',
+        APP_HOSTNAME: 'invalid',
+      })
     } catch (caught) {
       error = caught
     }
@@ -33,6 +40,7 @@ describe('parseBotConfig', () => {
     expect(error).toBeInstanceOf(BotConfigurationError)
     expect(String(error)).toContain('DISCORD_TOKEN')
     expect(String(error)).toContain('BOT_API_BASE_URL')
+    expect(String(error)).toContain('APP_HOSTNAME')
     expect(String(error)).not.toContain('internal-token')
   })
 })

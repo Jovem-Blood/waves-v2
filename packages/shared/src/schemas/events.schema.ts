@@ -8,7 +8,9 @@ export const botEventSchema = z
     type: requiredTextSchema,
     occurredAt: z.iso.datetime({ offset: true }),
     guildId: optionalTextSchema,
+    guildName: optionalTextSchema,
     voiceChannelId: optionalTextSchema,
+    voiceChannelName: optionalTextSchema,
     payload: z.record(z.string(), z.unknown()),
   })
   .strict()
@@ -26,6 +28,20 @@ export const botEventSchema = z
           code: 'custom',
           path: ['voiceChannelId'],
           message: 'voiceChannelId is required for voice.connected',
+        })
+      }
+      if (!event.guildName) {
+        context.addIssue({
+          code: 'custom',
+          path: ['guildName'],
+          message: 'guildName is required for voice.connected',
+        })
+      }
+      if (!event.voiceChannelName) {
+        context.addIssue({
+          code: 'custom',
+          path: ['voiceChannelName'],
+          message: 'voiceChannelName is required for voice.connected',
         })
       }
     }

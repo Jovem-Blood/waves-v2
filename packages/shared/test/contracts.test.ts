@@ -141,7 +141,9 @@ describe('player, event and error contracts', () => {
         type: 'voice.connected',
         occurredAt: '2026-06-18T12:00:00.000Z',
         guildId: 'guild-1',
+        guildName: 'Waves',
         voiceChannelId: 'voice-1',
+        voiceChannelName: 'ondas-da-noite',
         payload: {},
       }).success,
     ).toBe(true)
@@ -150,6 +152,16 @@ describe('player, event and error contracts', () => {
         type: 'voice.connected',
         occurredAt: '2026-06-18T12:00:00.000Z',
         guildId: 'guild-1',
+        guildName: 'Waves',
+        payload: {},
+      }).success,
+    ).toBe(false)
+    expect(
+      botEventSchema.safeParse({
+        type: 'voice.connected',
+        occurredAt: '2026-06-18T12:00:00.000Z',
+        guildId: 'guild-1',
+        voiceChannelId: 'voice-1',
         payload: {},
       }).success,
     ).toBe(false)

@@ -31,7 +31,12 @@ export interface PublicPlayerStateService {
   resume(): PlayerState
   setVolume(input: { volume: number }): PlayerState
   updateProgress(input: { queueItemId: string; progressMs: number }): PlayerState
-  voiceConnected(guildId: string, voiceChannelId: string): PlayerState
+  voiceConnected(
+    guildId: string,
+    guildName: string,
+    voiceChannelId: string,
+    voiceChannelName: string,
+  ): PlayerState
   voiceDisconnected(guildId: string): PlayerState
   claimPlayback(): ReturnType<PlayerStateService['claimPlayback']>
   completePlayback(
