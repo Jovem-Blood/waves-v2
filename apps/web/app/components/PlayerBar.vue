@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import type { PlayerState, QueueItem } from '@waves/shared'
-import { Disc3, LoaderCircle, Music2, Pause, Play, SkipForward, Volume2 } from '@lucide/vue'
+import {
+  Disc3,
+  ExternalLink,
+  LoaderCircle,
+  Music2,
+  Pause,
+  Play,
+  SkipForward,
+  Volume2,
+} from '@lucide/vue'
 
 defineProps<{
   player?: PlayerState
@@ -9,6 +18,7 @@ defineProps<{
   skipping: boolean
   mutating?: boolean
   error?: string
+  controlsDisabledReason?: string
 }>()
 
 defineEmits<{ skip: []; control: [action: 'pause' | 'resume']; volume: [value: number] }>()
@@ -49,7 +59,17 @@ function formatTime(value: number) {
         <div class="player-metadata">
           <strong>{{ currentItem.track.title }}</strong>
           <span>{{ currentItem.track.artists.join(', ') }}</span>
+          <small v-if="currentItem.track.albumName">{{ currentItem.track.albumName }}</small>
           <small>Pedido por {{ currentItem.requestedByDisplayName ?? 'Waves Web' }}</small>
+          <a
+            v-if="currentItem.track.externalUrl"
+            :href="currentItem.track.externalUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            :aria-label="`Abrir ${currentItem.track.title} no Spotify`"
+          >
+            Abrir no Spotify <ExternalLink :size="12" aria-hidden="true" />
+          </a>
         </div>
       </div>
 
@@ -75,7 +95,8 @@ function formatTime(value: number) {
         <button
           class="icon-button"
           type="button"
-          :disabled="mutating"
+          :disabled="mutating || Boolean(controlsDisabledReason)"
+          :title="controlsDisabledReason"
           :aria-label="player?.status === 'paused' ? 'Retomar reprodução' : 'Pausar reprodução'"
           @click="$emit('control', player?.status === 'paused' ? 'resume' : 'pause')"
         >
@@ -83,7 +104,13 @@ function formatTime(value: number) {
           <Play v-else-if="player?.status === 'paused'" :size="20" aria-hidden="true" />
           <Pause v-else :size="20" aria-hidden="true" />
         </button>
-        <button class="action-button" type="button" :disabled="skipping" @click="$emit('skip')">
+        <button
+          class="action-button"
+          type="button"
+          :disabled="skipping || Boolean(controlsDisabledReason)"
+          :title="controlsDisabledReason"
+          @click="$emit('skip')"
+        >
           <LoaderCircle v-if="skipping" class="spinner" :size="19" aria-hidden="true" />
           <SkipForward v-else :size="19" aria-hidden="true" />{{
             skipping ? 'PULANDO…' : 'PULAR FAIXA'
@@ -99,11 +126,14 @@ function formatTime(value: number) {
           max="100"
           step="5"
           :value="player?.volume ?? 100"
-          :disabled="mutating"
+          :disabled="mutating || Boolean(controlsDisabledReason)"
           @change="$emit('volume', Number(($event.target as HTMLInputElement).value))"
         />
         <output>{{ player?.volume ?? 100 }}%</output>
       </label>
+      <p v-if="controlsDisabledReason" class="controls-disabled-reason">
+        {{ controlsDisabledReason }}
+      </p>
     </div>
 
     <div v-else class="player-idle">
@@ -213,6 +243,18 @@ h2 {
   color: var(--accent-tertiary);
   font-size: 10px;
 }
+.player-metadata a {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-secondary);
+  font-size: 10px;
+  text-decoration: none;
+}
+.player-metadata a:hover {
+  text-decoration: underline;
+}
 .logical-progress {
   overflow: hidden;
   height: 5px;
@@ -281,6 +323,12 @@ h2 {
 }
 .player-error {
   margin: 12px 0 0;
+  font-size: 10px;
+  text-align: center;
+}
+.controls-disabled-reason {
+  margin: 0;
+  color: var(--warning);
   font-size: 10px;
   text-align: center;
 }

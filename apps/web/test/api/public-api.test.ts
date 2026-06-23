@@ -11,15 +11,19 @@ import { createPlayerGetHandler } from '../../server/api/player/index.get'
 import { createPlayerSkipHandler } from '../../server/api/player/skip.post'
 import { createQueueRemoveHandler } from '../../server/api/queue/[id].delete'
 import { createQueueMoveHandler } from '../../server/api/queue/[id]/move.post'
+import { createQueueRestoreHandler } from '../../server/api/queue/[id]/restore.post'
 import { createQueueListHandler } from '../../server/api/queue/index.get'
 import { createQueueAddHandler } from '../../server/api/queue/index.post'
 import { createSpotifySearchHandler } from '../../server/api/spotify/search.get'
+import { createOperationalStatusHandler } from '../../server/api/status.get'
 import { SpotifyUnavailableError } from '../../server/clients/spotify.errors'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
+import { OperationalStatusRepository } from '../../server/repositories/operational-status.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
 import { PlayerStateService } from '../../server/services/player-state.service'
+import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
 import type {
   PublicApiDependencies,
@@ -61,6 +65,7 @@ async function startTestApi(): Promise<TestContext> {
 
   const queueRepository = new QueueRepository(connection.db)
   const playerStateRepository = new PlayerStateRepository(connection.db, now)
+  const operationalStatusRepository = new OperationalStatusRepository(connection.db, now)
   const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
   let nextId = 0
   const spotifySearch = vi
@@ -72,6 +77,11 @@ async function startTestApi(): Promise<TestContext> {
   const dependencies: PublicApiDependencies = {
     queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
     playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
+    operationalStatusService: new OperationalStatusService(
+      operationalStatusRepository,
+      playerStateRepository,
+      now,
+    ),
     spotifyService,
   }
   const getDependencies = () => dependencies
@@ -83,8 +93,10 @@ async function startTestApi(): Promise<TestContext> {
   router.post('/api/queue', createQueueAddHandler(getDependencies))
   router.delete('/api/queue/:id', createQueueRemoveHandler(getDependencies))
   router.post('/api/queue/:id/move', createQueueMoveHandler(getDependencies))
+  router.post('/api/queue/:id/restore', createQueueRestoreHandler(getDependencies))
   router.get('/api/player', createPlayerGetHandler(getDependencies))
   router.post('/api/player/skip', createPlayerSkipHandler(getDependencies))
+  router.get('/api/status', createOperationalStatusHandler(getDependencies))
 
   const app = createApp()
   app.use(router.handler)
@@ -231,6 +243,43 @@ describe('public API', () => {
     expect(apiErrorSchema.parse(body)).toEqual(body)
   })
 
+  it('rejects duplicate active tracks and restores a removed item', async () => {
+    expect((await addTrack(firstTrack)).response.status).toBe(200)
+
+    const duplicate = await addTrack(firstTrack)
+    expect(duplicate.response.status).toBe(409)
+    expect(duplicate.body).toMatchObject({ data: { code: 'DUPLICATE_TRACK' } })
+
+    const removed = await request('/api/queue/queue-1', { method: 'DELETE' })
+    expect(removed.response.status).toBe(200)
+    const restored = await postJson('/api/queue/queue-1/restore', {})
+    expect(restored.response.status).toBe(200)
+    expect(restored.body).toMatchObject({
+      restoredItem: { id: 'queue-1', status: 'queued', position: 0 },
+      queue: [{ id: 'queue-1', status: 'queued', position: 0 }],
+    })
+  })
+
+  it('inserts a track next and returns public operational status', async () => {
+    await addTrack(firstTrack)
+    const next = await postJson('/api/queue', { track: secondTrack, placement: 'next' })
+    expect(next.response.status).toBe(200)
+
+    const queue = await request('/api/queue')
+    expect((queue.body as Array<{ id: string }>).map(({ id }) => id)).toEqual([
+      'queue-2',
+      'queue-1',
+    ])
+
+    const status = await request('/api/status')
+    expect(status.response.status).toBe(200)
+    expect(status.body).toMatchObject({
+      web: { status: 'available' },
+      bot: { status: 'offline' },
+      voice: { status: 'disconnected' },
+    })
+  })
+
   it('moves and removes queue items through HTTP', async () => {
     await addTrack(firstTrack)
     await addTrack(secondTrack)
@@ -244,7 +293,10 @@ describe('public API', () => {
 
     const removed = await request('/api/queue/queue-2', { method: 'DELETE' })
     expect(removed.response.status).toBe(200)
-    expect(removed.body).toEqual([expect.objectContaining({ id: 'queue-1', position: 0 })])
+    expect(removed.body).toMatchObject({
+      queue: [expect.objectContaining({ id: 'queue-1', position: 0 })],
+      removal: { queueItemId: 'queue-2', expiresAt: '2026-06-18T16:00:10.000Z' },
+    })
   })
 
   it('returns contract errors for missing items and invalid moves', async () => {

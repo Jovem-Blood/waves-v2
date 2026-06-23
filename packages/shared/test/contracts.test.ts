@@ -3,14 +3,18 @@ import { describe, expect, it } from 'vitest'
 import {
   queueItemAudioSourceSchema,
   addQueueItemInputSchema,
+  apiErrorCodeSchema,
   apiErrorSchema,
+  botHeartbeatInputSchema,
   botEventSchema,
   botPlayInputSchema,
   completePlaybackInputSchema,
   moveQueueItemInputSchema,
+  operationalStatusSchema,
   playerStateSchema,
   queueItemSchema,
   playbackTransitionResultSchema,
+  removeQueueItemResultSchema,
   trackMetadataSchema,
 } from '../src/index.js'
 
@@ -41,6 +45,35 @@ describe('trackMetadataSchema', () => {
         secret: 'must-not-pass',
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('round one UX contracts', () => {
+  it('accepts queue placement, removal receipts and new domain errors', () => {
+    expect(addQueueItemInputSchema.parse({ track: validTrack, placement: 'next' }).placement).toBe(
+      'next',
+    )
+    expect(
+      removeQueueItemResultSchema.parse({
+        queue: [],
+        removal: {
+          queueItemId: 'queue-1',
+          expiresAt: '2026-06-22T12:00:10.000Z',
+        },
+      }),
+    ).toMatchObject({ removal: { queueItemId: 'queue-1' } })
+    expect(apiErrorCodeSchema.parse('DUPLICATE_TRACK')).toBe('DUPLICATE_TRACK')
+  })
+
+  it('validates heartbeat and operational status', () => {
+    expect(botHeartbeatInputSchema.parse({ occurredAt: '2026-06-22T12:00:00.000Z' })).toBeDefined()
+    expect(
+      operationalStatusSchema.parse({
+        web: { status: 'available', checkedAt: '2026-06-22T12:00:00.000Z' },
+        bot: { status: 'offline' },
+        voice: { status: 'disconnected' },
+      }),
+    ).toBeDefined()
   })
 })
 

@@ -95,6 +95,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
     sendEvent,
     getPlayer: vi.fn(),
     updateProgress: vi.fn(),
+    heartbeat: vi.fn(),
   }
   const context: CommandContext = {
     name: 'test',
@@ -131,7 +132,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
 }
 
 describe('bot commands', () => {
-  it('defines the phase two control commands', () => {
+  it('defines the playback control commands', () => {
     expect(commandDefinitions.map((definition) => definition.toJSON().name)).toEqual([
       'play',
       'queue',
@@ -187,6 +188,23 @@ describe('bot commands', () => {
     expect(mocks.ephemeralReply).toHaveBeenCalledWith(
       'Não encontrei nenhuma faixa para essa busca.',
     )
+  })
+
+  it('play explains duplicate tracks without exposing API details', async () => {
+    const { api, context, mocks, playbackManager, voiceManager } = setup({
+      name: 'play',
+      query: 'track',
+      guildId: 'guild-1',
+      guildName: 'Waves',
+      voiceChannelId: 'voice-1',
+      voiceChannelName: 'ondas-da-noite',
+      voiceAdapterCreator: vi.fn(),
+    })
+    mocks.play.mockRejectedValue(new WavesApiError('DUPLICATE_TRACK', 409))
+
+    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+
+    expect(mocks.ephemeralReply).toHaveBeenCalledWith('Esta faixa já está na fila.')
   })
 
   it('play connects to the member voice channel before adding and starting playback', async () => {

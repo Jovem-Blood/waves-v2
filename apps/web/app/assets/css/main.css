@@ -34,11 +34,7 @@
 
   --on-accent: #04120b;
 
-  --gradient-primary: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  --gradient-primary: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 
   --gradient-active-row: linear-gradient(
     90deg,
@@ -176,8 +172,6 @@ input:focus-visible {
 .header-context svg {
   color: var(--accent-tertiary);
 }
-
-
 
 .dashboard-layout {
   display: grid;

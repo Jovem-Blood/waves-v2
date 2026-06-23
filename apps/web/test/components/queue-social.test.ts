@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import PlayerBar from '../../app/components/PlayerBar.vue'
 import QueuePanel from '../../app/components/QueuePanel.vue'
 import SpotifySearch from '../../app/components/SpotifySearch.vue'
+import TrackCard from '../../app/components/TrackCard.vue'
 import { useQueue } from '../../app/composables/useQueue'
 
 const track: TrackMetadata = {
@@ -74,10 +75,10 @@ describe('Queue Social components', () => {
     expect(empty.text()).toContain('A fila está vazia')
 
     const filled = mount(QueuePanel, {
-      props: { items: [queueItem], loading: false, refreshing: false },
+      props: { items: [queuedItem], loading: false, refreshing: false },
     })
-    await filled.get('[aria-label="Remover Luz da Madrugada da fila"]').trigger('click')
-    expect(filled.emitted('remove')).toEqual([[queueItem.id]])
+    await filled.get('[aria-label="Remover Cidade Lunar da fila"]').trigger('click')
+    expect(filled.emitted('remove')).toEqual([[queuedItem.id]])
   })
 
   it('keeps the playing row fixed and exposes a handle only for queued rows', () => {
@@ -114,6 +115,27 @@ describe('Queue Social components', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('Luz da Madrugada')
+  })
+
+  it('renders album, a safe Spotify link and both queue actions', async () => {
+    const enrichedTrack = {
+      ...track,
+      albumName: 'Horizontes',
+      externalUrl: 'https://open.spotify.com/track/spotify-1',
+    }
+    const wrapper = mount(TrackCard, {
+      props: { track: enrichedTrack, adding: false, added: false },
+    })
+
+    expect(wrapper.text()).toContain('Horizontes')
+    const link = wrapper.get('a')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('rel')).toBe('noopener noreferrer')
+
+    await wrapper.get('[aria-label="Adicionar Luz da Madrugada à fila"]').trigger('click')
+    await wrapper.get('[aria-label="Tocar Luz da Madrugada em seguida"]').trigger('click')
+    expect(wrapper.emitted('add')).toEqual([[enrichedTrack]])
+    expect(wrapper.emitted('playNext')).toEqual([[enrichedTrack]])
   })
 })
 

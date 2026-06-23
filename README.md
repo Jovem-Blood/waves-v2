@@ -143,7 +143,9 @@ compartilhar logs, procure por `streamUrl`, `Authorization`, `signature`, `token
 ## Estado atual
 
 O produto possui fila persistida, reprodução de voz, avanço automático, autojoin,
-pause, resume, volume, progresso, skip, leave e controles web sincronizados.
+pause, resume, volume, progresso, skip, leave e controles web sincronizados. O
+painel também informa separadamente a disponibilidade da web, do bot e da conexão
+de voz.
 
 O YouTube.js usa a API privada InnerTube e pode quebrar ou sofrer bloqueios sem
 aviso. A integração é destinada a uso privado e não utiliza cookies ou OAuth.

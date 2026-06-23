@@ -5,6 +5,7 @@ import {
   completePlaybackInputSchema,
   playbackClaimResultSchema,
   playbackTransitionResultSchema,
+  operationalStatusSchema,
   queueItemAudioSourceSchema,
   playerStateSchema,
   queueItemSchema,
@@ -18,6 +19,7 @@ import {
   type Queue,
   type QueueItemAudioSource,
   type PlayerState,
+  type OperationalStatus,
 } from '@waves/shared'
 import { z } from 'zod'
 
@@ -53,6 +55,7 @@ export interface WavesApi {
   sendEvent(event: BotEvent): Promise<void>
   getPlayer(): Promise<PlayerState>
   updateProgress(queueItemId: string, progressMs: number): Promise<PlayerState>
+  heartbeat(occurredAt: string): Promise<OperationalStatus>
 }
 
 export class WavesApiClient implements WavesApi {
@@ -81,6 +84,13 @@ export class WavesApiClient implements WavesApi {
     return this.requestJson('/internal/bot/player/progress', playerStateSchema, {
       method: 'POST',
       body: JSON.stringify({ queueItemId, progressMs }),
+    })
+  }
+
+  heartbeat(occurredAt: string): Promise<OperationalStatus> {
+    return this.requestJson('/internal/bot/heartbeat', operationalStatusSchema, {
+      method: 'POST',
+      body: JSON.stringify({ occurredAt }),
     })
   }
 

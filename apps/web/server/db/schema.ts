@@ -18,9 +18,10 @@ export const queueItems = sqliteTable(
     requestedByDiscordUserId: text('requested_by_discord_user_id'),
     requestedByDisplayName: text('requested_by_display_name'),
     status: text('status', {
-      enum: ['queued', 'playing', 'played', 'skipped', 'failed'],
+      enum: ['queued', 'playing', 'played', 'skipped', 'failed', 'removed'],
     }).notNull(),
     position: integer('position').notNull(),
+    removedAt: text('removed_at'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -36,7 +37,25 @@ export const queueItems = sqliteTable(
       .where(sql`${table.status} = 'playing'`),
     check('queue_items_position_nonnegative', sql`${table.position} >= 0`),
     check('queue_items_duration_nonnegative', sql`${table.durationMs} >= 0`),
+    uniqueIndex('queue_items_active_track_unique')
+      .on(table.provider, table.providerTrackId)
+      .where(sql`${table.status} in ('queued', 'playing')`),
   ],
+)
+
+export const operationalState = sqliteTable(
+  'operational_state',
+  {
+    id: integer('id').primaryKey(),
+    botLastSeenAt: text('bot_last_seen_at'),
+    voiceStatus: text('voice_status', {
+      enum: ['connected', 'disconnected', 'reconnecting'],
+    })
+      .notNull()
+      .default('disconnected'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [check('operational_state_singleton_id', sql`${table.id} = 1`)],
 )
 
 export const playerState = sqliteTable(

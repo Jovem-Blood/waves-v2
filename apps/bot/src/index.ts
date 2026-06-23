@@ -29,16 +29,30 @@ export async function startBot(): Promise<Client> {
   const api = new WavesApiClient(config)
   const client = createDiscordClient()
   const playbackReference: { current?: AudioPlayerManager } = {}
-  const voiceManager = new DiscordVoiceManager(logger, async (guildId, voiceChannelId) => {
-    playbackReference.current?.destroyGuild(guildId)
-    await api.sendEvent({
-      type: 'voice.disconnected',
-      occurredAt: new Date().toISOString(),
-      guildId,
-      voiceChannelId,
-      payload: { reason: 'unexpected' },
-    })
-  })
+  const voiceManager = new DiscordVoiceManager(
+    logger,
+    async (guildId, voiceChannelId) => {
+      playbackReference.current?.destroyGuild(guildId)
+      await api.sendEvent({
+        type: 'voice.disconnected',
+        occurredAt: new Date().toISOString(),
+        guildId,
+        voiceChannelId,
+        payload: { reason: 'unexpected' },
+      })
+    },
+    undefined,
+    undefined,
+    async (type, guildId, voiceChannelId) => {
+      await api.sendEvent({
+        type: `voice.${type}`,
+        occurredAt: new Date().toISOString(),
+        guildId,
+        voiceChannelId,
+        payload: {},
+      })
+    },
+  )
   const playbackManager = new AudioPlayerManager(api, voiceManager, logger, client)
   playbackReference.current = playbackManager
   let reconciliationRunning = false
@@ -73,10 +87,24 @@ export async function startBot(): Promise<Client> {
     })
   }, 2_500)
   reconciliationTimer.unref()
+  const sendHeartbeat = async () => {
+    try {
+      await api.heartbeat(new Date().toISOString())
+    } catch {
+      logger.warn(
+        { operation: 'bot.heartbeat', outcome: 'failed' },
+        'Bot heartbeat synchronization failed',
+      )
+    }
+  }
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 
   registerInteractionHandler(client, api, voiceManager, playbackManager, config.appHostname, logger)
   client.once(Events.ClientReady, (readyClient) => {
     logger.info({ discordUserId: readyClient.user.id }, 'Waves bot ready')
+    void sendHeartbeat()
+    heartbeatTimer = setInterval(() => void sendHeartbeat(), 5_000)
+    heartbeatTimer.unref()
   })
   client.on(Events.Error, () => {
     logger.error('Discord client error')
@@ -85,6 +113,7 @@ export async function startBot(): Promise<Client> {
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Waves bot shutting down')
     clearInterval(reconciliationTimer)
+    if (heartbeatTimer) clearInterval(heartbeatTimer)
     playbackManager.destroyAll()
     voiceManager.destroyAll()
     void client.destroy()

@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from '#imports'
 import { AudioWaveform, Headphones } from '@lucide/vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 
 import PlayerBar from './components/PlayerBar.vue'
 import HeaderConnectionStatus from './components/HeaderConnectionStatus.vue'
 import QueuePanel from './components/QueuePanel.vue'
 import SpotifySearch from './components/SpotifySearch.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import ToastViewport from './components/ToastViewport.vue'
+import { useOperationalStatus } from './composables/useOperationalStatus'
 import { usePlayerState } from './composables/usePlayerState'
 import { useQueue } from './composables/useQueue'
 
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
-const isOnline = ref(false)
 
 const queue = useQueue(apiBase)
 const player = usePlayerState(apiBase)
+const operational = useOperationalStatus(apiBase)
 
 const activeTrackIds = computed(() =>
   queue.items.value
@@ -40,21 +42,19 @@ const pageTitle = computed(() => {
 
 useHead({ title: pageTitle })
 
-async function checkHealth() {
-  try {
-    const response = await $fetch<{ ok: boolean }>(`${apiBase}/health`)
-    isOnline.value = response.ok
-  } catch {
-    isOnline.value = false
-  }
-}
-
 async function handleSkip() {
   const result = await player.skip()
   if (result) queue.replace(result.queue)
 }
 
-onMounted(() => void checkHealth())
+const controlsDisabledReason = computed(() => {
+  if (!operational.webAvailable.value) return 'A interface web está indisponível.'
+  if (operational.status.value?.bot.status !== 'online') return 'O bot está offline.'
+  if (operational.status.value.voice.status === 'reconnecting') return 'O canal está reconectando.'
+  if (operational.status.value.voice.status !== 'connected')
+    return 'O bot não está em um canal de voz.'
+  return undefined
+})
 </script>
 
 <template>
@@ -71,13 +71,16 @@ onMounted(() => void checkHealth())
       </div>
 
       <HeaderConnectionStatus
-        :player="player.state.value"
-        :loading="player.loading.value"
-        :error="player.error.value"
+        :status="operational.status.value"
+        :loading="operational.loading.value"
+        :web-available="operational.webAvailable.value"
       />
 
       <div class="header-actions">
-        <SettingsModal :is-online="isOnline" />
+        <SettingsModal
+          :status="operational.status.value"
+          :web-available="operational.webAvailable.value"
+        />
       </div>
     </header>
 
@@ -90,6 +93,7 @@ onMounted(() => void checkHealth())
         :skipping="player.skipping.value"
         :mutating="player.mutating.value"
         :error="player.error.value"
+        :controls-disabled-reason="controlsDisabledReason"
         @skip="handleSkip"
         @control="player.control"
         @volume="player.setVolume"
@@ -112,14 +116,20 @@ onMounted(() => void checkHealth())
       <SpotifySearch
         class="dashboard-search"
         :adding-track-id="queue.addingTrackId.value"
+        :adding-placement="queue.addingPlacement.value"
         :active-track-ids="activeTrackIds"
-        @add="queue.add"
+        @add="(track) => queue.add(track, 'end')"
+        @play-next="(track) => queue.add(track, 'next')"
       />
     </main>
 
     <footer class="app-footer">
-      <span><Headphones :size="14" aria-hidden="true" /> Player lógico · áudio na fase 2</span>
+      <span
+        ><Headphones :size="14" aria-hidden="true" /> Player e fila sincronizados com o
+        Discord</span
+      >
       <span>Waves sincroniza a fila automaticamente</span>
     </footer>
+    <ToastViewport />
   </div>
 </template>

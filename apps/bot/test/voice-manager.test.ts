@@ -46,13 +46,20 @@ function setup() {
     waitUntilReady,
   }
   const onUnexpectedDisconnect = vi.fn().mockResolvedValue(undefined)
+  const onConnectionStateChange = vi.fn().mockResolvedValue(undefined)
   const logger = {
     debug: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
   } as unknown as BotLogger
-  const manager = new DiscordVoiceManager(logger, onUnexpectedDisconnect, runtime, 100)
+  const manager = new DiscordVoiceManager(
+    logger,
+    onUnexpectedDisconnect,
+    runtime,
+    100,
+    onConnectionStateChange,
+  )
   const adapterCreator = vi.fn() as unknown as DiscordGatewayAdapterCreator
 
   return {
@@ -60,6 +67,7 @@ function setup() {
     connections,
     manager,
     onUnexpectedDisconnect,
+    onConnectionStateChange,
     runtime,
     waitUntilReady,
   }
@@ -141,5 +149,27 @@ describe('DiscordVoiceManager', () => {
     })
     test.manager.destroyAll()
     expect(test.connections[1]?.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('reports reconnecting and reconnected voice states', async () => {
+    const test = setup()
+    await test.manager.join({
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      adapterCreator: test.adapterCreator,
+    })
+    const active = test.connections[0]!
+    const previous = active.state
+    active.state = { status: VoiceConnectionStatus.Disconnected } as VoiceConnectionState
+    active.emit('stateChange', previous, active.state)
+
+    await vi.waitFor(() => {
+      expect(test.onConnectionStateChange).toHaveBeenCalledWith(
+        'reconnecting',
+        'guild-1',
+        'voice-1',
+      )
+      expect(test.onConnectionStateChange).toHaveBeenCalledWith('reconnected', 'guild-1', 'voice-1')
+    })
   })
 })

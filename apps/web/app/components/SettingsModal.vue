@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Settings } from '@lucide/vue'
+import type { OperationalStatus } from '@waves/shared'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { themes, useTheme, type ThemeId } from '../composables/useTheme'
 
 defineProps<{
-  isOnline: boolean
+  status?: OperationalStatus
+  webAvailable: boolean
 }>()
 
 const { current, setTheme } = useTheme()
@@ -43,11 +45,26 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           </div>
 
           <div class="modal-body">
-            <!-- Canal de voz e servidor entrarão aqui quando implementados -->
             <span class="settings-label">Status</span>
-            <div class="status-card" :data-online="isOnline">
+            <div class="status-card" :data-online="webAvailable">
               <span class="status-dot" aria-hidden="true" />
-              <span>{{ isOnline ? 'Bot online' : 'Bot offline' }}</span>
+              <span>{{ webAvailable ? 'Web disponível' : 'Web indisponível' }}</span>
+            </div>
+            <div class="status-card" :data-online="status?.bot.status === 'online'">
+              <span class="status-dot" aria-hidden="true" />
+              <span>Bot {{ status?.bot.status === 'online' ? 'online' : 'offline' }}</span>
+            </div>
+            <div class="status-card" :data-online="status?.voice.status === 'connected'">
+              <span class="status-dot" aria-hidden="true" />
+              <span>
+                {{
+                  status?.voice.status === 'connected'
+                    ? `${status.voice.guildName} · ${status.voice.voiceChannelName}`
+                    : status?.voice.status === 'reconnecting'
+                      ? 'Canal reconectando'
+                      : 'Canal desconectado'
+                }}
+              </span>
             </div>
 
             <span class="settings-label">Tema</span>

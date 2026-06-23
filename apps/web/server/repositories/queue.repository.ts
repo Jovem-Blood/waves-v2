@@ -4,7 +4,7 @@ import {
   type QueueItemStatus,
   type TrackMetadata,
 } from '@waves/shared'
-import { asc, eq, inArray, max } from 'drizzle-orm'
+import { and, asc, eq, inArray, max } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
 import { queueItems } from '../db/schema'
@@ -21,6 +21,7 @@ export interface QueueStatusAndPositionUpdate {
   status: QueueItemStatus
   position: number
   updatedAt: string
+  removedAt?: string | null
 }
 
 function parseArtists(artistsJson: string): string[] {
@@ -108,6 +109,24 @@ export class QueueRepository {
     return this.listActive()
   }
 
+  findActiveByTrack(
+    provider: TrackMetadata['provider'],
+    providerTrackId: string,
+  ): QueueItem | undefined {
+    const row = this.db
+      .select()
+      .from(queueItems)
+      .where(
+        and(
+          eq(queueItems.provider, provider),
+          eq(queueItems.providerTrackId, providerTrackId),
+          inArray(queueItems.status, ['queued', 'playing']),
+        ),
+      )
+      .get()
+    return row ? mapRow(row) : undefined
+  }
+
   findById(id: string): QueueItem | undefined {
     const row = this.db.select().from(queueItems).where(eq(queueItems.id, id)).get()
     return row ? mapRow(row) : undefined
@@ -125,11 +144,30 @@ export class QueueRepository {
         status: update.status,
         position: update.position,
         updatedAt: update.updatedAt,
+        ...(update.removedAt === undefined ? {} : { removedAt: update.removedAt }),
       })
       .where(eq(queueItems.id, id))
       .run()
 
     return this.findById(id)
+  }
+
+  restore(id: string, position: number, updatedAt: string): QueueItem | undefined {
+    this.db
+      .update(queueItems)
+      .set({ status: 'queued', position, removedAt: null, updatedAt })
+      .where(eq(queueItems.id, id))
+      .run()
+    return this.findById(id)
+  }
+
+  getRemovedAt(id: string): string | undefined {
+    const row = this.db
+      .select({ removedAt: queueItems.removedAt })
+      .from(queueItems)
+      .where(eq(queueItems.id, id))
+      .get()
+    return row?.removedAt ?? undefined
   }
 
   updatePositions(updates: readonly QueuePositionUpdate[]): QueueItem[] {

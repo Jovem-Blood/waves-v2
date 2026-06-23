@@ -5,7 +5,14 @@ import { trackMetadataSchema } from './track.schema.js'
 const requiredTextSchema = z.string().trim().min(1)
 const optionalTextSchema = requiredTextSchema.optional()
 
-export const queueItemStatusSchema = z.enum(['queued', 'playing', 'played', 'skipped', 'failed'])
+export const queueItemStatusSchema = z.enum([
+  'queued',
+  'playing',
+  'played',
+  'skipped',
+  'failed',
+  'removed',
+])
 
 export const queueItemSchema = z
   .object({
@@ -27,6 +34,7 @@ export const addQueueItemInputSchema = z
     track: trackMetadataSchema,
     requestedByDiscordUserId: optionalTextSchema,
     requestedByDisplayName: optionalTextSchema,
+    placement: z.enum(['end', 'next']).optional(),
   })
   .strict()
 
@@ -41,5 +49,26 @@ export const botPlayInputSchema = z
     query: requiredTextSchema,
     requestedByDiscordUserId: requiredTextSchema,
     requestedByDisplayName: requiredTextSchema,
+  })
+  .strict()
+
+export const queueRemovalReceiptSchema = z
+  .object({
+    queueItemId: requiredTextSchema,
+    expiresAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+
+export const removeQueueItemResultSchema = z
+  .object({
+    queue: queueSchema,
+    removal: queueRemovalReceiptSchema,
+  })
+  .strict()
+
+export const restoreQueueItemResultSchema = z
+  .object({
+    queue: queueSchema,
+    restoredItem: queueItemSchema,
   })
   .strict()

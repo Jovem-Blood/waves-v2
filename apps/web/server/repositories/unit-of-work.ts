@@ -1,10 +1,12 @@
 import type { WavesDatabase } from '../db/client'
 import { PlayerStateRepository } from './player-state.repository'
 import { QueueRepository } from './queue.repository'
+import { OperationalStatusRepository } from './operational-status.repository'
 
 export interface RepositoryContext {
   playerState: PlayerStateRepository
   queue: QueueRepository
+  operationalStatus: OperationalStatusRepository
 }
 
 export interface UnitOfWork {
@@ -22,6 +24,7 @@ export class DatabaseUnitOfWork implements UnitOfWork {
       operation({
         playerState: new PlayerStateRepository(transaction, this.now),
         queue: new QueueRepository(transaction),
+        operationalStatus: new OperationalStatusRepository(transaction, this.now),
       }),
     )
   }

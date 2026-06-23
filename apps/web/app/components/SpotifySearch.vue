@@ -6,10 +6,19 @@ import { LoaderCircle, Music2, Search, Sparkles } from '@lucide/vue'
 import { useSpotifySearch } from '../composables/useSpotifySearch'
 import TrackCard from './TrackCard.vue'
 
-const props = withDefaults(defineProps<{ addingTrackId?: string; activeTrackIds?: string[] }>(), {
-  activeTrackIds: () => [],
-})
-defineEmits<{ add: [track: TrackMetadata] }>()
+withDefaults(
+  defineProps<{
+    addingTrackId?: string
+    addingPlacement?: 'end' | 'next'
+    activeTrackIds?: string[]
+  }>(),
+  {
+    addingTrackId: undefined,
+    addingPlacement: undefined,
+    activeTrackIds: () => [],
+  },
+)
+defineEmits<{ add: [track: TrackMetadata]; playNext: [track: TrackMetadata] }>()
 
 const config = useRuntimeConfig()
 const search = useSpotifySearch(config.public.apiBase)
@@ -21,7 +30,7 @@ const search = useSpotifySearch(config.public.apiBase)
       <div>
         <span class="eyebrow">DESCOBRIR</span>
         <h2 id="search-title">Buscar no Spotify</h2>
-        <p>Adicione metadados à fila da sala.</p>
+        <p>Adicione à fila ou escolha o que toca em seguida.</p>
       </div>
       <span class="provider-badge"><Music2 :size="14" /> Spotify</span>
     </div>
@@ -69,8 +78,10 @@ const search = useSpotifySearch(config.public.apiBase)
         :key="track.id"
         :track="track"
         :adding="addingTrackId === track.id"
+        :adding-placement="addingPlacement"
         :added="activeTrackIds.includes(track.id)"
         @add="$emit('add', $event)"
+        @play-next="$emit('playNext', $event)"
       />
     </div>
   </section>

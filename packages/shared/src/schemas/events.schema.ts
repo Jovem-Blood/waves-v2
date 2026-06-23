@@ -54,6 +54,23 @@ export const botEventSchema = z
       })
     }
 
+    if (['voice.reconnecting', 'voice.reconnected'].includes(event.type)) {
+      if (!event.guildId) {
+        context.addIssue({
+          code: 'custom',
+          path: ['guildId'],
+          message: `guildId is required for ${event.type}`,
+        })
+      }
+      if (!event.voiceChannelId) {
+        context.addIssue({
+          code: 'custom',
+          path: ['voiceChannelId'],
+          message: `voiceChannelId is required for ${event.type}`,
+        })
+      }
+    }
+
     if (
       [
         'playback.started',

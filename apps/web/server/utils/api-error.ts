@@ -19,8 +19,15 @@ import {
   AudioSourceNotFoundError,
   AudioSourceUnavailableError,
 } from '../services/audio-source.errors'
-import { PlaybackConflictError, QueueItemNotFoundError } from '../services/domain-errors'
-import { TrackNotFoundError } from '../services/domain-errors'
+import {
+  DuplicateTrackError,
+  PlaybackConflictError,
+  QueueItemNotFoundError,
+  QueueItemNotRemovableError,
+  QueueItemNotRestorableError,
+  QueueRestoreExpiredError,
+  TrackNotFoundError,
+} from '../services/domain-errors'
 import { InternalApiConfigurationError } from './internal-api-config'
 import { UnauthorizedError } from './internal-errors'
 import { useLogger } from './logger'
@@ -47,6 +54,38 @@ function toApiError(error: unknown): ApiError {
       statusCode: 404,
       statusMessage: 'Track not found',
       data: { code: 'TRACK_NOT_FOUND' },
+    })
+  }
+
+  if (error instanceof DuplicateTrackError) {
+    return apiErrorSchema.parse({
+      statusCode: 409,
+      statusMessage: 'Track already queued',
+      data: { code: 'DUPLICATE_TRACK' },
+    })
+  }
+
+  if (error instanceof QueueItemNotRemovableError) {
+    return apiErrorSchema.parse({
+      statusCode: 409,
+      statusMessage: 'Queue item cannot be removed',
+      data: { code: 'QUEUE_ITEM_NOT_REMOVABLE' },
+    })
+  }
+
+  if (error instanceof QueueItemNotRestorableError) {
+    return apiErrorSchema.parse({
+      statusCode: 409,
+      statusMessage: 'Queue item cannot be restored',
+      data: { code: 'QUEUE_ITEM_NOT_RESTORABLE' },
+    })
+  }
+
+  if (error instanceof QueueRestoreExpiredError) {
+    return apiErrorSchema.parse({
+      statusCode: 410,
+      statusMessage: 'Queue restore expired',
+      data: { code: 'QUEUE_RESTORE_EXPIRED' },
     })
   }
 

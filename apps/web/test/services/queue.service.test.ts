@@ -7,7 +7,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
-import { QueueItemNotFoundError } from '../../server/services/domain-errors'
+import {
+  DuplicateTrackError,
+  QueueItemNotFoundError,
+  QueueItemNotRemovableError,
+  QueueRestoreExpiredError,
+} from '../../server/services/domain-errors'
 import { QueueService } from '../../server/services/queue.service'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
@@ -26,7 +31,7 @@ const input: AddQueueItemInput = {
   requestedByDisplayName: 'Luis',
 }
 
-function setup(): {
+function setup(nowProvider: () => Date = now): {
   connection: DatabaseConnection
   repository: QueueRepository
   service: QueueService
@@ -42,8 +47,8 @@ function setup(): {
     repository,
     service: new QueueService(
       repository,
-      new DatabaseUnitOfWork(connection.db, now),
-      now,
+      new DatabaseUnitOfWork(connection.db, nowProvider),
+      nowProvider,
       () => `queue-${++nextId}`,
     ),
   }
@@ -88,6 +93,44 @@ describe('QueueService', () => {
     ])
   })
 
+  it('adds next after the playing item or at the start when idle', () => {
+    const { repository, service } = setup()
+    service.add(input)
+    service.add({
+      track: { ...input.track, id: 'spotify:track-2', providerTrackId: 'track-2' },
+    })
+    repository.updateStatusAndPosition('queue-1', {
+      status: 'playing',
+      position: 0,
+      updatedAt: now().toISOString(),
+    })
+
+    service.add({
+      track: { ...input.track, id: 'spotify:track-3', providerTrackId: 'track-3' },
+      placement: 'next',
+    })
+    expect(service.list().map(({ id }) => id)).toEqual(['queue-1', 'queue-3', 'queue-2'])
+
+    const idle = setup()
+    idle.service.add(input)
+    idle.service.add({
+      track: { ...input.track, id: 'spotify:track-2', providerTrackId: 'track-2' },
+      placement: 'next',
+    })
+    expect(idle.service.list().map(({ id }) => id)).toEqual(['queue-2', 'queue-1'])
+  })
+
+  it('rejects duplicate active tracks but allows re-adding a removed track', () => {
+    const { service } = setup()
+    service.add(input)
+    expect(() => service.add({ track: { ...input.track, id: 'different-client-id' } })).toThrow(
+      DuplicateTrackError,
+    )
+
+    service.remove('queue-1')
+    expect(service.add(input)).toMatchObject({ id: 'queue-2', position: 0 })
+  })
+
   it('moves items to the beginning, middle and end with contiguous positions', () => {
     const { service } = setup()
     for (let index = 1; index <= 4; index += 1) {
@@ -129,7 +172,9 @@ describe('QueueService', () => {
   it('is idempotent when moving to the current position', () => {
     const { service } = setup()
     service.add(input)
-    service.add({ track: { ...input.track, id: 'spotify:track-2' } })
+    service.add({
+      track: { ...input.track, id: 'spotify:track-2', providerTrackId: 'track-2' },
+    })
     const before = service.list()
 
     expect(service.move('queue-2', { newPosition: 1 })).toEqual(before)
@@ -138,8 +183,12 @@ describe('QueueService', () => {
   it('keeps the playing item fixed while queued items are reordered', () => {
     const { repository, service } = setup()
     service.add(input)
-    service.add({ track: { ...input.track, id: 'spotify:track-2' } })
-    service.add({ track: { ...input.track, id: 'spotify:track-3' } })
+    service.add({
+      track: { ...input.track, id: 'spotify:track-2', providerTrackId: 'track-2' },
+    })
+    service.add({
+      track: { ...input.track, id: 'spotify:track-3', providerTrackId: 'track-3' },
+    })
     repository.updateStatusAndPosition('queue-1', {
       status: 'playing',
       position: 0,
@@ -174,10 +223,51 @@ describe('QueueService', () => {
       })
     }
 
-    const queue = service.remove(id)
+    const { queue } = service.remove(id)
 
     expect(queue.map(({ position }) => position)).toEqual(queue.map((_, index) => index))
     expect(queue.some((item) => item.id === id)).toBe(false)
+  })
+
+  it('restores a removed item at its original valid position', () => {
+    const { service } = setup()
+    for (let index = 1; index <= 3; index += 1) {
+      service.add({
+        track: {
+          ...input.track,
+          id: `spotify:track-${index}`,
+          providerTrackId: `track-${index}`,
+        },
+      })
+    }
+
+    service.remove('queue-2')
+    expect(service.restore('queue-2').queue.map(({ id }) => id)).toEqual([
+      'queue-1',
+      'queue-2',
+      'queue-3',
+    ])
+  })
+
+  it('rejects removing the playing item and restoring after ten seconds', () => {
+    let currentTime = new Date('2026-06-18T14:00:00.000Z')
+    const { repository, service } = setup(() => currentTime)
+    service.add(input)
+    repository.updateStatusAndPosition('queue-1', {
+      status: 'playing',
+      position: 0,
+      updatedAt: currentTime.toISOString(),
+    })
+    expect(() => service.remove('queue-1')).toThrow(QueueItemNotRemovableError)
+
+    repository.updateStatusAndPosition('queue-1', {
+      status: 'queued',
+      position: 0,
+      updatedAt: currentTime.toISOString(),
+    })
+    service.remove('queue-1')
+    currentTime = new Date('2026-06-18T14:00:10.001Z')
+    expect(() => service.restore('queue-1')).toThrow(QueueRestoreExpiredError)
   })
 
   it('throws a domain error for missing active items', () => {

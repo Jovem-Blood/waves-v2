@@ -2,9 +2,10 @@
 
 ## Overview
 
-Waves is a private dashboard for managing the music queue of a Discord bot.
-The first product phase uses Spotify for search and metadata. Audio playback,
-YouTube, Lavalink, FFmpeg, and authentication are intentionally out of scope.
+Waves is a private dashboard for managing the music queue and playback of a
+Discord bot. Spotify provides search and metadata, while the bot resolves audio
+through YouTube Music with Audius fallback. Authentication remains outside the
+panel and must be provided by an external protection layer.
 
 The visual direction is a dark operational interface with neon mint, cyan, and
 violet accents. The UI prioritizes queue management, current playback status,
@@ -230,6 +231,19 @@ Player-specific states:
 - `paused`
 - `stopped`
 
+Operational states:
+
+- Web: `available` or `unavailable`
+- Bot: `online` or `offline`
+- Voice: `connected`, `disconnected`, or `reconnecting`
+
+Never infer bot availability from the web health endpoint. Server and voice
+channel names are displayed only when supplied by the current bot connection.
+
+Mutation feedback uses global accessible toasts. Success feedback is polite,
+errors are announced as alerts, and queue removal offers a ten-second undo
+action.
+
 Use `aria-live="polite"` for queue polling and player status changes.
 
 ## Responsive Rules
@@ -288,4 +302,3 @@ Use `exports/ojohg.png` for the Discord application and bot profile image.
 - Use Lucide Vue components for icons.
 - Keep API loading, empty, error, and success states explicit.
 - Do not expose Spotify or internal API secrets to the client bundle.
-

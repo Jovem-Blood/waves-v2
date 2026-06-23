@@ -4,11 +4,30 @@ import {
   type AddQueueItemInput,
   type MoveQueueItemInput,
   type QueueItem,
+  type RemoveQueueItemResult,
+  type RestoreQueueItemResult,
 } from '@waves/shared'
 
 import type { QueueRepository } from '../repositories/queue.repository'
 import type { UnitOfWork } from '../repositories/unit-of-work'
-import { QueueItemNotFoundError } from './domain-errors'
+import {
+  DuplicateTrackError,
+  QueueItemNotFoundError,
+  QueueItemNotRemovableError,
+  QueueItemNotRestorableError,
+  QueueRestoreExpiredError,
+} from './domain-errors'
+
+const RESTORE_WINDOW_MS = 10_000
+
+function isActiveTrackConstraintError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(
+      'UNIQUE constraint failed: queue_items.provider, queue_items.provider_track_id',
+    )
+  )
+}
 
 export class QueueService {
   constructor(
@@ -24,33 +43,71 @@ export class QueueService {
 
   add(input: AddQueueItemInput): QueueItem {
     const parsed = addQueueItemInputSchema.parse(input)
-    const timestamp = this.now().toISOString()
-    const item: QueueItem = {
-      id: this.generateId(),
-      track: parsed.track,
-      ...(parsed.requestedByDiscordUserId === undefined
-        ? {}
-        : { requestedByDiscordUserId: parsed.requestedByDiscordUserId }),
-      ...(parsed.requestedByDisplayName === undefined
-        ? {}
-        : { requestedByDisplayName: parsed.requestedByDisplayName }),
-      status: 'queued',
-      position: this.queueRepository.listActive().length,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }
+    try {
+      return this.unitOfWork.run(({ queue }) => {
+        if (queue.findActiveByTrack(parsed.track.provider, parsed.track.providerTrackId)) {
+          throw new DuplicateTrackError()
+        }
 
-    return this.queueRepository.insert(item)
+        const activeItems = queue.listActive()
+        const placement = parsed.placement ?? 'end'
+        const targetPosition =
+          placement === 'next' ? (activeItems[0]?.status === 'playing' ? 1 : 0) : activeItems.length
+        const timestamp = this.now().toISOString()
+
+        if (targetPosition < activeItems.length) {
+          queue.updatePositions(
+            activeItems.map((item, index) => ({
+              id: item.id,
+              position: index >= targetPosition ? index + 1 : index,
+              updatedAt: timestamp,
+            })),
+          )
+        }
+
+        const item: QueueItem = {
+          id: this.generateId(),
+          track: parsed.track,
+          ...(parsed.requestedByDiscordUserId === undefined
+            ? {}
+            : { requestedByDiscordUserId: parsed.requestedByDiscordUserId }),
+          ...(parsed.requestedByDisplayName === undefined
+            ? {}
+            : { requestedByDisplayName: parsed.requestedByDisplayName }),
+          status: 'queued',
+          position: targetPosition,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }
+
+        return queue.insert(item)
+      })
+    } catch (error) {
+      if (error instanceof DuplicateTrackError || isActiveTrackConstraintError(error)) {
+        throw new DuplicateTrackError()
+      }
+      throw error
+    }
   }
 
-  remove(id: string): QueueItem[] {
+  remove(id: string): RemoveQueueItemResult {
     return this.unitOfWork.run(({ queue }) => {
-      if (!queue.findById(id)) {
+      const item = queue.findById(id)
+      if (!item) {
         throw new QueueItemNotFoundError(id)
       }
+      if (item.status !== 'queued') {
+        throw new QueueItemNotRemovableError(id)
+      }
 
-      queue.delete(id)
-      const timestamp = this.now().toISOString()
+      const now = this.now()
+      const timestamp = now.toISOString()
+      queue.updateStatusAndPosition(id, {
+        status: 'removed',
+        position: item.position,
+        removedAt: timestamp,
+        updatedAt: timestamp,
+      })
       const activeItems = queue.listForRecalculation()
       queue.updatePositions(
         activeItems.map((item, position) => ({
@@ -60,8 +117,56 @@ export class QueueService {
         })),
       )
 
-      return queue.listActive()
+      return {
+        queue: queue.listActive(),
+        removal: {
+          queueItemId: id,
+          expiresAt: new Date(now.getTime() + RESTORE_WINDOW_MS).toISOString(),
+        },
+      }
     })
+  }
+
+  restore(id: string): RestoreQueueItemResult {
+    try {
+      return this.unitOfWork.run(({ queue }) => {
+        const item = queue.findById(id)
+        if (!item) throw new QueueItemNotFoundError(id)
+        if (item.status !== 'removed') throw new QueueItemNotRestorableError(id)
+
+        const removedAt = queue.getRemovedAt(id)
+        if (!removedAt) throw new QueueItemNotRestorableError(id)
+        const now = this.now()
+        if (now.getTime() - new Date(removedAt).getTime() > RESTORE_WINDOW_MS) {
+          throw new QueueRestoreExpiredError(id)
+        }
+        if (queue.findActiveByTrack(item.track.provider, item.track.providerTrackId)) {
+          throw new DuplicateTrackError()
+        }
+
+        const activeItems = queue.listActive()
+        const playingOffset = activeItems[0]?.status === 'playing' ? 1 : 0
+        const targetPosition = Math.max(playingOffset, Math.min(item.position, activeItems.length))
+        const timestamp = now.toISOString()
+
+        queue.updatePositions(
+          activeItems.map((activeItem, index) => ({
+            id: activeItem.id,
+            position: index >= targetPosition ? index + 1 : index,
+            updatedAt: timestamp,
+          })),
+        )
+        const restoredItem = queue.restore(id, targetPosition, timestamp)
+        if (!restoredItem) throw new QueueItemNotFoundError(id)
+
+        return { queue: queue.listActive(), restoredItem }
+      })
+    } catch (error) {
+      if (error instanceof DuplicateTrackError || isActiveTrackConstraintError(error)) {
+        throw new DuplicateTrackError()
+      }
+      throw error
+    }
   }
 
   move(id: string, input: MoveQueueItemInput): QueueItem[] {

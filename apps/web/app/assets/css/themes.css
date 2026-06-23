@@ -29,11 +29,7 @@
 
   --on-accent: #04120b;
 
-  --gradient-primary: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  --gradient-primary: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 
   --gradient-active-row: linear-gradient(
     90deg,
@@ -81,11 +77,7 @@
 
   --on-accent: #1e1e2e;
 
-  --gradient-primary: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  --gradient-primary: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 
   --gradient-active-row: linear-gradient(
     90deg,
@@ -133,11 +125,7 @@
 
   --on-accent: #0a0a0f;
 
-  --gradient-primary: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  --gradient-primary: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 
   --gradient-active-row: linear-gradient(
     90deg,
@@ -185,11 +173,7 @@
 
   --on-accent: #2e3440;
 
-  --gradient-primary: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  --gradient-primary: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 
   --gradient-active-row: linear-gradient(
     90deg,
@@ -237,11 +221,7 @@
 
   --on-accent: #1e1f29;
 
-  --gradient-primary: linear-gradient(
-    90deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
+  --gradient-primary: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 
   --gradient-active-row: linear-gradient(
     90deg,

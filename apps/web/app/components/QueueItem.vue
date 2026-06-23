@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import type { QueueItem } from '@waves/shared'
-import { ArrowDown, ArrowUp, Disc3, GripVertical, LoaderCircle, Trash2 } from '@lucide/vue'
+import {
+  ArrowDown,
+  ArrowUp,
+  Disc3,
+  ExternalLink,
+  GripVertical,
+  LoaderCircle,
+  Trash2,
+} from '@lucide/vue'
 
 defineProps<{
   item: QueueItem
@@ -49,6 +57,16 @@ function formatDuration(durationMs: number) {
       <div>
         <strong>{{ item.track.title }}</strong>
         <span>{{ item.track.artists.join(', ') }}</span>
+        <small v-if="item.track.albumName">{{ item.track.albumName }}</small>
+        <a
+          v-if="item.track.externalUrl"
+          :href="item.track.externalUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="`Abrir ${item.track.title} no Spotify`"
+        >
+          Spotify <ExternalLink :size="11" aria-hidden="true" />
+        </a>
       </div>
     </div>
 
@@ -78,7 +96,7 @@ function formatDuration(durationMs: number) {
       <button
         class="row-action remove-action"
         type="button"
-        :disabled="mutating"
+        :disabled="mutating || item.status !== 'queued'"
         :aria-label="`Remover ${item.track.title} da fila`"
         @click="$emit('remove', item.id)"
       >
@@ -181,7 +199,8 @@ function formatDuration(durationMs: number) {
 }
 
 .queue-track strong,
-.queue-track span {
+.queue-track span,
+.queue-track small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -194,6 +213,21 @@ function formatDuration(durationMs: number) {
 .queue-track span {
   color: var(--text-muted);
   font-size: 10px;
+}
+
+.queue-track small {
+  color: var(--text-subtle);
+  font-size: 9px;
+}
+
+.queue-track a {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent-secondary);
+  font-size: 9px;
+  text-decoration: none;
 }
 
 .queue-requester,

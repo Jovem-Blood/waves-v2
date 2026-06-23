@@ -7,6 +7,7 @@ import { createApp, createRouter, toNodeListener } from 'h3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createInternalEventsHandler } from '../../server/api/internal/bot/events.post'
+import { createInternalHeartbeatHandler } from '../../server/api/internal/bot/heartbeat.post'
 import { createInternalPlayHandler } from '../../server/api/internal/bot/play.post'
 import { createInternalPlaybackClaimHandler } from '../../server/api/internal/bot/playback/claim.post'
 import { createInternalPlaybackCompleteHandler } from '../../server/api/internal/bot/playback/complete.post'
@@ -16,9 +17,11 @@ import { createInternalResolveSourceHandler } from '../../server/api/internal/bo
 import { createQueueListHandler } from '../../server/api/queue/index.get'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
+import { OperationalStatusRepository } from '../../server/repositories/operational-status.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
 import { PlayerStateService } from '../../server/services/player-state.service'
+import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
 import type { WavesLogger } from '../../server/utils/logger'
 import type {
@@ -63,6 +66,7 @@ async function startTestApi(): Promise<TestContext> {
   migrate(connection.db, { migrationsFolder })
   const queueRepository = new QueueRepository(connection.db)
   const playerStateRepository = new PlayerStateRepository(connection.db, now)
+  const operationalStatusRepository = new OperationalStatusRepository(connection.db, now)
   const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
   let nextId = 0
   const spotifySearch = vi
@@ -81,6 +85,11 @@ async function startTestApi(): Promise<TestContext> {
   const dependencies: PublicApiDependencies = {
     queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
     playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
+    operationalStatusService: new OperationalStatusService(
+      operationalStatusRepository,
+      playerStateRepository,
+      now,
+    ),
     spotifyService,
   }
   const loggerInfo = vi.fn()
@@ -122,7 +131,12 @@ async function startTestApi(): Promise<TestContext> {
       getExpectedToken,
       () => logger,
       () => dependencies.playerStateService,
+      () => dependencies.operationalStatusService,
     ),
+  )
+  router.post(
+    '/api/internal/bot/heartbeat',
+    createInternalHeartbeatHandler(getDependencies, getExpectedToken),
   )
   router.post(
     '/api/internal/bot/sources/:queueItemId/resolve',
@@ -273,6 +287,16 @@ describe('internal bot API authorization', () => {
 })
 
 describe('authorized internal bot API', () => {
+  it('accepts heartbeat and marks the bot online', async () => {
+    const heartbeat = await postJson('/api/internal/bot/heartbeat', {
+      occurredAt: '2026-06-18T17:00:00.000Z',
+    })
+
+    expect(heartbeat.response.status).toBe(200)
+    expect(heartbeat.body).toMatchObject({
+      bot: { status: 'online', lastSeenAt: '2026-06-18T17:00:00.000Z' },
+    })
+  })
   it('returns the same active queue as the public endpoint', async () => {
     context?.dependencies.queueService.add({ track: firstTrack })
     context?.dependencies.queueService.add({ track: secondTrack })

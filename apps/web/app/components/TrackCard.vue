@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type { TrackMetadata } from '@waves/shared'
-import { Check, Disc3, LoaderCircle, Plus } from '@lucide/vue'
+import { Check, Disc3, ExternalLink, ListPlus, LoaderCircle, Play } from '@lucide/vue'
 
-defineProps<{ track: TrackMetadata; adding: boolean; added: boolean }>()
-defineEmits<{ add: [track: TrackMetadata] }>()
+defineProps<{
+  track: TrackMetadata
+  adding: boolean
+  addingPlacement?: 'end' | 'next'
+  added: boolean
+}>()
+defineEmits<{ add: [track: TrackMetadata]; playNext: [track: TrackMetadata] }>()
 
 function formatDuration(durationMs: number) {
   const totalSeconds = Math.round(durationMs / 1000)
@@ -18,19 +23,53 @@ function formatDuration(durationMs: number) {
     <div class="track-copy">
       <strong>{{ track.title }}</strong>
       <span>{{ track.artists.join(', ') }}</span>
-      <small>{{ formatDuration(track.durationMs) }}</small>
+      <small v-if="track.albumName">{{ track.albumName }}</small>
+      <div class="track-links">
+        <small>{{ formatDuration(track.durationMs) }}</small>
+        <a
+          v-if="track.externalUrl"
+          :href="track.externalUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="`Abrir ${track.title} no Spotify`"
+        >
+          Spotify <ExternalLink :size="12" aria-hidden="true" />
+        </a>
+      </div>
     </div>
-    <button
-      class="add-button"
-      type="button"
-      :disabled="adding || added"
-      :aria-label="added ? `${track.title} já está na fila` : `Adicionar ${track.title} à fila`"
-      @click="$emit('add', track)"
-    >
-      <Check v-if="added" class="check-icon" :size="18" aria-hidden="true" />
-      <LoaderCircle v-else-if="adding" class="spinner" :size="18" aria-hidden="true" />
-      <Plus v-else :size="19" aria-hidden="true" />
-    </button>
+    <div class="track-actions">
+      <button
+        class="add-button"
+        type="button"
+        :disabled="adding || added"
+        :aria-label="added ? `${track.title} já está na fila` : `Adicionar ${track.title} à fila`"
+        @click="$emit('add', track)"
+      >
+        <Check v-if="added" class="check-icon" :size="18" aria-hidden="true" />
+        <LoaderCircle
+          v-else-if="adding && addingPlacement === 'end'"
+          class="spinner"
+          :size="18"
+          aria-hidden="true"
+        />
+        <ListPlus v-else :size="19" aria-hidden="true" />
+      </button>
+      <button
+        class="add-button next-button"
+        type="button"
+        :disabled="adding || added"
+        :aria-label="`Tocar ${track.title} em seguida`"
+        @click="$emit('playNext', track)"
+      >
+        <LoaderCircle
+          v-if="adding && addingPlacement === 'next'"
+          class="spinner"
+          :size="18"
+          aria-hidden="true"
+        />
+        <Play v-else :size="18" aria-hidden="true" />
+      </button>
+    </div>
   </article>
 </template>
 
@@ -88,8 +127,40 @@ function formatDuration(durationMs: number) {
   font-size: 9px;
 }
 
+.track-links,
+.track-links a,
+.track-actions {
+  display: flex;
+  align-items: center;
+}
+
+.track-links {
+  gap: 10px;
+}
+
+.track-links a {
+  gap: 3px;
+  color: var(--accent-secondary);
+  font-size: 9px;
+  text-decoration: none;
+}
+
+.track-links a:hover {
+  text-decoration: underline;
+}
+
+.track-actions {
+  gap: 4px;
+}
+
 .track-copy small {
   font-family: 'Geist Mono Variable', monospace;
+}
+
+.next-button {
+  color: var(--accent-secondary);
+  border-color: color-mix(in srgb, var(--accent-secondary) 28%, transparent);
+  background: color-mix(in srgb, var(--accent-secondary) 6%, transparent);
 }
 
 .add-button {

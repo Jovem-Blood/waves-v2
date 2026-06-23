@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { defineInternalApiHandler } from '../../../utils/internal-auth'
 import { type WavesLogger, useLogger } from '../../../utils/logger'
 import {
+  type PublicOperationalStatusService,
   type PublicPlayerStateService,
   usePublicApiDependencies,
 } from '../../../utils/public-api-dependencies'
@@ -18,6 +19,8 @@ export function createInternalEventsHandler(
   getLogger: () => WavesLogger = useLogger,
   getPlayerStateService: () => PublicPlayerStateService = () =>
     usePublicApiDependencies().playerStateService,
+  getOperationalStatusService: () => PublicOperationalStatusService = () =>
+    usePublicApiDependencies().operationalStatusService,
 ) {
   return defineInternalApiHandler(async (event) => {
     const startedAt = Date.now()
@@ -40,8 +43,14 @@ export function createInternalEventsHandler(
         botEvent.voiceChannelId!,
         botEvent.voiceChannelName!,
       )
+      getOperationalStatusService().setVoiceStatus('connected')
     } else if (botEvent.type === 'voice.disconnected') {
       getPlayerStateService().voiceDisconnected(botEvent.guildId!)
+      getOperationalStatusService().setVoiceStatus('disconnected')
+    } else if (botEvent.type === 'voice.reconnecting') {
+      getOperationalStatusService().setVoiceStatus('reconnecting')
+    } else if (botEvent.type === 'voice.reconnected') {
+      getOperationalStatusService().setVoiceStatus('connected')
     } else if (botEvent.type === 'playback.paused') {
       getPlayerStateService().pause()
     } else if (botEvent.type === 'playback.resumed') {

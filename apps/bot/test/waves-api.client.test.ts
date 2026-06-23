@@ -92,6 +92,13 @@ describe('WavesApiClient', () => {
         }),
       )
       .mockResolvedValueOnce(jsonResponse({ accepted: true }, 202))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          web: { status: 'available', checkedAt: item.updatedAt },
+          bot: { status: 'online', lastSeenAt: item.updatedAt },
+          voice: { status: 'disconnected' },
+        }),
+      )
     const client = new WavesApiClient(config, request)
     const playInput: BotPlayInput = {
       query: 'track',
@@ -129,6 +136,9 @@ describe('WavesApiClient', () => {
       player: { status: 'idle' },
     })
     await expect(client.sendEvent(event)).resolves.toBeUndefined()
+    await expect(client.heartbeat(item.updatedAt)).resolves.toMatchObject({
+      bot: { status: 'online' },
+    })
 
     const sourceRequest = request.mock.calls[2]?.[1]
     expect(sourceRequest?.body).toBe(JSON.stringify({ forceRefresh: true }))

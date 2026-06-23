@@ -58,6 +58,11 @@ export class DiscordVoiceManager implements VoiceManager {
     private readonly onUnexpectedDisconnect: (guildId: string, channelId: string) => Promise<void>,
     private readonly runtime: VoiceRuntime = defaultRuntime,
     private readonly readyTimeoutMs = 15_000,
+    private readonly onConnectionStateChange?: (
+      type: 'reconnecting' | 'reconnected',
+      guildId: string,
+      channelId: string,
+    ) => Promise<void>,
   ) {}
 
   async join(input: JoinVoiceInput): Promise<JoinVoiceResult> {
@@ -222,10 +227,12 @@ export class DiscordVoiceManager implements VoiceManager {
       this.sessions.get(guildId) === session
     ) {
       session.recovering = true
+      void this.notifyConnectionState('reconnecting', guildId, session.channelId)
       void this.runtime
         .waitUntilReady(session.connection, this.readyTimeoutMs)
         .then(() => {
           session.recovering = false
+          void this.notifyConnectionState('reconnected', guildId, session.channelId)
         })
         .catch(() => {
           if (session.intentionalDestroy || this.sessions.get(guildId) !== session) {
@@ -262,6 +269,19 @@ export class DiscordVoiceManager implements VoiceManager {
   private async notifyUnexpectedDisconnect(guildId: string, channelId: string): Promise<void> {
     await this.onUnexpectedDisconnect(guildId, channelId).catch(() => {
       this.logger.error({ guildId, voiceChannelId: channelId }, 'Voice event sync failed')
+    })
+  }
+
+  private async notifyConnectionState(
+    type: 'reconnecting' | 'reconnected',
+    guildId: string,
+    channelId: string,
+  ): Promise<void> {
+    await this.onConnectionStateChange?.(type, guildId, channelId).catch(() => {
+      this.logger.error(
+        { guildId, voiceChannelId: channelId, eventType: `voice.${type}` },
+        'Voice event sync failed',
+      )
     })
   }
 }

@@ -160,6 +160,7 @@ function setup(connected = true) {
       updatedAt: item.updatedAt,
     }),
     updateProgress: vi.fn(),
+    heartbeat: vi.fn(),
   }
   const subscription = new PlayerSubscription(
     {} as VoiceConnection,
