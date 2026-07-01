@@ -15,7 +15,12 @@ import { useDatabase } from '../db/client'
 import { PlayerStateRepository } from '../repositories/player-state.repository'
 import { OperationalStatusRepository } from '../repositories/operational-status.repository'
 import { QueueRepository } from '../repositories/queue.repository'
+import { DiscordLoginTokenRepository } from '../repositories/discord-login-token.repository'
+import { SessionRepository } from '../repositories/session.repository'
 import { DatabaseUnitOfWork } from '../repositories/unit-of-work'
+import { UserRepository } from '../repositories/user.repository'
+import type { AuthService } from '../services/auth.service'
+import { AuthService as RuntimeAuthService } from '../services/auth.service'
 import type { SkipResult } from '../services/player-state.service'
 import { PlayerStateService } from '../services/player-state.service'
 import { OperationalStatusService } from '../services/operational-status.service'
@@ -66,6 +71,7 @@ export interface PublicApiDependencies {
   queueService: PublicQueueService
   spotifyService: PublicSpotifyService
   operationalStatusService: PublicOperationalStatusService
+  authService: AuthService
 }
 
 let runtimeDependencies: PublicApiDependencies | undefined
@@ -77,6 +83,9 @@ export function usePublicApiDependencies(): PublicApiDependencies {
 
   const db = useDatabase()
   const queueRepository = new QueueRepository(db)
+  const userRepository = new UserRepository(db)
+  const sessionRepository = new SessionRepository(db)
+  const discordLoginTokenRepository = new DiscordLoginTokenRepository(db)
   const playerStateRepository = new PlayerStateRepository(db)
   const operationalStatusRepository = new OperationalStatusRepository(db)
   const unitOfWork = new DatabaseUnitOfWork(db)
@@ -88,6 +97,12 @@ export function usePublicApiDependencies(): PublicApiDependencies {
     operationalStatusService: new OperationalStatusService(
       operationalStatusRepository,
       playerStateRepository,
+    ),
+    authService: new RuntimeAuthService(
+      userRepository,
+      sessionRepository,
+      discordLoginTokenRepository,
+      queueRepository,
     ),
     spotifyService: {
       searchTracks(query) {

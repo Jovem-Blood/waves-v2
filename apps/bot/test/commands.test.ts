@@ -51,6 +51,10 @@ function setup(overrides: Partial<CommandContext> = {}) {
   const claimPlayback = vi.fn()
   const completePlayback = vi.fn()
   const sendEvent = vi.fn().mockResolvedValue(undefined)
+  const createDiscordLink = vi.fn().mockResolvedValue({
+    url: 'https://waves.example.com/auth/discord-link?token=secret',
+    expiresAt: '2026-06-18T18:10:00.000Z',
+  })
   const joinVoice = vi.fn().mockResolvedValue('connected' as const)
   const leaveVoice = vi.fn().mockReturnValue(true)
   const isConnected = vi.fn().mockReturnValue(true)
@@ -96,6 +100,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
     getPlayer: vi.fn(),
     updateProgress: vi.fn(),
     heartbeat: vi.fn(),
+    createDiscordLink,
   }
   const context: CommandContext = {
     name: 'test',
@@ -122,6 +127,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
       skipPlayback,
       destroyPlaybackGuild,
       sendEvent,
+      createDiscordLink,
       skip,
       joinVoice,
       leaveVoice,
@@ -136,6 +142,7 @@ describe('bot commands', () => {
     expect(commandDefinitions.map((definition) => definition.toJSON().name)).toEqual([
       'play',
       'queue',
+      'login',
       'skip',
       'join',
       'leave',
@@ -143,7 +150,37 @@ describe('bot commands', () => {
       'resume',
       'volume',
     ])
-    expect(commands.size).toBe(8)
+    expect(commands.size).toBe(9)
+  })
+
+  it('login creates a private Discord link', async () => {
+    const { api, context, mocks, playbackManager, voiceManager } = setup({
+      name: 'login',
+      userId: 'discord-1',
+      displayName: 'Luis',
+      discordUsername: 'luis',
+      discordGlobalName: 'Luis Global',
+      discordAvatarUrl: 'https://cdn.example/avatar.png',
+      guildId: 'guild-1',
+    })
+
+    await commands.get('login')!.execute(context, api, voiceManager, playbackManager)
+
+    expect(mocks.deferEphemeral).toHaveBeenCalledOnce()
+    expect(mocks.createDiscordLink).toHaveBeenCalledWith({
+      discordUserId: 'discord-1',
+      discordUsername: 'luis',
+      discordGlobalName: 'Luis Global',
+      discordAvatarUrl: 'https://cdn.example/avatar.png',
+      guildId: 'guild-1',
+    })
+    expect(mocks.ephemeralReply).toHaveBeenCalledWith(
+      [
+        'Use este link privado para vincular sua sessão do Waves ao Discord:',
+        'https://waves.example.com/auth/discord-link?token=secret',
+        'Ele expira em 10 minutos e só funciona uma vez.',
+      ].join('\n'),
+    )
   })
 
   it('play sends query and requester identity', async () => {

@@ -81,6 +81,7 @@ export function useQueue(apiBase: string) {
         ? (caught as { data?: { data?: { code?: string } } }).data
         : undefined
     const code = payload?.data?.code
+    if (code === 'UNAUTHORIZED') return 'Informe seu nome antes de pedir músicas.'
     if (code === 'DUPLICATE_TRACK') return 'Esta faixa já está na fila.'
     if (code === 'QUEUE_ITEM_NOT_REMOVABLE') return 'A faixa em reprodução não pode ser removida.'
     if (code === 'QUEUE_RESTORE_EXPIRED') return 'O prazo para desfazer a remoção expirou.'

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { publicUserSchema } from './user.schema.js'
 import { trackMetadataSchema } from './track.schema.js'
 
 const requiredTextSchema = z.string().trim().min(1)
@@ -18,6 +19,8 @@ export const queueItemSchema = z
   .object({
     id: requiredTextSchema,
     track: trackMetadataSchema,
+    requestedByUserId: optionalTextSchema,
+    requestedByUser: publicUserSchema.optional(),
     requestedByDiscordUserId: optionalTextSchema,
     requestedByDisplayName: optionalTextSchema,
     status: queueItemStatusSchema,
@@ -32,6 +35,7 @@ export const queueSchema = z.array(queueItemSchema)
 export const addQueueItemInputSchema = z
   .object({
     track: trackMetadataSchema,
+    requestedByUserId: optionalTextSchema,
     requestedByDiscordUserId: optionalTextSchema,
     requestedByDisplayName: optionalTextSchema,
     placement: z.enum(['end', 'next']).optional(),

@@ -68,6 +68,9 @@ export class QueueService {
         const item: QueueItem = {
           id: this.generateId(),
           track: parsed.track,
+          ...(parsed.requestedByUserId === undefined
+            ? {}
+            : { requestedByUserId: parsed.requestedByUserId }),
           ...(parsed.requestedByDiscordUserId === undefined
             ? {}
             : { requestedByDiscordUserId: parsed.requestedByDiscordUserId }),

@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 describe('database migrations', () => {
-  it('creates all five tables', () => {
+  it('creates all eight tables', () => {
     const { sqlite } = createMigratedDatabase()
     const tables = sqlite
       .prepare(
@@ -34,10 +34,13 @@ describe('database migrations', () => {
 
     expect(tables).toEqual([
       'allowed_users',
+      'discord_login_tokens',
       'operational_state',
       'player_state',
       'queue_items',
       'resolved_sources',
+      'sessions',
+      'users',
     ])
   })
 

@@ -31,6 +31,7 @@ import {
 import { InternalApiConfigurationError } from './internal-api-config'
 import { UnauthorizedError } from './internal-errors'
 import { useLogger } from './logger'
+import { PublicAppConfigurationError } from './public-app-config'
 
 function toApiError(error: unknown): ApiError {
   if (error instanceof ZodError || error instanceof SpotifyInvalidQueryError) {
@@ -134,7 +135,10 @@ function toApiError(error: unknown): ApiError {
     })
   }
 
-  if (error instanceof InternalApiConfigurationError) {
+  if (
+    error instanceof InternalApiConfigurationError ||
+    error instanceof PublicAppConfigurationError
+  ) {
     return apiErrorSchema.parse({
       statusCode: 500,
       statusMessage: 'Internal server error',

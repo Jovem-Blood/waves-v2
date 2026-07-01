@@ -6,9 +6,9 @@ const validEnvironment = {
   DISCORD_TOKEN: 'discord-token',
   DISCORD_CLIENT_ID: 'client-id',
   DISCORD_GUILD_ID: 'guild-id',
-  INTERNAL_API_TOKEN: 'internal-token',
-  BOT_API_BASE_URL: 'http://localhost:3000/api',
-  APP_HOSTNAME: 'http://localhost:3000',
+  BOT_INTERNAL_SECRET: 'internal-token',
+  INTERNAL_WEB_URL: 'http://localhost:3000',
+  PUBLIC_APP_URL: 'http://localhost:3000',
 }
 
 describe('parseBotConfig', () => {
@@ -24,14 +24,31 @@ describe('parseBotConfig', () => {
     })
   })
 
+  it('keeps compatibility with legacy internal API variables', () => {
+    expect(
+      parseBotConfig({
+        DISCORD_TOKEN: 'discord-token',
+        DISCORD_CLIENT_ID: 'client-id',
+        DISCORD_GUILD_ID: 'guild-id',
+        INTERNAL_API_TOKEN: 'legacy-token',
+        BOT_API_BASE_URL: 'http://localhost:3000/api',
+        APP_HOSTNAME: 'http://localhost:3000',
+      }),
+    ).toMatchObject({
+      internalApiToken: 'legacy-token',
+      apiBaseUrl: 'http://localhost:3000/api',
+      appHostname: 'http://localhost:3000',
+    })
+  })
+
   it('rejects invalid fields without exposing values', () => {
     let error: unknown
     try {
       parseBotConfig({
         ...validEnvironment,
         DISCORD_TOKEN: '',
-        BOT_API_BASE_URL: 'invalid',
-        APP_HOSTNAME: 'invalid',
+        INTERNAL_WEB_URL: 'invalid',
+        PUBLIC_APP_URL: 'invalid',
       })
     } catch (caught) {
       error = caught
@@ -39,8 +56,8 @@ describe('parseBotConfig', () => {
 
     expect(error).toBeInstanceOf(BotConfigurationError)
     expect(String(error)).toContain('DISCORD_TOKEN')
-    expect(String(error)).toContain('BOT_API_BASE_URL')
-    expect(String(error)).toContain('APP_HOSTNAME')
+    expect(String(error)).toContain('INTERNAL_WEB_URL/BOT_API_BASE_URL')
+    expect(String(error)).toContain('PUBLIC_APP_URL/APP_HOSTNAME')
     expect(String(error)).not.toContain('internal-token')
   })
 })

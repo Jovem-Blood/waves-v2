@@ -11,6 +11,8 @@ import {
   Volume2,
 } from '@lucide/vue'
 
+import UserAvatar from './UserAvatar.vue'
+
 defineProps<{
   player?: PlayerState
   currentItem?: QueueItem
@@ -26,6 +28,10 @@ defineEmits<{ skip: []; control: [action: 'pause' | 'resume']; volume: [value: n
 function formatTime(value: number) {
   const seconds = Math.floor(value / 1000)
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function requesterName(item: QueueItem) {
+  return item.requestedByUser?.displayName ?? item.requestedByDisplayName ?? 'Waves Web'
 }
 </script>
 
@@ -60,7 +66,14 @@ function formatTime(value: number) {
           <strong>{{ currentItem.track.title }}</strong>
           <span>{{ currentItem.track.artists.join(', ') }}</span>
           <small v-if="currentItem.track.albumName">{{ currentItem.track.albumName }}</small>
-          <small>Pedido por {{ currentItem.requestedByDisplayName ?? 'Waves Web' }}</small>
+          <small class="player-requester">
+            <UserAvatar
+              :user="currentItem.requestedByUser"
+              :display-name="requesterName(currentItem)"
+              size="sm"
+            />
+            Pedido por {{ requesterName(currentItem) }}
+          </small>
           <a
             v-if="currentItem.track.externalUrl"
             :href="currentItem.track.externalUrl"
@@ -242,6 +255,13 @@ h2 {
 .player-metadata small {
   color: var(--accent-tertiary);
   font-size: 10px;
+}
+.player-requester {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
 }
 .player-metadata a {
   display: inline-flex;

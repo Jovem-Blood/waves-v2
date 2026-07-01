@@ -10,6 +10,8 @@ import {
   Trash2,
 } from '@lucide/vue'
 
+import UserAvatar from './UserAvatar.vue'
+
 defineProps<{
   item: QueueItem
   index: number
@@ -29,6 +31,10 @@ function formatDuration(durationMs: number) {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = String(totalSeconds % 60).padStart(2, '0')
   return `${minutes}:${seconds}`
+}
+
+function requesterName(item: QueueItem) {
+  return item.requestedByUser?.displayName ?? item.requestedByDisplayName ?? 'Waves Web'
 }
 </script>
 
@@ -54,10 +60,14 @@ function formatDuration(durationMs: number) {
         :alt="`Capa de ${item.track.title}`"
       />
       <span v-else class="queue-cover-empty"><Disc3 :size="20" aria-hidden="true" /></span>
-      <div>
+      <div class="queue-track-copy">
         <strong>{{ item.track.title }}</strong>
         <span>{{ item.track.artists.join(', ') }}</span>
         <small v-if="item.track.albumName">{{ item.track.albumName }}</small>
+        <span class="queue-track-requester">
+          <UserAvatar :user="item.requestedByUser" :display-name="requesterName(item)" size="sm" />
+          Pedido por {{ requesterName(item) }}
+        </span>
         <a
           v-if="item.track.externalUrl"
           :href="item.track.externalUrl"
@@ -70,7 +80,10 @@ function formatDuration(durationMs: number) {
       </div>
     </div>
 
-    <span class="queue-requester">{{ item.requestedByDisplayName ?? 'Waves Web' }}</span>
+    <span class="queue-requester">
+      <UserAvatar :user="item.requestedByUser" :display-name="requesterName(item)" size="sm" />
+      <span>{{ requesterName(item) }}</span>
+    </span>
     <span class="queue-duration">{{ formatDuration(item.track.durationMs) }}</span>
     <span class="queue-status">{{ item.status }}</span>
 
@@ -192,30 +205,30 @@ function formatDuration(durationMs: number) {
   background: var(--surface-strong);
 }
 
-.queue-track div {
+.queue-track-copy {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
-.queue-track strong,
-.queue-track span,
-.queue-track small {
+.queue-track-copy > strong,
+.queue-track-copy > span,
+.queue-track-copy > small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.queue-track strong {
+.queue-track-copy > strong {
   font-size: 12px;
 }
 
-.queue-track span {
+.queue-track-copy > span {
   color: var(--text-muted);
   font-size: 10px;
 }
 
-.queue-track small {
+.queue-track-copy > small {
   color: var(--text-subtle);
   font-size: 9px;
 }
@@ -228,6 +241,15 @@ function formatDuration(durationMs: number) {
   color: var(--accent-secondary);
   font-size: 9px;
   text-decoration: none;
+}
+
+.queue-track-requester {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-tertiary);
+  font-size: 9px;
 }
 
 .queue-requester,
@@ -291,10 +313,21 @@ function formatDuration(durationMs: number) {
   }
 
   .queue-requester {
-    overflow: hidden;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
     color: var(--accent-tertiary);
+  }
+
+  .queue-requester span {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .queue-track-requester {
+    display: none;
   }
 
   .queue-duration {

@@ -1,4 +1,5 @@
 import {
+  publicUserSchema,
   queueItemSchema,
   type QueueItem,
   type QueueItemStatus,
@@ -7,9 +8,11 @@ import {
 import { and, asc, eq, inArray, max } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
-import { queueItems } from '../db/schema'
+import { queueItems, users } from '../db/schema'
+import type { UserRow } from './user.repository'
 
 type QueueItemRow = typeof queueItems.$inferSelect
+type QueueItemWithUserRow = { item: QueueItemRow; user: UserRow | null }
 
 export interface QueuePositionUpdate {
   id: string
@@ -34,7 +37,7 @@ function parseArtists(artistsJson: string): string[] {
   return parsed
 }
 
-function mapRow(row: QueueItemRow): QueueItem {
+function mapRow(row: QueueItemRow, user?: UserRow | null): QueueItem {
   const track: TrackMetadata = {
     id: row.trackId,
     provider: row.provider,
@@ -51,6 +54,18 @@ function mapRow(row: QueueItemRow): QueueItem {
   return queueItemSchema.parse({
     id: row.id,
     track,
+    ...(row.requestedByUserId === null ? {} : { requestedByUserId: row.requestedByUserId }),
+    ...(user === undefined || user === null
+      ? {}
+      : {
+          requestedByUser: publicUserSchema.parse({
+            id: user.id,
+            kind: user.kind,
+            displayName: user.displayName,
+            ...(user.avatarUrl === null ? {} : { avatarUrl: user.avatarUrl }),
+            ...(user.discordUserId === null ? {} : { discordUserId: user.discordUserId }),
+          }),
+        }),
     ...(row.requestedByDiscordUserId === null
       ? {}
       : { requestedByDiscordUserId: row.requestedByDiscordUserId }),
@@ -62,6 +77,10 @@ function mapRow(row: QueueItemRow): QueueItem {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   })
+}
+
+function mapJoinedRow(row: QueueItemWithUserRow): QueueItem {
+  return mapRow(row.item, row.user)
 }
 
 function toInsert(item: QueueItem): typeof queueItems.$inferInsert {
@@ -79,6 +98,9 @@ function toInsert(item: QueueItem): typeof queueItems.$inferInsert {
     ...(parsed.track.coverUrl === undefined ? {} : { coverUrl: parsed.track.coverUrl }),
     ...(parsed.track.externalUrl === undefined ? {} : { externalUrl: parsed.track.externalUrl }),
     ...(parsed.track.isrc === undefined ? {} : { isrc: parsed.track.isrc }),
+    ...(parsed.requestedByUserId === undefined
+      ? {}
+      : { requestedByUserId: parsed.requestedByUserId }),
     ...(parsed.requestedByDiscordUserId === undefined
       ? {}
       : { requestedByDiscordUserId: parsed.requestedByDiscordUserId }),
@@ -97,12 +119,13 @@ export class QueueRepository {
 
   listActive(): QueueItem[] {
     return this.db
-      .select()
+      .select({ item: queueItems, user: users })
       .from(queueItems)
+      .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
       .where(inArray(queueItems.status, ['queued', 'playing']))
       .orderBy(asc(queueItems.position))
       .all()
-      .map(mapRow)
+      .map(mapJoinedRow)
   }
 
   listForRecalculation(): QueueItem[] {
@@ -114,8 +137,9 @@ export class QueueRepository {
     providerTrackId: string,
   ): QueueItem | undefined {
     const row = this.db
-      .select()
+      .select({ item: queueItems, user: users })
       .from(queueItems)
+      .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
       .where(
         and(
           eq(queueItems.provider, provider),
@@ -124,12 +148,17 @@ export class QueueRepository {
         ),
       )
       .get()
-    return row ? mapRow(row) : undefined
+    return row ? mapJoinedRow(row) : undefined
   }
 
   findById(id: string): QueueItem | undefined {
-    const row = this.db.select().from(queueItems).where(eq(queueItems.id, id)).get()
-    return row ? mapRow(row) : undefined
+    const row = this.db
+      .select({ item: queueItems, user: users })
+      .from(queueItems)
+      .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
+      .where(eq(queueItems.id, id))
+      .get()
+    return row ? mapJoinedRow(row) : undefined
   }
 
   insert(item: QueueItem): QueueItem {
@@ -196,19 +225,32 @@ export class QueueRepository {
       }
 
       return updates.map(({ id }) => {
-        const row = tx.select().from(queueItems).where(eq(queueItems.id, id)).get()
+        const row = tx
+          .select({ item: queueItems, user: users })
+          .from(queueItems)
+          .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
+          .where(eq(queueItems.id, id))
+          .get()
 
         if (!row) {
           throw new Error(`Queue item ${id} was not found while updating positions`)
         }
 
-        return mapRow(row)
+        return mapJoinedRow(row)
       })
     })
   }
 
   delete(id: string): boolean {
     return this.db.delete(queueItems).where(eq(queueItems.id, id)).run().changes > 0
+  }
+
+  reassignRequester(fromUserId: string, toUserId: string, updatedAt: string): number {
+    return this.db
+      .update(queueItems)
+      .set({ requestedByUserId: toUserId, updatedAt })
+      .where(eq(queueItems.requestedByUserId, fromUserId))
+      .run().changes
   }
 
   private requireById(id: string): QueueItem {

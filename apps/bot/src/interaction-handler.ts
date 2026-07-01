@@ -56,6 +56,7 @@ export async function handleInteraction(
     member instanceof GuildMember
       ? member.displayName
       : (interaction.user.globalName ?? interaction.user.username)
+  const discordAvatarUrl = interaction.user.avatarURL()
   const voiceChannelId =
     member instanceof GuildMember ? (member.voice.channelId ?? undefined) : undefined
   const voiceChannelName =
@@ -86,6 +87,11 @@ export async function handleInteraction(
         : {}),
       userId: interaction.user.id,
       displayName,
+      discordUsername: interaction.user.username,
+      ...(interaction.user.globalName === null
+        ? {}
+        : { discordGlobalName: interaction.user.globalName }),
+      ...(discordAvatarUrl === null ? {} : { discordAvatarUrl }),
       ...(voiceChannelId === undefined ? {} : { voiceChannelId }),
       ...(voiceChannelName === undefined ? {} : { voiceChannelName }),
       ...(interaction.guild === null

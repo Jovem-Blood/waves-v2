@@ -15,6 +15,7 @@ export const queueItems = sqliteTable(
     coverUrl: text('cover_url'),
     externalUrl: text('external_url'),
     isrc: text('isrc'),
+    requestedByUserId: text('requested_by_user_id').references(() => users.id),
     requestedByDiscordUserId: text('requested_by_discord_user_id'),
     requestedByDisplayName: text('requested_by_display_name'),
     status: text('status', {
@@ -29,6 +30,7 @@ export const queueItems = sqliteTable(
     index('queue_items_status_idx').on(table.status),
     index('queue_items_position_idx').on(table.position),
     index('queue_items_created_at_idx').on(table.createdAt),
+    index('queue_items_requested_by_user_id_idx').on(table.requestedByUserId),
     uniqueIndex('queue_items_active_position_unique')
       .on(table.position)
       .where(sql`${table.status} in ('queued', 'playing')`),
@@ -40,6 +42,69 @@ export const queueItems = sqliteTable(
     uniqueIndex('queue_items_active_track_unique')
       .on(table.provider, table.providerTrackId)
       .where(sql`${table.status} in ('queued', 'playing')`),
+  ],
+)
+
+export const users = sqliteTable(
+  'users',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind', { enum: ['guest', 'discord'] }).notNull(),
+    displayName: text('display_name').notNull(),
+    avatarUrl: text('avatar_url'),
+    discordUserId: text('discord_user_id'),
+    discordUsername: text('discord_username'),
+    discordGlobalName: text('discord_global_name'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('users_discord_user_id_unique')
+      .on(table.discordUserId)
+      .where(sql`${table.discordUserId} is not null`),
+    check('users_kind_valid', sql`${table.kind} in ('guest', 'discord')`),
+    check('users_display_name_not_empty', sql`length(trim(${table.displayName})) > 0`),
+  ],
+)
+
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    lastSeenAt: text('last_seen_at').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('sessions_user_id_idx').on(table.userId),
+    uniqueIndex('sessions_token_hash_unique').on(table.tokenHash),
+    index('sessions_expires_at_idx').on(table.expiresAt),
+  ],
+)
+
+export const discordLoginTokens = sqliteTable(
+  'discord_login_tokens',
+  {
+    id: text('id').primaryKey(),
+    tokenHash: text('token_hash').notNull(),
+    discordUserId: text('discord_user_id').notNull(),
+    discordUsername: text('discord_username').notNull(),
+    discordGlobalName: text('discord_global_name'),
+    discordAvatarUrl: text('discord_avatar_url'),
+    guildId: text('guild_id'),
+    expiresAt: text('expires_at').notNull(),
+    usedAt: text('used_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('discord_login_tokens_token_hash_unique').on(table.tokenHash),
+    index('discord_login_tokens_discord_user_id_idx').on(table.discordUserId),
+    index('discord_login_tokens_expires_at_idx').on(table.expiresAt),
   ],
 )
 

@@ -3,6 +3,8 @@ import { useHead, useRuntimeConfig } from '#imports'
 import { AudioWaveform, Headphones } from '@lucide/vue'
 import { computed } from 'vue'
 
+import CurrentUserMenu from './components/CurrentUserMenu.vue'
+import GuestNamePrompt from './components/GuestNamePrompt.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import HeaderConnectionStatus from './components/HeaderConnectionStatus.vue'
 import QueuePanel from './components/QueuePanel.vue'
@@ -10,6 +12,7 @@ import SpotifySearch from './components/SpotifySearch.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import ToastViewport from './components/ToastViewport.vue'
 import { useOperationalStatus } from './composables/useOperationalStatus'
+import { useAuth } from './composables/useAuth'
 import { usePlayerState } from './composables/usePlayerState'
 import { useQueue } from './composables/useQueue'
 
@@ -19,6 +22,7 @@ const apiBase = config.public.apiBase
 const queue = useQueue(apiBase)
 const player = usePlayerState(apiBase)
 const operational = useOperationalStatus(apiBase)
+const auth = useAuth(apiBase)
 
 const activeTrackIds = computed(() =>
   queue.items.value
@@ -55,6 +59,8 @@ const controlsDisabledReason = computed(() => {
     return 'O bot não está em um canal de voz.'
   return undefined
 })
+
+const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
 </script>
 
 <template>
@@ -77,6 +83,12 @@ const controlsDisabledReason = computed(() => {
       />
 
       <div class="header-actions">
+        <CurrentUserMenu
+          :user="auth.user.value"
+          :loading="auth.loading.value"
+          :disabled="auth.submitting.value"
+          @logout="auth.logout"
+        />
         <SettingsModal
           :status="operational.status.value"
           :web-available="operational.webAvailable.value"
@@ -130,6 +142,12 @@ const controlsDisabledReason = computed(() => {
       >
       <span>Waves sincroniza a fila automaticamente</span>
     </footer>
+    <GuestNamePrompt
+      :open="guestPromptOpen"
+      :submitting="auth.submitting.value"
+      :error="auth.error.value"
+      @submit="auth.createGuest"
+    />
     <ToastViewport />
   </div>
 </template>

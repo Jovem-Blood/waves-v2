@@ -36,6 +36,7 @@ export class SafePlaybackError extends Error {
 export function classifyPlaybackError(error: unknown): {
   errorCode: PlaybackErrorCode
   httpStatus?: number
+  errorName?: string
 } {
   if (error instanceof SafePlaybackError) {
     return {
@@ -54,6 +55,9 @@ export function classifyPlaybackError(error: unknown): {
   }
   if (error instanceof WavesApiError) {
     return { errorCode: 'API_ERROR', httpStatus: error.statusCode }
+  }
+  if (error instanceof Error) {
+    return { errorCode: 'UNKNOWN', errorName: error.name }
   }
   return { errorCode: 'UNKNOWN' }
 }

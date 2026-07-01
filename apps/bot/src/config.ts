@@ -36,9 +36,9 @@ const variableNames = {
   discordToken: 'DISCORD_TOKEN',
   discordClientId: 'DISCORD_CLIENT_ID',
   discordGuildId: 'DISCORD_GUILD_ID',
-  internalApiToken: 'INTERNAL_API_TOKEN',
-  apiBaseUrl: 'BOT_API_BASE_URL',
-  appHostname: 'APP_HOSTNAME',
+  internalApiToken: 'BOT_INTERNAL_SECRET',
+  apiBaseUrl: 'INTERNAL_WEB_URL/BOT_API_BASE_URL',
+  appHostname: 'PUBLIC_APP_URL/APP_HOSTNAME',
   logLevel: 'LOG_LEVEL',
 } as const
 
@@ -56,13 +56,17 @@ export function parseBotConfig(environment?: Record<string, string | undefined>)
   }
 
   const source = environment ?? process.env
+  const internalWebUrl = source.INTERNAL_WEB_URL
+  const legacyApiBaseUrl = source.BOT_API_BASE_URL
+  const apiBaseUrl =
+    internalWebUrl === undefined ? legacyApiBaseUrl : `${internalWebUrl.replace(/\/+$/, '')}/api`
   const result = botConfigSchema.safeParse({
     discordToken: source.DISCORD_TOKEN,
     discordClientId: source.DISCORD_CLIENT_ID,
     discordGuildId: source.DISCORD_GUILD_ID,
-    internalApiToken: source.INTERNAL_API_TOKEN,
-    apiBaseUrl: source.BOT_API_BASE_URL,
-    appHostname: source.APP_HOSTNAME,
+    internalApiToken: source.BOT_INTERNAL_SECRET ?? source.INTERNAL_API_TOKEN,
+    apiBaseUrl,
+    appHostname: source.PUBLIC_APP_URL ?? source.APP_HOSTNAME,
     logLevel: source.LOG_LEVEL ?? (source.NODE_ENV === 'development' ? 'debug' : 'info'),
   })
 

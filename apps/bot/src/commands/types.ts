@@ -30,6 +30,9 @@ export interface CommandContext {
   volume?: number
   userId: string
   displayName: string
+  discordUsername?: string
+  discordGlobalName?: string
+  discordAvatarUrl?: string
   guildName?: string
   voiceChannelId?: string
   voiceChannelName?: string

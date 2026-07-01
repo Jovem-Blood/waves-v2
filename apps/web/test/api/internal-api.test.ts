@@ -19,7 +19,11 @@ import { createDatabaseConnection, type DatabaseConnection } from '../../server/
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
 import { OperationalStatusRepository } from '../../server/repositories/operational-status.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
+import { DiscordLoginTokenRepository } from '../../server/repositories/discord-login-token.repository'
+import { SessionRepository } from '../../server/repositories/session.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
+import { UserRepository } from '../../server/repositories/user.repository'
+import { AuthService } from '../../server/services/auth.service'
 import { PlayerStateService } from '../../server/services/player-state.service'
 import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
@@ -65,6 +69,9 @@ async function startTestApi(): Promise<TestContext> {
   const connection = createDatabaseConnection({ url: ':memory:' })
   migrate(connection.db, { migrationsFolder })
   const queueRepository = new QueueRepository(connection.db)
+  const userRepository = new UserRepository(connection.db)
+  const sessionRepository = new SessionRepository(connection.db)
+  const discordLoginTokenRepository = new DiscordLoginTokenRepository(connection.db)
   const playerStateRepository = new PlayerStateRepository(connection.db, now)
   const operationalStatusRepository = new OperationalStatusRepository(connection.db, now)
   const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
@@ -89,6 +96,15 @@ async function startTestApi(): Promise<TestContext> {
       operationalStatusRepository,
       playerStateRepository,
       now,
+    ),
+    authService: new AuthService(
+      userRepository,
+      sessionRepository,
+      discordLoginTokenRepository,
+      queueRepository,
+      now,
+      () => `auth-${++nextId}`,
+      () => 'auth-token',
     ),
     spotifyService,
   }
@@ -337,6 +353,41 @@ describe('authorized internal bot API', () => {
         track: firstTrack,
         requestedByDiscordUserId: 'discord-1',
         requestedByDisplayName: 'Luis',
+      },
+    })
+  })
+
+  it('uses linked Discord users as canonical queue requesters', async () => {
+    context?.dependencies.authService.consumeDiscordLink(
+      context.dependencies.authService
+        .createDiscordLink(
+          {
+            discordUserId: 'discord-1',
+            discordUsername: 'luis',
+            discordGlobalName: 'Luis Discord',
+          },
+          'https://waves.example.com',
+        )
+        .url.split('token=')[1]!,
+    )
+
+    const { response, body } = await postJson('/api/internal/bot/play', {
+      query: 'track',
+      requestedByDiscordUserId: 'discord-1',
+      requestedByDisplayName: 'Luis Legacy',
+    })
+
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({
+      item: {
+        requestedByUserId: 'auth-2',
+        requestedByDisplayName: 'Luis Discord',
+        requestedByUser: {
+          id: 'auth-2',
+          kind: 'discord',
+          displayName: 'Luis Discord',
+          discordUserId: 'discord-1',
+        },
       },
     })
   })

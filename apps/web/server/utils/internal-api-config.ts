@@ -12,7 +12,7 @@ export class InternalApiConfigurationError extends Error {
   readonly code = 'INTERNAL_API_CONFIGURATION_ERROR'
 
   constructor() {
-    super('Invalid internal API configuration: INTERNAL_API_TOKEN')
+    super('Invalid internal API configuration: BOT_INTERNAL_SECRET')
     this.name = 'InternalApiConfigurationError'
   }
 }
@@ -21,7 +21,7 @@ export function parseInternalApiConfig(
   environment: Record<string, string | undefined> = process.env,
 ): InternalApiConfig {
   const result = internalApiConfigSchema.safeParse({
-    token: environment.INTERNAL_API_TOKEN,
+    token: environment.BOT_INTERNAL_SECRET ?? environment.INTERNAL_API_TOKEN,
   })
 
   if (!result.success) {

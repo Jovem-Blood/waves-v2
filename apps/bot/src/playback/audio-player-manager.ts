@@ -511,8 +511,8 @@ export class AudioPlayerManager implements PlaybackManager {
     player.on('stateChange', (previousState, nextState) => {
       this.handleStateChange(guildId, session, previousState, nextState)
     })
-    player.on('error', () => {
-      void this.handlePlayerError(guildId, session)
+    player.on('error', (error) => {
+      void this.handlePlayerError(guildId, session, error)
     })
 
     if (!this.voiceManager.subscribe(guildId, player)) {
@@ -758,7 +758,11 @@ export class AudioPlayerManager implements PlaybackManager {
     }
   }
 
-  private async handlePlayerError(guildId: string, session: PlaybackSession): Promise<void> {
+  private async handlePlayerError(
+    guildId: string,
+    session: PlaybackSession,
+    error: unknown,
+  ): Promise<void> {
     const current = session.current
     if (!current || session.settling) {
       return
@@ -772,6 +776,7 @@ export class AudioPlayerManager implements PlaybackManager {
         playbackAttemptId: current.playbackAttemptId,
         attempt: current.retries + 1,
         outcome: current.retries < 1 ? 'refreshing' : 'failing',
+        ...classifyPlaybackError(error),
         errorCode: 'PLAYER_ERROR',
       },
       'Audio player error',

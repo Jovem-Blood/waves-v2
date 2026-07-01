@@ -48,7 +48,10 @@ export interface YouTubeMusicClientOptions {
 
 function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new YouTubeMusicUnavailableError()), timeoutMs)
+    const timer = setTimeout(
+      () => reject(new YouTubeMusicUnavailableError({ cause: new Error('Operation timed out') })),
+      timeoutMs,
+    )
     timer.unref?.()
     operation.then(resolve, reject).finally(() => clearTimeout(timer))
   })
@@ -169,7 +172,7 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
       if (error instanceof YouTubeMusicUnavailableError) {
         throw error
       }
-      throw new YouTubeMusicUnavailableError()
+      throw new YouTubeMusicUnavailableError({ cause: error })
     }
   }
 
@@ -229,7 +232,7 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
       if (error instanceof YouTubeMusicInvalidResponseError) {
         throw error
       }
-      throw new YouTubeMusicUnavailableError()
+      throw new YouTubeMusicUnavailableError({ cause: error })
     }
   }
 

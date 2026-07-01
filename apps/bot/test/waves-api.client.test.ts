@@ -99,6 +99,12 @@ describe('WavesApiClient', () => {
           voice: { status: 'disconnected' },
         }),
       )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          url: 'https://waves.example.com/auth/discord-link?token=secret',
+          expiresAt: '2026-06-18T18:10:00.000Z',
+        }),
+      )
     const client = new WavesApiClient(config, request)
     const playInput: BotPlayInput = {
       query: 'track',
@@ -139,9 +145,30 @@ describe('WavesApiClient', () => {
     await expect(client.heartbeat(item.updatedAt)).resolves.toMatchObject({
       bot: { status: 'online' },
     })
+    await expect(
+      client.createDiscordLink({
+        discordUserId: 'discord-1',
+        discordUsername: 'luis',
+        discordGlobalName: 'Luis',
+        guildId: 'guild-1',
+      }),
+    ).resolves.toEqual({
+      url: 'https://waves.example.com/auth/discord-link?token=secret',
+      expiresAt: '2026-06-18T18:10:00.000Z',
+    })
 
     const sourceRequest = request.mock.calls[2]?.[1]
     expect(sourceRequest?.body).toBe(JSON.stringify({ forceRefresh: true }))
+    const linkRequest = request.mock.calls[7]
+    expect(linkRequest?.[0]).toBe('http://localhost:3000/api/auth/discord-link/create')
+    expect(linkRequest?.[1]?.body).toBe(
+      JSON.stringify({
+        discordUserId: 'discord-1',
+        discordUsername: 'luis',
+        discordGlobalName: 'Luis',
+        guildId: 'guild-1',
+      }),
+    )
   })
 
   it('translates API errors and malformed responses', async () => {

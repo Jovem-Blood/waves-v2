@@ -15,7 +15,7 @@ const config: BotConfig = {
 }
 
 describe('registerCommands', () => {
-  it('registers exactly eight commands in the configured guild', async () => {
+  it('registers exactly nine commands in the configured guild', async () => {
     const putCommands = vi.fn().mockResolvedValue([])
 
     await registerCommands(config, putCommands)
@@ -28,6 +28,7 @@ describe('registerCommands', () => {
     expect(body.map(({ name }) => name)).toEqual([
       'play',
       'queue',
+      'login',
       'skip',
       'join',
       'leave',

@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js'
 
 import { joinCommand } from './join.command.js'
 import { leaveCommand } from './leave.command.js'
+import { loginCommand } from './login.command.js'
 import { playCommand } from './play.command.js'
 import { queueCommand } from './queue.command.js'
 import { skipCommand } from './skip.command.js'
@@ -26,6 +27,9 @@ export const commandDefinitions = [
         .setMinLength(1),
     ),
   new SlashCommandBuilder().setName('queue').setDescription('Mostra a fila atual'),
+  new SlashCommandBuilder()
+    .setName('login')
+    .setDescription('Gera um link privado para vincular sua sessão web ao Discord'),
   new SlashCommandBuilder().setName('skip').setDescription('Pula a faixa atual'),
   new SlashCommandBuilder().setName('join').setDescription('Conecta o Waves ao seu canal de voz'),
   new SlashCommandBuilder().setName('leave').setDescription('Desconecta o Waves do canal de voz'),
@@ -48,6 +52,7 @@ export const commands = new Map<string, BotCommand>(
   [
     playCommand,
     queueCommand,
+    loginCommand,
     skipCommand,
     joinCommand,
     leaveCommand,

@@ -161,6 +161,7 @@ function setup(connected = true) {
     }),
     updateProgress: vi.fn(),
     heartbeat: vi.fn(),
+    createDiscordLink: vi.fn(),
   }
   const subscription = new PlayerSubscription(
     {} as VoiceConnection,
@@ -331,6 +332,7 @@ describe('AudioPlayerManager', () => {
       expect.objectContaining({
         operation: 'audio_player.error',
         errorCode: 'PLAYER_ERROR',
+        errorName: 'Error',
         outcome: 'refreshing',
       }),
       'Audio player error',

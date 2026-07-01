@@ -116,6 +116,7 @@ input:focus-visible {
 }
 
 .brand-lockup,
+.header-actions,
 .header-context,
 .app-footer span {
   display: flex;
@@ -124,6 +125,12 @@ input:focus-visible {
 
 .brand-lockup {
   gap: 10px;
+}
+
+.header-actions {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .brand-mark {

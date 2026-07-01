@@ -7,6 +7,10 @@ import { createApp, createRouter, toNodeListener } from 'h3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { healthHandler } from '../../server/api/health.get'
+import { createGuestAuthHandler } from '../../server/api/auth/guest.post'
+import { createLogoutHandler } from '../../server/api/auth/logout.post'
+import { createDiscordLinkCreateHandler } from '../../server/api/auth/discord-link/create.post'
+import { createMeHandler } from '../../server/api/me.get'
 import { createPlayerGetHandler } from '../../server/api/player/index.get'
 import { createPlayerSkipHandler } from '../../server/api/player/skip.post'
 import { createQueueRemoveHandler } from '../../server/api/queue/[id].delete'
@@ -21,7 +25,11 @@ import { createDatabaseConnection, type DatabaseConnection } from '../../server/
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
 import { OperationalStatusRepository } from '../../server/repositories/operational-status.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
+import { SessionRepository } from '../../server/repositories/session.repository'
+import { DiscordLoginTokenRepository } from '../../server/repositories/discord-login-token.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
+import { UserRepository } from '../../server/repositories/user.repository'
+import { AuthService } from '../../server/services/auth.service'
 import { PlayerStateService } from '../../server/services/player-state.service'
 import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
@@ -55,6 +63,7 @@ interface TestContext {
   dependencies: PublicApiDependencies
   server: Server
   spotifySearch: ReturnType<typeof vi.fn<(query: string) => Promise<TrackMetadata[]>>>
+  sessionCookie?: string
 }
 
 let context: TestContext | undefined
@@ -64,6 +73,9 @@ async function startTestApi(): Promise<TestContext> {
   migrate(connection.db, { migrationsFolder })
 
   const queueRepository = new QueueRepository(connection.db)
+  const userRepository = new UserRepository(connection.db)
+  const sessionRepository = new SessionRepository(connection.db)
+  const discordLoginTokenRepository = new DiscordLoginTokenRepository(connection.db)
   const playerStateRepository = new PlayerStateRepository(connection.db, now)
   const operationalStatusRepository = new OperationalStatusRepository(connection.db, now)
   const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
@@ -82,12 +94,37 @@ async function startTestApi(): Promise<TestContext> {
       playerStateRepository,
       now,
     ),
+    authService: new AuthService(
+      userRepository,
+      sessionRepository,
+      discordLoginTokenRepository,
+      queueRepository,
+      now,
+      vi
+        .fn<() => string>()
+        .mockReturnValueOnce('user-1')
+        .mockReturnValueOnce('session-1')
+        .mockReturnValueOnce('user-2')
+        .mockReturnValueOnce('session-2'),
+      () => 'test-session-token',
+    ),
     spotifyService,
   }
   const getDependencies = () => dependencies
   const router = createRouter()
 
   router.get('/api/health', healthHandler)
+  router.get('/api/me', createMeHandler(getDependencies))
+  router.post('/api/auth/guest', createGuestAuthHandler(getDependencies))
+  router.post('/api/auth/logout', createLogoutHandler(getDependencies))
+  router.post(
+    '/api/auth/discord-link/create',
+    createDiscordLinkCreateHandler(
+      getDependencies,
+      () => 'https://waves.example.com',
+      () => 'internal-token',
+    ),
+  )
   router.get('/api/spotify/search', createSpotifySearchHandler(getDependencies))
   router.get('/api/queue', createQueueListHandler(getDependencies))
   router.post('/api/queue', createQueueAddHandler(getDependencies))
@@ -142,22 +179,39 @@ async function request(
     throw new Error('Test API is not running')
   }
 
-  const response = await fetch(`${context.baseUrl}${path}`, init)
+  const response = await fetch(`${context.baseUrl}${path}`, {
+    ...init,
+    headers: {
+      ...(context.sessionCookie ? { Cookie: context.sessionCookie } : {}),
+      ...Object.fromEntries(new Headers(init?.headers).entries()),
+    },
+  })
   return {
     response,
     body: await response.json(),
   }
 }
 
-async function postJson(path: string, body: unknown) {
+async function postJson(path: string, body: unknown, headers?: HeadersInit) {
   return request(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   })
 }
 
+async function createGuest(displayName = 'Luis') {
+  const { response, body } = await postJson('/api/auth/guest', { displayName })
+  const setCookie = response.headers.get('set-cookie')
+  if (!setCookie) throw new Error('Guest session did not set a cookie')
+  if (context) context.sessionCookie = setCookie.split(';')[0]
+  return { response, body }
+}
+
 async function addTrack(track: TrackMetadata) {
+  if (!context?.sessionCookie) {
+    await createGuest()
+  }
   return postJson('/api/queue', { track } satisfies AddQueueItemInput)
 }
 
@@ -205,6 +259,55 @@ describe('public API', () => {
     expect(context?.spotifySearch).toHaveBeenCalledWith('track one')
   })
 
+  it('creates, reads and clears a guest session', async () => {
+    const initial = await request('/api/me')
+    expect(initial.response.status).toBe(200)
+    expect(initial.body).toEqual({ user: null })
+
+    const guest = await createGuest('  Luis  ')
+    expect(guest.response.status).toBe(200)
+    expect(guest.body).toMatchObject({
+      user: { id: 'user-1', kind: 'guest', displayName: 'Luis' },
+    })
+
+    const me = await request('/api/me')
+    expect(me.response.status).toBe(200)
+    expect(me.body).toMatchObject({
+      user: { id: 'user-1', kind: 'guest', displayName: 'Luis' },
+    })
+
+    const logout = await postJson('/api/auth/logout', {})
+    expect(logout.response.status).toBe(200)
+    expect(logout.body).toEqual({ ok: true })
+    if (context) context.sessionCookie = undefined
+
+    expect((await request('/api/me')).body).toEqual({ user: null })
+  })
+
+  it('creates Discord link tokens only for the internal bot', async () => {
+    const unauthorized = await postJson('/api/auth/discord-link/create', {
+      discordUserId: 'discord-1',
+      discordUsername: 'luis',
+    })
+    expect(unauthorized.response.status).toBe(401)
+
+    const authorized = await postJson(
+      '/api/auth/discord-link/create',
+      {
+        discordUserId: 'discord-1',
+        discordUsername: 'luis',
+        discordGlobalName: 'Luis',
+        guildId: 'guild-1',
+      },
+      { Authorization: 'Bearer internal-token' },
+    )
+    expect(authorized.response.status).toBe(200)
+    expect(authorized.body).toEqual({
+      url: 'https://waves.example.com/auth/discord-link?token=test-session-token',
+      expiresAt: '2026-06-18T16:10:00.000Z',
+    })
+  })
+
   it('sanitizes Spotify failures', async () => {
     context?.spotifySearch.mockRejectedValue(new SpotifyUnavailableError('search'))
 
@@ -228,9 +331,23 @@ describe('public API', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual([
-      expect.objectContaining({ id: 'queue-1', position: 0, track: firstTrack }),
+      expect.objectContaining({
+        id: 'queue-1',
+        position: 0,
+        track: firstTrack,
+        requestedByUserId: 'user-1',
+        requestedByDisplayName: 'Luis',
+        requestedByUser: { id: 'user-1', kind: 'guest', displayName: 'Luis' },
+      }),
       expect.objectContaining({ id: 'queue-2', position: 1, track: secondTrack }),
     ])
+  })
+
+  it('requires a guest session before adding a track', async () => {
+    const added = await postJson('/api/queue', { track: firstTrack })
+
+    expect(added.response.status).toBe(401)
+    expect(added.body).toMatchObject({ data: { code: 'UNAUTHORIZED' } })
   })
 
   it('rejects invalid and extra queue fields', async () => {

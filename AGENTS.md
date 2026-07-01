@@ -5,6 +5,9 @@
 Waves é um sistema privado, mobile-first, para controlar a fila e o player de
 músicas de um bot Discord. O nome técnico do monorepo é `discord-music-panel`.
 
+Sempre verifique este `AGENTS.md` na raiz do projeto antes de iniciar trabalho no
+repositório.
+
 ## Interface web e design
 
 Qualquer trabalho que crie, altere, revise ou teste a UI de `apps/web` deve começar
@@ -73,15 +76,48 @@ Antes de concluir trabalho de UI:
 
 ## Documentação atual
 
-Ao trabalhar com biblioteca, framework, SDK, API, CLI ou serviço de nuvem, consulte
-primeiro a documentação atual usando Context7:
+Use o `ctx7` CLI para buscar documentação atual sempre que o usuário perguntar sobre
+biblioteca, framework, SDK, API, CLI tool ou serviço de nuvem, inclusive tecnologias
+conhecidas como React, Next.js, Prisma, Express, Tailwind, Django ou Spring Boot.
+Isso inclui sintaxe de API, configuração, migração de versão, debugging específico
+de biblioteca, setup e uso de CLI.
 
-```bash
-npx ctx7@latest library <nome> "<pergunta completa>"
-npx ctx7@latest docs <libraryId> "<pergunta completa>"
-```
+Não use Context7 para refatoração, scripts escritos do zero, debugging de regra de
+negócio, code review ou conceitos gerais de programação.
 
-Não inclua secrets nas consultas.
+Fluxo obrigatório:
+
+1. Resolva a biblioteca:
+
+   ```bash
+   npx ctx7@latest library <nome> "<pergunta completa do usuário>"
+   ```
+
+2. Escolha o melhor match pelo nome exato, relevância da descrição, quantidade de
+   snippets, reputação da fonte e benchmark score.
+3. Busque a documentação:
+
+   ```bash
+   npx ctx7@latest docs <libraryId> "<pergunta completa do usuário>"
+   ```
+
+4. Responda usando a documentação buscada.
+
+Regras adicionais:
+
+- chame `library` primeiro para obter um ID válido, exceto quando o usuário já
+  fornecer um ID no formato `/org/project`;
+- use o nome oficial da biblioteca com pontuação correta, como `Next.js`,
+  `Customer.io` ou `Three.js`;
+- para docs versionadas, use o ID versionado retornado pelo `library`, como
+  `/vercel/next.js/v14.3.0`;
+- não rode mais de 3 comandos por pergunta;
+- não inclua secrets, API keys, senhas ou credenciais nas consultas;
+- rode as consultas do Context7 fora do sandbox padrão do Codex;
+- se um comando falhar com DNS, `ENOTFOUND`, falha de resolução de host ou
+  `fetch failed`, execute novamente fora do sandbox;
+- se houver erro de quota, informe o usuário e sugira `npx ctx7@latest login` ou
+  definir `CONTEXT7_API_KEY` para limites maiores.
 
 ## Comandos de qualidade
 

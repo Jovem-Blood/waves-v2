@@ -29,6 +29,20 @@
       "when": 1782165600000,
       "tag": "0003_quick_ux_polish",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1782334592418,
+      "tag": "0004_amused_terrax",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1782339151443,
+      "tag": "0005_spooky_fallen_one",
+      "breakpoints": true
     }
   ]
 }

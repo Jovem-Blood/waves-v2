@@ -3,6 +3,8 @@ import {
   botEventSchema,
   botPlayInputSchema,
   completePlaybackInputSchema,
+  createDiscordLinkInputSchema,
+  createDiscordLinkResponseSchema,
   playbackClaimResultSchema,
   playbackTransitionResultSchema,
   operationalStatusSchema,
@@ -14,6 +16,8 @@ import {
   type BotEvent,
   type BotPlayInput,
   type CompletePlaybackInput,
+  type CreateDiscordLinkInput,
+  type CreateDiscordLinkResponse,
   type PlaybackClaimResult,
   type PlaybackTransitionResult,
   type Queue,
@@ -56,6 +60,7 @@ export interface WavesApi {
   getPlayer(): Promise<PlayerState>
   updateProgress(queueItemId: string, progressMs: number): Promise<PlayerState>
   heartbeat(occurredAt: string): Promise<OperationalStatus>
+  createDiscordLink(input: CreateDiscordLinkInput): Promise<CreateDiscordLinkResponse>
 }
 
 export class WavesApiClient implements WavesApi {
@@ -134,6 +139,13 @@ export class WavesApiClient implements WavesApi {
     await this.requestJson('/internal/bot/events', eventAckSchema, {
       method: 'POST',
       body: JSON.stringify(botEventSchema.parse(event)),
+    })
+  }
+
+  createDiscordLink(input: CreateDiscordLinkInput): Promise<CreateDiscordLinkResponse> {
+    return this.requestJson('/auth/discord-link/create', createDiscordLinkResponseSchema, {
+      method: 'POST',
+      body: JSON.stringify(createDiscordLinkInputSchema.parse(input)),
     })
   }
 

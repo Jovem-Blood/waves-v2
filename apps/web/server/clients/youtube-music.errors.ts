@@ -1,20 +1,20 @@
 export class YouTubeMusicInvalidResponseError extends Error {
-  constructor() {
-    super('YouTube Music returned an invalid response')
+  constructor(options?: ErrorOptions) {
+    super('YouTube Music returned an invalid response', options)
     this.name = 'YouTubeMusicInvalidResponseError'
   }
 }
 
 export class YouTubeMusicUnavailableError extends Error {
-  constructor() {
-    super('YouTube Music is unavailable')
+  constructor(options?: ErrorOptions) {
+    super('YouTube Music is unavailable', options)
     this.name = 'YouTubeMusicUnavailableError'
   }
 }
 
 export class YouTubeMusicCandidateUnavailableError extends Error {
-  constructor() {
-    super('The YouTube Music candidate is unavailable')
+  constructor(options?: ErrorOptions) {
+    super('The YouTube Music candidate is unavailable', options)
     this.name = 'YouTubeMusicCandidateUnavailableError'
   }
 }

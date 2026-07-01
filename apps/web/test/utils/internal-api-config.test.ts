@@ -22,7 +22,7 @@ describe('parseInternalApiConfig', () => {
       error = caught
     }
 
-    expect(String(error)).toContain('INTERNAL_API_TOKEN')
+    expect(String(error)).toContain('BOT_INTERNAL_SECRET')
     expect(String(error)).not.toContain('internal-token')
   })
 })

@@ -29,10 +29,14 @@ export function createInternalPlayHandler(
         throw new TrackNotFoundError()
       }
 
+      const linkedUser = getDependencies().authService.findDiscordUser(
+        input.requestedByDiscordUserId,
+      )
       const item = getDependencies().queueService.add({
         track,
+        ...(linkedUser === undefined ? {} : { requestedByUserId: linkedUser.id }),
         requestedByDiscordUserId: input.requestedByDiscordUserId,
-        requestedByDisplayName: input.requestedByDisplayName,
+        requestedByDisplayName: linkedUser?.displayName ?? input.requestedByDisplayName,
       })
       useLogger().info(
         { operation: 'route.internal.play', queueItemId: item.id, outcome: 'added' },
