@@ -15,7 +15,7 @@ packages/
 
 ## Requisitos
 
-- Node.js 22 ou superior
+- Node.js 25.5.0 ou superior
 - pnpm 10 ou superior
 - FFmpeg no `PATH`, compilado com suporte a `libopus`
 - acesso de rede ao YouTube Music e Audius
