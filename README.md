@@ -36,6 +36,8 @@ Copie `.env.example` para `.env` na raiz e preencha:
   enviados pelo bot.
 - `LOG_LEVEL`, com `debug`, `info`, `warn` ou `error`. O default é `debug` em
   desenvolvimento e `info` nos demais ambientes.
+- `SESSION_COOKIE_SECURE`, use `false` para Docker local via HTTP e `true` quando
+  acessar o painel por HTTPS.
 
 O bot carrega o `.env` da raiz durante o desenvolvimento.
 O script `dev:web` também aponta explicitamente para esse arquivo no monorepo.
@@ -76,6 +78,32 @@ O registro é feito por guild e cria os comandos `/play`, `/queue`, `/skip`, `/j
 `/leave`, `/pause`, `/resume` e `/volume`. O bot atualiza esses comandos
 automaticamente antes de fazer login. Use `pnpm --filter bot bot:register` apenas
 quando precisar registrar sem iniciar o processo do bot.
+
+## Docker
+
+Com o `.env` configurado na raiz:
+
+```bash
+docker compose up --build -d
+docker compose logs -f web bot
+```
+
+O Compose cria dois serviços a partir da mesma imagem local `waves:local`:
+
+- `web`: executa as migrações SQLite e inicia o Nuxt em `http://localhost:3000`.
+- `bot`: espera o healthcheck do web e comunica-se com `http://web:3000/api`.
+
+O banco fica no volume nomeado `waves-data`, montado em `/data`. Use
+`docker compose down` para parar sem apagar dados. Use
+`docker compose down -v` apenas quando quiser remover também o volume SQLite.
+
+Para adicionar serviços operacionais depois, como coleta de logs ou Cloudflared,
+use arquivos Compose extras:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.logs.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d
+```
 
 ## Smoke test local
 

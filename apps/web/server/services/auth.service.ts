@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 import {
   createDiscordLinkInputSchema,
@@ -79,7 +79,7 @@ export class AuthService {
     private readonly discordLoginTokens?: DiscordLoginTokenRepository,
     private readonly queueRepository?: QueueRepository,
     private readonly now: () => Date = () => new Date(),
-    private readonly generateId: () => string = () => crypto.randomUUID(),
+    private readonly generateId: () => string = randomUUID,
     private readonly generateToken: () => string = () => randomBytes(32).toString('base64url'),
   ) {}
 

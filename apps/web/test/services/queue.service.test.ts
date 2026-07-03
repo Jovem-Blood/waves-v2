@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { AddQueueItemInput } from '@waves/shared'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { QueueRepository } from '../../server/repositories/queue.repository'
@@ -55,12 +55,26 @@ function setup(nowProvider: () => Date = now): {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const connection of connections.splice(0)) {
     connection.close()
   }
 })
 
 describe('QueueService', () => {
+  it('generates item ids without depending on global crypto', () => {
+    vi.stubGlobal('crypto', {})
+    const connection = createDatabaseConnection({ url: ':memory:' })
+    migrate(connection.db, { migrationsFolder })
+    connections.push(connection)
+    const repository = new QueueRepository(connection.db)
+    const service = new QueueService(repository, new DatabaseUnitOfWork(connection.db, now), now)
+
+    const item = service.add(input)
+
+    expect(item.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  })
+
   it('adds the first item at position zero with deterministic metadata', () => {
     const { service } = setup()
 

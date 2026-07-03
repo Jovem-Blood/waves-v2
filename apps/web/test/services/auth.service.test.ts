@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { SessionRepository } from '../../server/repositories/session.repository'
@@ -32,12 +32,36 @@ function setup(now: () => Date, token = 'session-token') {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const connection of connections.splice(0)) {
     connection.close()
   }
 })
 
 describe('AuthService', () => {
+  it('generates user ids without depending on global crypto', () => {
+    vi.stubGlobal('crypto', {})
+    const now = () => new Date('2026-06-18T16:00:00.000Z')
+    const connection = createDatabaseConnection({ url: ':memory:' })
+    migrate(connection.db, { migrationsFolder })
+    connections.push(connection)
+    const service = new AuthService(
+      new UserRepository(connection.db),
+      new SessionRepository(connection.db),
+      undefined,
+      undefined,
+      now,
+      undefined,
+      () => 'session-token',
+    )
+
+    const created = service.createGuestSession({ displayName: 'Luis' })
+
+    expect(created.user.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    )
+  })
+
   it('creates a guest user and authenticates by session token hash', () => {
     const now = () => new Date('2026-06-18T16:00:00.000Z')
     const { connection, service } = setup(now)

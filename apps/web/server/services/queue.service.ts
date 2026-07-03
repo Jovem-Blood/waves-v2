@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import {
   addQueueItemInputSchema,
   moveQueueItemInputSchema,
@@ -34,7 +36,7 @@ export class QueueService {
     private readonly queueRepository: QueueRepository,
     private readonly unitOfWork: UnitOfWork,
     private readonly now: () => Date = () => new Date(),
-    private readonly generateId: () => string = () => crypto.randomUUID(),
+    private readonly generateId: () => string = randomUUID,
   ) {}
 
   list(): QueueItem[] {
