@@ -37,6 +37,7 @@ Platform.shim.eval = (data, environment) => {
 
 export interface YouTubeMusicClientPort {
   searchSongs(query: string, limit?: number): Promise<YouTubeMusicCandidate[]>
+  getUpNextSongs(videoId: string, limit?: number): Promise<YouTubeMusicCandidate[]>
   resolveAudioFormat(videoId: string): Promise<YouTubeAudioFormat>
 }
 
@@ -172,6 +173,40 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
       if (error instanceof YouTubeMusicUnavailableError) {
         throw error
       }
+      throw new YouTubeMusicUnavailableError({ cause: error })
+    }
+  }
+
+  async getUpNextSongs(videoId: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+    try {
+      const innertube = await this.getSession()
+      const playlist = await withTimeout(innertube.music.getUpNext(videoId, true), this.timeoutMs)
+      const seen = new Set<string>([videoId])
+
+      return playlist.contents
+        .flatMap((item) => {
+          if (!('video_id' in item) || !item.video_id || seen.has(item.video_id)) return []
+          const labels = safeBadgeLabels(item.badges)
+          if (labels.some((label) => /live/i.test(label))) return []
+          const artists = item.artists?.map((artist) => artist.name) ?? [item.author]
+          const parsed = youtubeMusicCandidateSchema.safeParse({
+            videoId: item.video_id,
+            title: item.title.toString(),
+            artists,
+            durationMs: item.duration.seconds * 1000,
+            ...(item.album?.name ? { albumName: item.album.name } : {}),
+            ...(item.author ? { channelName: item.author } : {}),
+            isOfficial:
+              Boolean(item.album?.name) || labels.some((label) => /official|verified/i.test(label)),
+            isTopic: /-\s*topic$/i.test(item.author),
+          })
+          if (!parsed.success) return []
+          seen.add(item.video_id)
+          return [parsed.data]
+        })
+        .slice(0, limit)
+    } catch (error) {
+      if (error instanceof YouTubeMusicUnavailableError) throw error
       throw new YouTubeMusicUnavailableError({ cause: error })
     }
   }

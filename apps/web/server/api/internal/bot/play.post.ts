@@ -32,12 +32,14 @@ export function createInternalPlayHandler(
       const linkedUser = getDependencies().authService.findDiscordUser(
         input.requestedByDiscordUserId,
       )
-      const item = getDependencies().queueService.add({
+      const dependencies = getDependencies()
+      const item = dependencies.queueService.add({
         track,
         ...(linkedUser === undefined ? {} : { requestedByUserId: linkedUser.id }),
         requestedByDiscordUserId: input.requestedByDiscordUserId,
         requestedByDisplayName: linkedUser?.displayName ?? input.requestedByDisplayName,
       })
+      await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
       useLogger().info(
         { operation: 'route.internal.play', queueItemId: item.id, outcome: 'added' },
         'Internal play added queue item',

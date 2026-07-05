@@ -14,6 +14,7 @@ import type { PlayerStateRepository } from '../repositories/player-state.reposit
 import type { UnitOfWork } from '../repositories/unit-of-work'
 import { PlaybackConflictError, QueueItemNotFoundError } from './domain-errors'
 import { type WavesLogger, useLogger } from '../utils/logger'
+import { randomUUID } from 'node:crypto'
 
 export interface SkipResult {
   player: PlayerState
@@ -26,6 +27,7 @@ export class PlayerStateService {
     private readonly unitOfWork: UnitOfWork,
     private readonly now: () => Date = () => new Date(),
     private readonly logger: WavesLogger = useLogger(),
+    private readonly generateId: () => string = randomUUID,
   ) {}
 
   get(): PlayerState {
@@ -276,6 +278,51 @@ export class PlayerStateService {
   completePlayback(input: CompletePlaybackInput): PlaybackTransitionResult {
     const parsed = completePlaybackInputSchema.parse(input)
     return this.transitionCurrent(parsed.queueItemId, parsed.outcome)
+  }
+
+  promoteAutoplaySuggestion(expectedSeedFingerprint: string): PlaybackClaimResult {
+    return this.unitOfWork.run(({ autoplay, autoplaySuggestion, playerState, queue }) => {
+      const state = autoplay.get()
+      const suggestion = autoplaySuggestion.get()
+      const active = queue.listActive()
+      const recentIds = new Set(queue.listRecentPlayed(20).map((item) => item.track.providerTrackId))
+      if (
+        !state.enabled ||
+        active.length > 0 ||
+        !suggestion ||
+        suggestion.seedFingerprint !== expectedSeedFingerprint ||
+        recentIds.has(suggestion.track.providerTrackId) ||
+        queue.findActiveByTrack(suggestion.track.provider, suggestion.track.providerTrackId)
+      ) {
+        if (suggestion && suggestion.seedFingerprint !== expectedSeedFingerprint) {
+          autoplaySuggestion.clear()
+        }
+        return { player: playerState.get() }
+      }
+
+      const player = playerState.get()
+      if (!player.guildId || !player.voiceChannelId) return { player }
+      const timestamp = this.now().toISOString()
+      const item = queue.insert({
+        id: this.generateId(),
+        track: suggestion.track,
+        requestedByDisplayName: 'Autoplay',
+        status: 'playing',
+        position: 0,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      autoplaySuggestion.clear()
+      return {
+        item,
+        player: playerState.update({
+          status: 'playing',
+          currentQueueItemId: item.id,
+          progressMs: 0,
+          updatedAt: timestamp,
+        }),
+      }
+    })
   }
 
   private transitionCurrent(

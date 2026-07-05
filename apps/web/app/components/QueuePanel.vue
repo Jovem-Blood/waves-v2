@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { Queue, QueueItem } from '@waves/shared'
-import { Clock3, ListMusic, LoaderCircle, Radio, RefreshCw, Users } from '@lucide/vue'
+import type { AutoplayState, Queue, QueueItem } from '@waves/shared'
+import { Clock3, ListMusic, LoaderCircle, Radio, RefreshCw, Sparkles, Users } from '@lucide/vue'
 import Sortable, { type SortableEvent } from 'sortablejs'
 import { onBeforeUnmount, ref, watch } from 'vue'
 
 import QueueItemRow from './QueueItem.vue'
+import AutoplaySuggestionRow from './AutoplaySuggestionRow.vue'
 
 defineProps<{
   items: Queue
@@ -12,6 +13,11 @@ defineProps<{
   refreshing: boolean
   error?: string
   mutatingId?: string
+  autoplay?: AutoplayState
+  autoplayLoading?: boolean
+  autoplayUpdating?: boolean
+  autoplayError?: string
+  autoplayRejecting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +26,8 @@ const emit = defineEmits<{
   move: [item: QueueItem, direction: -1 | 1]
   moveToPosition: [fromIndex: number, toIndex: number]
   dragStateChange: [dragging: boolean]
+  autoplayChange: [enabled: boolean]
+  autoplayReject: []
 }>()
 
 const queueItemsRef = ref<HTMLElement | null>(null)
@@ -102,15 +110,31 @@ onBeforeUnmount(() => {
         <p>Gerencie o que toca em seguida para todo mundo.</p>
       </div>
 
-      <button
-        class="icon-button"
-        type="button"
-        :disabled="refreshing"
-        aria-label="Atualizar fila"
-        @click="$emit('refresh')"
-      >
-        <RefreshCw :class="{ spinner: refreshing }" :size="18" aria-hidden="true" />
-      </button>
+      <div class="queue-controls">
+        <button
+          class="autoplay-toggle"
+          type="button"
+          role="switch"
+          :aria-checked="autoplay?.enabled ?? false"
+          :disabled="autoplayLoading || autoplayUpdating"
+          :aria-label="autoplay?.enabled ? 'Desativar autoplay' : 'Ativar autoplay'"
+          @click="$emit('autoplayChange', !(autoplay?.enabled ?? false))"
+        >
+          <Sparkles :size="15" aria-hidden="true" />
+          <span>Autoplay</span>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb" /></span>
+          <LoaderCircle v-if="autoplayUpdating" class="spinner" :size="14" aria-hidden="true" />
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          :disabled="refreshing"
+          aria-label="Atualizar fila"
+          @click="$emit('refresh')"
+        >
+          <RefreshCw :class="{ spinner: refreshing }" :size="18" aria-hidden="true" />
+        </button>
+      </div>
     </div>
 
     <div class="queue-summary">
@@ -127,6 +151,12 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="error" class="queue-alert error-message">{{ error }}</div>
+    <div v-if="autoplayError || autoplay?.failureCode" class="queue-alert autoplay-warning">
+      {{
+        autoplayError ??
+        'O autoplay não encontrou uma recomendação agora. Ele tentará novamente depois.'
+      }}
+    </div>
 
     <div class="queue-table">
       <div class="queue-table-header" aria-hidden="true">
@@ -162,6 +192,12 @@ onBeforeUnmount(() => {
           @remove="$emit('remove', $event)"
           @move="(movedItem, direction) => $emit('move', movedItem, direction)"
         />
+        <AutoplaySuggestionRow
+          v-if="autoplay?.suggestion"
+          :suggestion="autoplay.suggestion"
+          :rejecting="autoplayRejecting"
+          @reject="$emit('autoplayReject')"
+        />
       </div>
 
       <div class="queue-footer">
@@ -191,6 +227,106 @@ onBeforeUnmount(() => {
 .queue-header {
   justify-content: space-between;
   gap: 16px;
+}
+
+.queue-controls,
+.autoplay-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.queue-controls {
+  gap: 6px;
+}
+
+.autoplay-toggle {
+  min-height: 48px;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  font-family: 'Geist Mono Variable', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.autoplay-toggle:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.autoplay-toggle:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.autoplay-toggle:active:not(:disabled) {
+  background: var(--surface-strong);
+}
+
+.autoplay-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.autoplay-toggle[aria-checked='true'] {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.switch-track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition:
+    transform 140ms ease,
+    background 140ms ease;
+}
+
+.autoplay-toggle[aria-checked='true'] .switch-track {
+  background: color-mix(in srgb, var(--accent-primary) 35%, var(--surface-strong));
+}
+
+.autoplay-toggle[aria-checked='true'] .switch-thumb {
+  transform: translateX(12px);
+  background: var(--accent-primary);
+}
+
+.autoplay-warning {
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+}
+
+@media (max-width: 32rem) {
+  .queue-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .queue-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 .queue-title-row {

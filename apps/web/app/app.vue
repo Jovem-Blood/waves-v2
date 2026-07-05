@@ -15,6 +15,7 @@ import { useOperationalStatus } from './composables/useOperationalStatus'
 import { useAuth } from './composables/useAuth'
 import { usePlayerState } from './composables/usePlayerState'
 import { useQueue } from './composables/useQueue'
+import { useAutoplay } from './composables/useAutoplay'
 
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
@@ -23,6 +24,7 @@ const queue = useQueue(apiBase)
 const player = usePlayerState(apiBase)
 const operational = useOperationalStatus(apiBase)
 const auth = useAuth(apiBase)
+const autoplay = useAutoplay(apiBase)
 
 const activeTrackIds = computed(() =>
   queue.items.value
@@ -118,11 +120,18 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         :refreshing="queue.refreshing.value"
         :error="queue.error.value"
         :mutating-id="queue.mutatingId.value"
+        :autoplay="autoplay.state.value"
+        :autoplay-loading="autoplay.loading.value"
+        :autoplay-updating="autoplay.updating.value"
+        :autoplay-error="autoplay.error.value"
+        :autoplay-rejecting="autoplay.rejecting.value"
         @refresh="queue.refresh"
         @remove="queue.remove"
         @move="queue.move"
         @move-to-position="queue.moveToPosition"
         @drag-state-change="queue.setInteractionLocked"
+        @autoplay-change="autoplay.setEnabled"
+        @autoplay-reject="autoplay.rejectSuggestion"
       />
 
       <SpotifySearch

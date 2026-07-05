@@ -50,7 +50,6 @@ function createClient(tracks: SpotifyTrack[] = [completeTrack]): {
   const searchTracks = vi
     .fn<(query: string, accessToken: string, limit?: number) => Promise<SpotifyTrack[]>>()
     .mockResolvedValue(tracks)
-
   return {
     client: { requestAccessToken, searchTracks },
     requestAccessToken,

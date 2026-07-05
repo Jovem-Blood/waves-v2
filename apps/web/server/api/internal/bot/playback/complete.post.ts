@@ -19,8 +19,11 @@ export function createInternalPlaybackCompleteHandler(
       { operation: 'route.internal.playback.complete' },
       async () => {
         const input = completePlaybackInputSchema.parse(await readBody(event))
+        const dependencies = getDependencies()
         const result = playbackTransitionResultSchema.parse(
-          getDependencies().playerStateService.completePlayback(input),
+          dependencies.autoplayOrchestrator
+            ? await dependencies.autoplayOrchestrator.completePlayback(input)
+            : dependencies.playerStateService.completePlayback(input),
         )
         useLogger().info(
           {

@@ -24,13 +24,16 @@ export function createQueueAddHandler(
       writeSessionCookie(event, token, { expiresAt: session.expiresAt })
     }
 
-    return queueItemSchema.parse(
-      getDependencies().queueService.add({
+    const dependencies = getDependencies()
+    const item = queueItemSchema.parse(
+      dependencies.queueService.add({
         ...input,
         requestedByUserId: session.user.id,
         requestedByDisplayName: session.user.displayName,
       }),
     )
+    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    return item
   })
 }
 

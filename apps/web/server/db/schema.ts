@@ -123,6 +123,59 @@ export const operationalState = sqliteTable(
   (table) => [check('operational_state_singleton_id', sql`${table.id} = 1`)],
 )
 
+export const autoplayState = sqliteTable(
+  'autoplay_state',
+  {
+    id: integer('id').primaryKey(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+    failureCode: text('failure_code', {
+      enum: [
+        'spotify_unavailable',
+        'invalid_response',
+        'recommendation_unavailable',
+        'metadata_unavailable',
+        'no_seeds',
+        'no_candidates',
+      ],
+    }),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [check('autoplay_state_singleton_id', sql`${table.id} = 1`)],
+)
+
+export const autoplaySuggestions = sqliteTable(
+  'autoplay_suggestions',
+  {
+    id: integer('id').primaryKey(),
+    trackId: text('track_id').notNull(),
+    provider: text('provider', { enum: ['spotify'] }).notNull(),
+    providerTrackId: text('provider_track_id').notNull(),
+    title: text('title').notNull(),
+    artistsJson: text('artists_json').notNull(),
+    albumName: text('album_name'),
+    durationMs: integer('duration_ms').notNull(),
+    coverUrl: text('cover_url'),
+    externalUrl: text('external_url'),
+    isrc: text('isrc'),
+    generatedAt: text('generated_at').notNull(),
+    seedFingerprint: text('seed_fingerprint').notNull(),
+  },
+  (table) => [
+    check('autoplay_suggestions_singleton_id', sql`${table.id} = 1`),
+    check('autoplay_suggestions_duration_nonnegative', sql`${table.durationMs} >= 0`),
+  ],
+)
+
+export const autoplayRejections = sqliteTable(
+  'autoplay_rejections',
+  {
+    spotifyTrackId: text('spotify_track_id').primaryKey(),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('autoplay_rejections_expires_at_idx').on(table.expiresAt)],
+)
+
 export const playerState = sqliteTable(
   'player_state',
   {

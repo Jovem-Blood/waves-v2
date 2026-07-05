@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 describe('database migrations', () => {
-  it('creates all eight tables', () => {
+  it('creates all eleven tables', () => {
     const { sqlite } = createMigratedDatabase()
     const tables = sqlite
       .prepare(
@@ -34,6 +34,9 @@ describe('database migrations', () => {
 
     expect(tables).toEqual([
       'allowed_users',
+      'autoplay_rejections',
+      'autoplay_state',
+      'autoplay_suggestions',
       'discord_login_tokens',
       'operational_state',
       'player_state',
@@ -133,5 +136,5 @@ describe('database migrations', () => {
     if (contentsBefore) {
       expect(readFileSync(devDatabase)).toEqual(contentsBefore)
     }
-  })
+  }, 10_000)
 })

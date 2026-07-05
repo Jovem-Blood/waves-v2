@@ -2,11 +2,15 @@ import type { WavesDatabase } from '../db/client'
 import { PlayerStateRepository } from './player-state.repository'
 import { QueueRepository } from './queue.repository'
 import { OperationalStatusRepository } from './operational-status.repository'
+import { AutoplayRepository } from './autoplay.repository'
+import { AutoplaySuggestionRepository } from './autoplay-suggestion.repository'
 
 export interface RepositoryContext {
   playerState: PlayerStateRepository
   queue: QueueRepository
   operationalStatus: OperationalStatusRepository
+  autoplay: AutoplayRepository
+  autoplaySuggestion: AutoplaySuggestionRepository
 }
 
 export interface UnitOfWork {
@@ -25,6 +29,8 @@ export class DatabaseUnitOfWork implements UnitOfWork {
         playerState: new PlayerStateRepository(transaction, this.now),
         queue: new QueueRepository(transaction),
         operationalStatus: new OperationalStatusRepository(transaction, this.now),
+        autoplay: new AutoplayRepository(transaction, this.now),
+        autoplaySuggestion: new AutoplaySuggestionRepository(transaction),
       }),
     )
   }

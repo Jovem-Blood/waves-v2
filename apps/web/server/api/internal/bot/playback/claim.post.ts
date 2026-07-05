@@ -14,9 +14,11 @@ export function createInternalPlaybackClaimHandler(
 ) {
   return defineInternalApiHandler(
     () =>
-      loggedOperation(useLogger(), { operation: 'route.internal.playback.claim' }, () =>
-        playbackClaimResultSchema.parse(getDependencies().playerStateService.claimPlayback()),
-      ),
+      loggedOperation(useLogger(), { operation: 'route.internal.playback.claim' }, async () => {
+        const dependencies = getDependencies()
+        await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+        return playbackClaimResultSchema.parse(dependencies.playerStateService.claimPlayback())
+      }),
     getExpectedToken,
   )
 }

@@ -37,6 +37,7 @@ describe('YouTubeMusicAudioSourceResolver', () => {
     })
     const client: YouTubeMusicClientPort = {
       searchSongs,
+      getUpNextSongs: vi.fn(),
       resolveAudioFormat,
     }
 
@@ -54,6 +55,7 @@ describe('YouTubeMusicAudioSourceResolver', () => {
     const searchSongs = vi.fn()
     const client: YouTubeMusicClientPort = {
       searchSongs,
+      getUpNextSongs: vi.fn(),
       resolveAudioFormat: vi.fn().mockResolvedValue({
         videoId: 'video-1',
         streamUrl: 'https://media.example/refreshed',
@@ -83,6 +85,7 @@ describe('YouTubeMusicAudioSourceResolver', () => {
       })
     const client: YouTubeMusicClientPort = {
       searchSongs: vi.fn().mockResolvedValue([candidate('video-2')]),
+      getUpNextSongs: vi.fn(),
       resolveAudioFormat,
     }
 

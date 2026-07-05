@@ -81,6 +81,56 @@ describe('Queue Social components', () => {
     expect(filled.emitted('remove')).toEqual([[queuedItem.id]])
   })
 
+  it('renders an accessible autoplay switch and reports recommendation failures', async () => {
+    const wrapper = mount(QueuePanel, {
+      props: {
+        items: [],
+        loading: false,
+        refreshing: false,
+        autoplay: {
+          enabled: true,
+          failureCode: 'no_candidates',
+          suggestion: null,
+          updatedAt: '2026-06-18T12:00:00.000Z',
+        },
+      },
+    })
+
+    const toggle = wrapper.get('[role="switch"]')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(toggle.attributes('aria-label')).toBe('Desativar autoplay')
+    expect(wrapper.text()).toContain('não encontrou uma recomendação')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('autoplayChange')).toEqual([[false]])
+  })
+
+  it('renders the autoplay ghost after human tracks and exposes rejection accessibly', async () => {
+    const wrapper = mount(QueuePanel, {
+      props: {
+        items: [queuedItem],
+        loading: false,
+        refreshing: false,
+        autoplay: {
+          enabled: true,
+          failureCode: null,
+          suggestion: {
+            track: { ...track, id: 'spotify:ghost', providerTrackId: 'ghost', title: 'Fantasma' },
+            provider: 'spotify',
+            generatedAt: '2026-06-18T12:00:00.000Z',
+            seedFingerprint: 'seed',
+          },
+          updatedAt: '2026-06-18T12:00:00.000Z',
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('Sugestão do autoplay')
+    const rows = wrapper.findAll('.queue-items > *')
+    expect(rows.at(-1)?.classes()).toContain('autoplay-suggestion')
+    await wrapper.get('[aria-label="Rejeitar sugestão Fantasma"]').trigger('click')
+    expect(wrapper.emitted('autoplayReject')).toEqual([[]])
+  })
+
   it('keeps the playing row fixed and exposes a handle only for queued rows', () => {
     const wrapper = mount(QueuePanel, {
       props: {

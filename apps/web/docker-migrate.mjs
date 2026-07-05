@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import process from 'node:process'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 

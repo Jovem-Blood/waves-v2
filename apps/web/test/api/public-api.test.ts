@@ -20,6 +20,9 @@ import { createQueueListHandler } from '../../server/api/queue/index.get'
 import { createQueueAddHandler } from '../../server/api/queue/index.post'
 import { createSpotifySearchHandler } from '../../server/api/spotify/search.get'
 import { createOperationalStatusHandler } from '../../server/api/status.get'
+import { createAutoplayGetHandler } from '../../server/api/autoplay/index.get'
+import { createAutoplayUpdateHandler } from '../../server/api/autoplay/index.put'
+import { createAutoplaySuggestionRejectHandler } from '../../server/api/autoplay/suggestion.delete'
 import { SpotifyUnavailableError } from '../../server/clients/spotify.errors'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
@@ -29,10 +32,13 @@ import { SessionRepository } from '../../server/repositories/session.repository'
 import { DiscordLoginTokenRepository } from '../../server/repositories/discord-login-token.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
 import { UserRepository } from '../../server/repositories/user.repository'
+import { AutoplayRepository } from '../../server/repositories/autoplay.repository'
+import { AutoplaySuggestionRepository } from '../../server/repositories/autoplay-suggestion.repository'
 import { AuthService } from '../../server/services/auth.service'
 import { PlayerStateService } from '../../server/services/player-state.service'
 import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
+import { AutoplayService } from '../../server/services/autoplay.service'
 import type {
   PublicApiDependencies,
   PublicSpotifyService,
@@ -79,6 +85,11 @@ async function startTestApi(): Promise<TestContext> {
   const playerStateRepository = new PlayerStateRepository(connection.db, now)
   const operationalStatusRepository = new OperationalStatusRepository(connection.db, now)
   const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
+  const autoplayService = new AutoplayService(
+    new AutoplayRepository(connection.db, now),
+    new AutoplaySuggestionRepository(connection.db),
+    now,
+  )
   let nextId = 0
   const spotifySearch = vi
     .fn<(query: string) => Promise<TrackMetadata[]>>()
@@ -109,6 +120,7 @@ async function startTestApi(): Promise<TestContext> {
       () => 'test-session-token',
     ),
     spotifyService,
+    autoplayService,
   }
   const getDependencies = () => dependencies
   const router = createRouter()
@@ -134,6 +146,12 @@ async function startTestApi(): Promise<TestContext> {
   router.get('/api/player', createPlayerGetHandler(getDependencies))
   router.post('/api/player/skip', createPlayerSkipHandler(getDependencies))
   router.get('/api/status', createOperationalStatusHandler(getDependencies))
+  router.get('/api/autoplay', createAutoplayGetHandler(getDependencies))
+  router.put('/api/autoplay', createAutoplayUpdateHandler(getDependencies))
+  router.delete(
+    '/api/autoplay/suggestion',
+    createAutoplaySuggestionRejectHandler(getDependencies),
+  )
 
   const app = createApp()
   app.use(router.handler)
@@ -348,6 +366,47 @@ describe('public API', () => {
 
     expect(added.response.status).toBe(401)
     expect(added.body).toMatchObject({ data: { code: 'UNAUTHORIZED' } })
+  })
+
+  it('persists autoplay globally and requires a session to update it', async () => {
+    const initial = await request('/api/autoplay')
+    expect(initial.body).toMatchObject({ enabled: false, failureCode: null })
+
+    const unauthorized = await request('/api/autoplay', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(unauthorized.response.status).toBe(401)
+
+    await createGuest()
+    const updated = await request('/api/autoplay', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(updated.response.status).toBe(200)
+    expect(updated.body).toMatchObject({ enabled: true, failureCode: null })
+    expect((await request('/api/autoplay')).body).toMatchObject({ enabled: true })
+  })
+
+  it('requires authentication to reject a persisted autoplay suggestion', async () => {
+    const repository = new AutoplaySuggestionRepository(context?.connection.db)
+    repository.replace({
+      track: firstTrack,
+      provider: 'spotify',
+      generatedAt: '2026-06-18T16:00:00.000Z',
+      seedFingerprint: 'seed',
+    })
+
+    expect((await request('/api/autoplay/suggestion', { method: 'DELETE' })).response.status).toBe(
+      401,
+    )
+    await createGuest()
+    const rejected = await request('/api/autoplay/suggestion', { method: 'DELETE' })
+    expect(rejected.response.status).toBe(200)
+    expect(rejected.body).toMatchObject({ suggestion: null })
+    expect(repository.listRejected('2026-06-18T16:30:00.000Z')).toEqual(new Set(['track-1']))
   })
 
   it('rejects invalid and extra queue fields', async () => {

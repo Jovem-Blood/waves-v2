@@ -5,7 +5,7 @@ import {
   type QueueItemStatus,
   type TrackMetadata,
 } from '@waves/shared'
-import { and, asc, eq, inArray, max } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
 import { queueItems, users } from '../db/schema'
@@ -130,6 +130,18 @@ export class QueueRepository {
 
   listForRecalculation(): QueueItem[] {
     return this.listActive()
+  }
+
+  listRecentPlayed(limit: number): QueueItem[] {
+    return this.db
+      .select({ item: queueItems, user: users })
+      .from(queueItems)
+      .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
+      .where(eq(queueItems.status, 'played'))
+      .orderBy(desc(queueItems.updatedAt))
+      .limit(limit)
+      .all()
+      .map(mapJoinedRow)
   }
 
   findActiveByTrack(
