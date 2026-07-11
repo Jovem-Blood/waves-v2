@@ -10,6 +10,7 @@ import { healthHandler } from '../../server/api/health.get'
 import { createGuestAuthHandler } from '../../server/api/auth/guest.post'
 import { createLogoutHandler } from '../../server/api/auth/logout.post'
 import { createDiscordLinkCreateHandler } from '../../server/api/auth/discord-link/create.post'
+import { createDiscordLinkConsumeHandler } from '../../server/routes/auth/discord-link.get'
 import { createMeHandler } from '../../server/api/me.get'
 import { createPlayerGetHandler } from '../../server/api/player/index.get'
 import { createPlayerSkipHandler } from '../../server/api/player/skip.post'
@@ -137,6 +138,7 @@ async function startTestApi(): Promise<TestContext> {
       () => 'internal-token',
     ),
   )
+  router.get('/auth/discord-link', createDiscordLinkConsumeHandler(getDependencies))
   router.get('/api/spotify/search', createSpotifySearchHandler(getDependencies))
   router.get('/api/queue', createQueueListHandler(getDependencies))
   router.post('/api/queue', createQueueAddHandler(getDependencies))
@@ -323,6 +325,40 @@ describe('public API', () => {
     expect(authorized.body).toEqual({
       url: 'https://waves.example.com/auth/discord-link?token=test-session-token',
       expiresAt: '2026-06-18T16:10:00.000Z',
+    })
+  })
+
+  it('consumes a Discord link and authenticates the browser session', async () => {
+    const authorized = await postJson(
+      '/api/auth/discord-link/create',
+      {
+        discordUserId: 'discord-1',
+        discordUsername: 'luis',
+        discordGlobalName: 'Luis',
+        guildId: 'guild-1',
+      },
+      { Authorization: 'Bearer internal-token' },
+    )
+    expect(authorized.response.status).toBe(200)
+
+    const link = new URL((authorized.body as { url: string }).url)
+    const consume = await fetch(`${context?.baseUrl}${link.pathname}${link.search}`, {
+      redirect: 'manual',
+    })
+    expect(consume.status).toBe(302)
+    expect(consume.headers.get('location')).toBe('/')
+
+    const setCookie = consume.headers.get('set-cookie')
+    expect(setCookie).toContain('waves_session=')
+    if (context) context.sessionCookie = setCookie?.split(';')[0]
+
+    const me = await request('/api/me')
+    expect(me.body).toMatchObject({
+      user: {
+        kind: 'discord',
+        displayName: 'Luis',
+        discordUserId: 'discord-1',
+      },
     })
   })
 

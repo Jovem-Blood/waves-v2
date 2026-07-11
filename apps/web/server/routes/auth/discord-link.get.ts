@@ -10,7 +10,10 @@ import {
   readSessionCookie,
   writeSessionCookie,
 } from '../../utils/session-cookie'
-import { usePublicApiDependencies } from '../../utils/public-api-dependencies'
+import {
+  type PublicApiDependencies,
+  usePublicApiDependencies,
+} from '../../utils/public-api-dependencies'
 
 function errorMessage(error: unknown): string {
   if (error instanceof DiscordLinkExpiredError) {
@@ -97,24 +100,30 @@ function renderErrorPage(message: string): string {
 </html>`
 }
 
-export default defineEventHandler(async (event) => {
-  const token = getQuery(event).token
+export function createDiscordLinkConsumeHandler(
+  getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
+) {
+  return defineEventHandler(async (event) => {
+    const token = getQuery(event).token
 
-  try {
-    if (typeof token !== 'string' || token.trim().length === 0) {
-      throw new DiscordLinkInvalidError()
+    try {
+      if (typeof token !== 'string' || token.trim().length === 0) {
+        throw new DiscordLinkInvalidError()
+      }
+
+      const session = getDependencies().authService.consumeDiscordLink(
+        token,
+        readSessionCookie(event),
+      )
+      writeSessionCookie(event, session.token, { expiresAt: session.expiresAt })
+      return sendRedirect(event, '/', 302)
+    } catch (error) {
+      clearSessionCookie(event)
+      setResponseStatus(event, 400)
+      setHeader(event, 'content-type', 'text/html; charset=utf-8')
+      return renderErrorPage(errorMessage(error))
     }
+  })
+}
 
-    const session = usePublicApiDependencies().authService.consumeDiscordLink(
-      token,
-      readSessionCookie(event),
-    )
-    writeSessionCookie(event, session.token, { expiresAt: session.expiresAt })
-    return sendRedirect(event, '/', 302)
-  } catch (error) {
-    clearSessionCookie(event)
-    setResponseStatus(event, 400)
-    setHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return renderErrorPage(errorMessage(error))
-  }
-})
+export default createDiscordLinkConsumeHandler()
