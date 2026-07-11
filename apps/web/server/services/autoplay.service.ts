@@ -19,36 +19,35 @@ export class AutoplayService {
 
   get(): AutoplayState {
     const state = this.repository.get()
-    return { ...state, suggestion: this.suggestions?.get() ?? null }
+    return { ...state, suggestions: this.suggestions?.list() ?? [] }
   }
 
   update(input: UpdateAutoplayInput): AutoplayState {
     const parsed = updateAutoplayInputSchema.parse(input)
     if (!parsed.enabled) this.suggestions?.clear()
     const state = this.repository.update({ enabled: parsed.enabled, failureCode: null })
-    return { ...state, suggestion: this.suggestions?.get() ?? null }
+    return { ...state, suggestions: this.suggestions?.list() ?? [] }
   }
 
   recordFailure(failureCode: AutoplayFailureCode): AutoplayState {
     const state = this.repository.update({ failureCode })
-    return { ...state, suggestion: this.suggestions?.get() ?? null }
+    return { ...state, suggestions: this.suggestions?.list() ?? [] }
   }
 
   clearFailure(): AutoplayState {
     const state = this.repository.update({ failureCode: null })
-    return { ...state, suggestion: this.suggestions?.get() ?? null }
+    return { ...state, suggestions: this.suggestions?.list() ?? [] }
   }
 
-  rejectSuggestion(): AutoplayState {
-    const suggestion = this.suggestions?.get()
-    if (suggestion && this.suggestions) {
+  rejectSuggestion(providerTrackId: string): AutoplayState {
+    if (this.suggestions?.removeByProviderTrackId(providerTrackId)) {
       const createdAt = this.now()
       this.suggestions.reject(
-        suggestion.track.providerTrackId,
+        providerTrackId,
         createdAt.toISOString(),
         new Date(createdAt.getTime() + REJECTION_TTL_MS).toISOString(),
       )
-      this.suggestions.clear()
+      this.suggestions.compactPositions()
     }
     return this.get()
   }

@@ -392,20 +392,33 @@ describe('public API', () => {
 
   it('requires authentication to reject a persisted autoplay suggestion', async () => {
     const repository = new AutoplaySuggestionRepository(context?.connection.db)
-    repository.replace({
-      track: firstTrack,
-      provider: 'spotify',
-      generatedAt: '2026-06-18T16:00:00.000Z',
-      seedFingerprint: 'seed',
-    })
+    repository.replaceAll([
+      {
+        track: firstTrack,
+        provider: 'spotify',
+        generatedAt: '2026-06-18T16:00:00.000Z',
+        seedFingerprint: 'seed',
+      },
+      {
+        track: { ...secondTrack, providerTrackId: 'track-2' },
+        provider: 'spotify',
+        generatedAt: '2026-06-18T16:00:00.000Z',
+        seedFingerprint: 'seed',
+      },
+    ])
 
     expect((await request('/api/autoplay/suggestion', { method: 'DELETE' })).response.status).toBe(
       401,
     )
     await createGuest()
-    const rejected = await request('/api/autoplay/suggestion', { method: 'DELETE' })
+    const rejected = await request('/api/autoplay/suggestion', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerTrackId: 'track-1' }),
+    })
     expect(rejected.response.status).toBe(200)
-    expect(rejected.body).toMatchObject({ suggestion: null })
+    expect(rejected.body.suggestions).toHaveLength(1)
+    expect(rejected.body.suggestions[0].track.providerTrackId).toBe('track-2')
     expect(repository.listRejected('2026-06-18T16:30:00.000Z')).toEqual(new Set(['track-1']))
   })
 

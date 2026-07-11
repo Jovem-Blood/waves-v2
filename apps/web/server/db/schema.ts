@@ -147,6 +147,7 @@ export const autoplaySuggestions = sqliteTable(
   'autoplay_suggestions',
   {
     id: integer('id').primaryKey(),
+    position: integer('position').notNull(),
     trackId: text('track_id').notNull(),
     provider: text('provider', { enum: ['spotify'] }).notNull(),
     providerTrackId: text('provider_track_id').notNull(),
@@ -161,7 +162,9 @@ export const autoplaySuggestions = sqliteTable(
     seedFingerprint: text('seed_fingerprint').notNull(),
   },
   (table) => [
-    check('autoplay_suggestions_singleton_id', sql`${table.id} = 1`),
+    uniqueIndex('autoplay_suggestions_position_unique').on(table.position),
+    uniqueIndex('autoplay_suggestions_track_unique').on(table.provider, table.providerTrackId),
+    check('autoplay_suggestions_position_range', sql`${table.position} between 0 and 2`),
     check('autoplay_suggestions_duration_nonnegative', sql`${table.durationMs} >= 0`),
   ],
 )

@@ -10,7 +10,7 @@ export function useAutoplay(apiBase: string) {
   const state = ref<AutoplayState>()
   const loading = ref(true)
   const updating = ref(false)
-  const rejecting = ref(false)
+  const rejectingId = ref<string>()
   const error = ref<string>()
   let pollingTimer: ReturnType<typeof setInterval> | undefined
   let requestInFlight = false
@@ -44,18 +44,21 @@ export function useAutoplay(apiBase: string) {
     }
   }
 
-  async function rejectSuggestion() {
-    rejecting.value = true
+  async function rejectSuggestion(providerTrackId: string) {
+    rejectingId.value = providerTrackId
     try {
       state.value = autoplayStateSchema.parse(
-        await $fetch(`${apiBase}/autoplay/suggestion`, { method: 'DELETE' }),
+        await $fetch(`${apiBase}/autoplay/suggestion`, {
+          method: 'DELETE',
+          body: { providerTrackId },
+        }),
       )
       error.value = undefined
       toasts.success('Sugestão rejeitada.')
     } catch {
       toasts.error('Não foi possível rejeitar a sugestão.')
     } finally {
-      rejecting.value = false
+      rejectingId.value = undefined
     }
   }
 
@@ -67,5 +70,5 @@ export function useAutoplay(apiBase: string) {
     if (pollingTimer) clearInterval(pollingTimer)
   })
 
-  return { state, loading, updating, rejecting, error, setEnabled, rejectSuggestion }
+  return { state, loading, updating, rejectingId, error, setEnabled, rejectSuggestion }
 }

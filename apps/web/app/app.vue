@@ -124,7 +124,7 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         :autoplay-loading="autoplay.loading.value"
         :autoplay-updating="autoplay.updating.value"
         :autoplay-error="autoplay.error.value"
-        :autoplay-rejecting="autoplay.rejecting.value"
+        :autoplay-rejecting-id="autoplay.rejectingId.value"
         @refresh="queue.refresh"
         @remove="queue.remove"
         @move="queue.move"

@@ -90,7 +90,7 @@ describe('Queue Social components', () => {
         autoplay: {
           enabled: true,
           failureCode: 'no_candidates',
-          suggestion: null,
+          suggestions: [],
           updatedAt: '2026-06-18T12:00:00.000Z',
         },
       },
@@ -104,7 +104,18 @@ describe('Queue Social components', () => {
     expect(wrapper.emitted('autoplayChange')).toEqual([[false]])
   })
 
-  it('renders the autoplay ghost after human tracks and exposes rejection accessibly', async () => {
+  it('renders three autoplay ghosts after human tracks and rejects one target accessibly', async () => {
+    const suggestions = ['Fantasma', 'Neblina', 'Aurora'].map((title, index) => ({
+      track: {
+        ...track,
+        id: `spotify:ghost-${index + 1}`,
+        providerTrackId: `ghost-${index + 1}`,
+        title,
+      },
+      provider: 'spotify' as const,
+      generatedAt: '2026-06-18T12:00:00.000Z',
+      seedFingerprint: 'seed',
+    }))
     const wrapper = mount(QueuePanel, {
       props: {
         items: [queuedItem],
@@ -113,22 +124,18 @@ describe('Queue Social components', () => {
         autoplay: {
           enabled: true,
           failureCode: null,
-          suggestion: {
-            track: { ...track, id: 'spotify:ghost', providerTrackId: 'ghost', title: 'Fantasma' },
-            provider: 'spotify',
-            generatedAt: '2026-06-18T12:00:00.000Z',
-            seedFingerprint: 'seed',
-          },
+          suggestions,
           updatedAt: '2026-06-18T12:00:00.000Z',
         },
+        autoplayRejectingId: 'ghost-1',
       },
     })
 
-    expect(wrapper.text()).toContain('Sugestão do autoplay')
+    expect(wrapper.findAll('.autoplay-suggestion')).toHaveLength(3)
     const rows = wrapper.findAll('.queue-items > *')
     expect(rows.at(-1)?.classes()).toContain('autoplay-suggestion')
-    await wrapper.get('[aria-label="Rejeitar sugestão Fantasma"]').trigger('click')
-    expect(wrapper.emitted('autoplayReject')).toEqual([[]])
+    await wrapper.get('[aria-label="Rejeitar sugestão Neblina"]').trigger('click')
+    expect(wrapper.emitted('autoplayReject')).toEqual([['ghost-2']])
   })
 
   it('keeps the playing row fixed and exposes a handle only for queued rows', () => {

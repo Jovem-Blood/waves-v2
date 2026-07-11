@@ -13,6 +13,9 @@ import {
 } from './recommendation.errors'
 import type { PlayerStateService } from './player-state.service'
 import type { QueueService } from './queue.service'
+import { buildAutoplayExcludedTrackIds, RECENT_PLAYED_LIMIT } from './autoplay-exclusions'
+
+const TARGET_AUTOPLAY_SUGGESTIONS = 3
 
 interface RecommendationProvider {
   getRecommendations(
@@ -44,14 +47,18 @@ export class AutoplayOrchestrator {
   }
 
   async completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult> {
+    const wasAutoplayEnabled = this.autoplayService.get().enabled
+    if (wasAutoplayEnabled) {
+      await this.safeQueueChanged()
+    }
+
     const completed = this.playerStateService.completePlayback(input)
     if (completed.nextItem) {
       await this.safeQueueChanged()
       return completed
     }
-    if (!this.autoplayService.get().enabled) return completed
+    if (!wasAutoplayEnabled || !this.autoplayService.get().enabled) return completed
 
-    await this.safeQueueChanged()
     const fingerprint = this.seedFingerprint(this.currentSeeds())
     this.promotionInFlight ??= Promise.resolve(
       this.playerStateService.promoteAutoplaySuggestion(fingerprint),
@@ -61,6 +68,7 @@ export class AutoplayOrchestrator {
     const promoted = await this.promotionInFlight
     if (!promoted.item) return completed
     this.autoplayService.clearFailure()
+    await this.safeQueueChanged()
     return {
       completedQueueItemId: completed.completedQueueItemId,
       player: promoted.player,
@@ -98,22 +106,24 @@ export class AutoplayOrchestrator {
       this.suggestionRepository.clear()
       return
     }
+
+    const existing = this.suggestionRepository.list()
     if (active.length !== 1) {
-      const existing = this.suggestionRepository.get()
-      if (existing) {
-        const recentIds = new Set(
-          this.queueRepository.listRecentPlayed(20).map((item) => item.track.providerTrackId),
-        )
-        const isActive = active.some(
-          (item) => item.track.providerTrackId === existing.track.providerTrackId,
-        )
-        if (
-          existing.seedFingerprint !== this.seedFingerprint(this.currentSeeds()) ||
-          isActive ||
-          recentIds.has(existing.track.providerTrackId)
-        ) {
-          this.suggestionRepository.clear()
-        }
+      const recentIds = new Set(
+        this.queueRepository
+          .listRecentPlayed(RECENT_PLAYED_LIMIT)
+          .map((item) => item.track.providerTrackId),
+      )
+      const activeIds = new Set(active.map((item) => item.track.providerTrackId))
+      const fingerprint = this.seedFingerprint(this.currentSeeds())
+      const stillValid = existing.filter(
+        (suggestion) =>
+          suggestion.seedFingerprint === fingerprint &&
+          !activeIds.has(suggestion.track.providerTrackId) &&
+          !recentIds.has(suggestion.track.providerTrackId),
+      )
+      if (stillValid.length !== existing.length) {
+        this.suggestionRepository.replaceAll(stillValid)
       }
       return
     }
@@ -124,32 +134,43 @@ export class AutoplayOrchestrator {
       return
     }
     const fingerprint = this.seedFingerprint(seeds)
-    const recent = this.queueRepository.listRecentPlayed(20)
-    const excluded = new Set(recent.map((item) => item.track.providerTrackId))
-    active.forEach((item) => excluded.add(item.track.providerTrackId))
-    this.suggestionRepository
-      .listRejected(this.now().toISOString())
-      .forEach((trackId) => excluded.add(trackId))
+    const recent = this.queueRepository.listRecentPlayed(RECENT_PLAYED_LIMIT)
+    const rejected = this.suggestionRepository.listRejected(this.now().toISOString())
+    const activeIds = new Set(active.map((item) => item.track.providerTrackId))
+    const recentIds = new Set(recent.map((item) => item.track.providerTrackId))
+    const validExisting = existing.filter(
+      (suggestion) =>
+        !activeIds.has(suggestion.track.providerTrackId) &&
+        !recentIds.has(suggestion.track.providerTrackId) &&
+        !rejected.has(suggestion.track.providerTrackId) &&
+        !seeds.some((seed) => seed.providerTrackId === suggestion.track.providerTrackId),
+    )
+    const excluded = buildAutoplayExcludedTrackIds({
+      active,
+      recent,
+      suggestions: validExisting,
+      rejected,
+      seeds,
+    })
 
-    const existing = this.suggestionRepository.get()
-    if (
-      existing &&
-      existing.seedFingerprint === fingerprint &&
-      !excluded.has(existing.track.providerTrackId)
-    ) {
+    if (validExisting.length >= TARGET_AUTOPLAY_SUGGESTIONS) {
       return
     }
-    if (existing) this.suggestionRepository.clear()
+    if (validExisting.length !== existing.length) this.suggestionRepository.replaceAll(validExisting)
 
     const recommendations = await this.recommendationProvider.getRecommendations(seeds, excluded)
-    const candidate = recommendations.find(
-      (track) =>
-        !excluded.has(track.providerTrackId) &&
-        !this.queueRepository.findActiveByTrack(track.provider, track.providerTrackId),
-    )
-    if (!candidate) {
-      this.autoplayService.recordFailure('no_candidates')
-      return
+    const nextSuggestions = [...validExisting]
+    for (const track of recommendations) {
+      if (nextSuggestions.length >= TARGET_AUTOPLAY_SUGGESTIONS) break
+      if (excluded.has(track.providerTrackId)) continue
+      if (this.queueRepository.findActiveByTrack(track.provider, track.providerTrackId)) continue
+      nextSuggestions.push({
+        track,
+        provider: 'spotify',
+        generatedAt: this.now().toISOString(),
+        seedFingerprint: fingerprint,
+      })
+      excluded.add(track.providerTrackId)
     }
 
     const currentSeeds = this.currentSeeds()
@@ -160,18 +181,17 @@ export class AutoplayOrchestrator {
     ) {
       return
     }
-    this.suggestionRepository.replace({
-      track: candidate,
-      provider: 'spotify',
-      generatedAt: this.now().toISOString(),
-      seedFingerprint: fingerprint,
-    })
+    this.suggestionRepository.replaceAll(nextSuggestions)
+    if (nextSuggestions.length === 0 || nextSuggestions.length === validExisting.length) {
+      this.autoplayService.recordFailure('no_candidates')
+      return
+    }
     this.autoplayService.clearFailure()
   }
 
   private currentSeeds(): TrackMetadata[] {
     const active = this.queueService.list()
-    const recent = this.queueRepository.listRecentPlayed(20)
+    const recent = this.queueRepository.listRecentPlayed(RECENT_PLAYED_LIMIT)
     const seen = new Set<string>()
     return [...active.slice(0, 1), ...recent]
       .filter((item) => {

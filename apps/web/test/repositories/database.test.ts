@@ -45,6 +45,12 @@ describe('database migrations', () => {
       'sessions',
       'users',
     ])
+
+    const suggestionColumns = sqlite
+      .prepare("pragma table_info('autoplay_suggestions')")
+      .all() as Array<{ name: string }>
+
+    expect(suggestionColumns.map((column) => column.name)).toContain('position')
   })
 
   it('deduplicates active tracks and compacts positions before creating the unique index', () => {

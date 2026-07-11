@@ -1,8 +1,12 @@
 import { autoplaySuggestionSchema, type AutoplaySuggestion, type TrackMetadata } from '@waves/shared'
-import { eq, gt, lte } from 'drizzle-orm'
+import { asc, eq, gt, lte } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
 import { autoplayRejections, autoplaySuggestions } from '../db/schema'
+
+const MAX_AUTOPLAY_SUGGESTIONS = 3
+
+type SuggestionRow = typeof autoplaySuggestions.$inferSelect
 
 function parseArtists(value: string): string[] {
   const parsed: unknown = JSON.parse(value)
@@ -15,9 +19,66 @@ function parseArtists(value: string): string[] {
 export class AutoplaySuggestionRepository {
   constructor(private readonly db: WavesDatabaseExecutor) {}
 
-  get(): AutoplaySuggestion | undefined {
-    const row = this.db.select().from(autoplaySuggestions).where(eq(autoplaySuggestions.id, 1)).get()
-    if (!row) return undefined
+  list(): AutoplaySuggestion[] {
+    return this.db
+      .select()
+      .from(autoplaySuggestions)
+      .orderBy(asc(autoplaySuggestions.position))
+      .all()
+      .map((row) => this.mapRow(row))
+  }
+
+  replaceAll(suggestions: AutoplaySuggestion[]): AutoplaySuggestion[] {
+    const parsed = suggestions
+      .slice(0, MAX_AUTOPLAY_SUGGESTIONS)
+      .map((suggestion) => autoplaySuggestionSchema.parse(suggestion))
+
+    this.clear()
+    parsed.forEach((suggestion, position) => {
+      const { track } = suggestion
+      this.db
+        .insert(autoplaySuggestions)
+        .values({
+          id: position + 1,
+          position,
+          trackId: track.id,
+          provider: track.provider,
+          providerTrackId: track.providerTrackId,
+          title: track.title,
+          artistsJson: JSON.stringify(track.artists),
+          albumName: track.albumName ?? null,
+          durationMs: track.durationMs,
+          coverUrl: track.coverUrl ?? null,
+          externalUrl: track.externalUrl ?? null,
+          isrc: track.isrc ?? null,
+          generatedAt: suggestion.generatedAt,
+          seedFingerprint: suggestion.seedFingerprint,
+        })
+        .run()
+    })
+
+    return this.list()
+  }
+
+  clear(): boolean {
+    return this.db.delete(autoplaySuggestions).run().changes > 0
+  }
+
+  removeByProviderTrackId(providerTrackId: string): boolean {
+    return (
+      this.db
+        .delete(autoplaySuggestions)
+        .where(eq(autoplaySuggestions.providerTrackId, providerTrackId))
+        .run().changes > 0
+    )
+  }
+
+  compactPositions(): AutoplaySuggestion[] {
+    const current = this.list()
+    return this.replaceAll(current)
+  }
+
+  private mapRow(row: SuggestionRow): AutoplaySuggestion {
     const track: TrackMetadata = {
       id: row.trackId,
       provider: row.provider,
@@ -36,52 +97,6 @@ export class AutoplaySuggestionRepository {
       provider: row.provider,
       seedFingerprint: row.seedFingerprint,
     })
-  }
-
-  replace(suggestion: AutoplaySuggestion): AutoplaySuggestion {
-    const { track } = autoplaySuggestionSchema.parse(suggestion)
-    this.db
-      .insert(autoplaySuggestions)
-      .values({
-        id: 1,
-        trackId: track.id,
-        provider: track.provider,
-        providerTrackId: track.providerTrackId,
-        title: track.title,
-        artistsJson: JSON.stringify(track.artists),
-        albumName: track.albumName ?? null,
-        durationMs: track.durationMs,
-        coverUrl: track.coverUrl ?? null,
-        externalUrl: track.externalUrl ?? null,
-        isrc: track.isrc ?? null,
-        generatedAt: suggestion.generatedAt,
-        seedFingerprint: suggestion.seedFingerprint,
-      })
-      .onConflictDoUpdate({
-        target: autoplaySuggestions.id,
-        set: {
-          trackId: track.id,
-          provider: track.provider,
-          providerTrackId: track.providerTrackId,
-          title: track.title,
-          artistsJson: JSON.stringify(track.artists),
-          albumName: track.albumName ?? null,
-          durationMs: track.durationMs,
-          coverUrl: track.coverUrl ?? null,
-          externalUrl: track.externalUrl ?? null,
-          isrc: track.isrc ?? null,
-          generatedAt: suggestion.generatedAt,
-          seedFingerprint: suggestion.seedFingerprint,
-        },
-      })
-      .run()
-    const persisted = this.get()
-    if (!persisted) throw new Error('Autoplay suggestion was not persisted')
-    return persisted
-  }
-
-  clear(): boolean {
-    return this.db.delete(autoplaySuggestions).where(eq(autoplaySuggestions.id, 1)).run().changes > 0
   }
 
   reject(spotifyTrackId: string, createdAt: string, expiresAt: string): void {

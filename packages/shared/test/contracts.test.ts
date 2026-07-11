@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  autoplayStateSchema,
   queueItemAudioSourceSchema,
   addQueueItemInputSchema,
   apiErrorCodeSchema,
@@ -13,6 +14,7 @@ import {
   operationalStatusSchema,
   playerStateSchema,
   queueItemSchema,
+  rejectAutoplaySuggestionInputSchema,
   playbackTransitionResultSchema,
   removeQueueItemResultSchema,
   trackMetadataSchema,
@@ -45,6 +47,36 @@ describe('trackMetadataSchema', () => {
         secret: 'must-not-pass',
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('autoplay schemas', () => {
+  it('validates ordered suggestions and target rejection input', () => {
+    const state = autoplayStateSchema.parse({
+      enabled: true,
+      failureCode: null,
+      suggestions: [
+        {
+          track: {
+            id: 'spotify:first',
+            provider: 'spotify',
+            providerTrackId: 'first',
+            title: 'First',
+            artists: ['Artist'],
+            durationMs: 120000,
+          },
+          provider: 'spotify',
+          generatedAt: '2026-06-18T12:00:00.000Z',
+          seedFingerprint: 'seed',
+        },
+      ],
+      updatedAt: '2026-06-18T12:00:00.000Z',
+    })
+
+    expect(state.suggestions).toHaveLength(1)
+    expect(rejectAutoplaySuggestionInputSchema.parse({ providerTrackId: 'first' })).toEqual({
+      providerTrackId: 'first',
+    })
   })
 })
 

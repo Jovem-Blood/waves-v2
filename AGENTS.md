@@ -121,11 +121,17 @@ Regras adicionais:
 
 ## Comandos de qualidade
 
+Por padrão, não execute `pnpm build` como gate de rotina: builds consomem muitos
+tokens e só devem ser rodados quando o usuário pedir explicitamente ou quando a
+mudança envolver empacotamento, deploy, Docker, configuração de build ou outro
+comportamento que apenas o build valide. Para mudanças de código, o gate mínimo
+obrigatório é `pnpm typecheck`, com testes/lint/format aplicáveis conforme o
+escopo da alteração.
+
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm build
 pnpm format:check
 ```
 

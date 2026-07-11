@@ -84,7 +84,7 @@ export interface PublicSpotifyService {
 export interface PublicAutoplayService {
   get(): AutoplayState
   update(input: UpdateAutoplayInput): AutoplayState
-  rejectSuggestion(): AutoplayState
+  rejectSuggestion(providerTrackId: string): AutoplayState
 }
 
 export interface PublicAutoplayOrchestrator {

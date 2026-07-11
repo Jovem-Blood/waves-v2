@@ -24,7 +24,7 @@ export const autoplayStateSchema = z
   .object({
     enabled: z.boolean(),
     failureCode: autoplayFailureCodeSchema.nullable(),
-    suggestion: autoplaySuggestionSchema.nullable().default(null),
+    suggestions: z.array(autoplaySuggestionSchema).max(3).default([]),
     updatedAt: z.iso.datetime({ offset: true }),
   })
   .strict()
@@ -35,4 +35,8 @@ export const updateAutoplayInputSchema = z
   })
   .strict()
 
-export const rejectAutoplaySuggestionInputSchema = z.object({}).strict()
+export const rejectAutoplaySuggestionInputSchema = z
+  .object({
+    providerTrackId: z.string().trim().min(1),
+  })
+  .strict()

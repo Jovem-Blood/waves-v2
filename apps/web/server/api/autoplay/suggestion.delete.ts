@@ -1,4 +1,5 @@
-import { autoplayStateSchema } from '@waves/shared'
+import { autoplayStateSchema, rejectAutoplaySuggestionInputSchema } from '@waves/shared'
+import { readBody } from 'h3'
 
 import { definePublicApiHandler } from '../../utils/api-error'
 import { UnauthorizedError } from '../../utils/internal-errors'
@@ -18,7 +19,8 @@ export function createAutoplaySuggestionRejectHandler(
     if (!session) throw new UnauthorizedError()
     if (token && session.renewed) writeSessionCookie(event, token, { expiresAt: session.expiresAt })
     if (!dependencies.autoplayService) throw new Error('Autoplay service is unavailable')
-    dependencies.autoplayService.rejectSuggestion()
+    const input = rejectAutoplaySuggestionInputSchema.parse(await readBody(event))
+    dependencies.autoplayService.rejectSuggestion(input.providerTrackId)
     await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
     return autoplayStateSchema.parse(dependencies.autoplayService.get())
   })

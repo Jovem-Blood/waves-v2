@@ -15,6 +15,7 @@ import type { UnitOfWork } from '../repositories/unit-of-work'
 import { PlaybackConflictError, QueueItemNotFoundError } from './domain-errors'
 import { type WavesLogger, useLogger } from '../utils/logger'
 import { randomUUID } from 'node:crypto'
+import { RECENT_PLAYED_LIMIT } from './autoplay-exclusions'
 
 export interface SkipResult {
   player: PlayerState
@@ -283,9 +284,11 @@ export class PlayerStateService {
   promoteAutoplaySuggestion(expectedSeedFingerprint: string): PlaybackClaimResult {
     return this.unitOfWork.run(({ autoplay, autoplaySuggestion, playerState, queue }) => {
       const state = autoplay.get()
-      const suggestion = autoplaySuggestion.get()
+      const suggestion = autoplaySuggestion.list()[0]
       const active = queue.listActive()
-      const recentIds = new Set(queue.listRecentPlayed(20).map((item) => item.track.providerTrackId))
+      const recentIds = new Set(
+        queue.listRecentPlayed(RECENT_PLAYED_LIMIT).map((item) => item.track.providerTrackId),
+      )
       if (
         !state.enabled ||
         active.length > 0 ||
@@ -312,7 +315,8 @@ export class PlayerStateService {
         createdAt: timestamp,
         updatedAt: timestamp,
       })
-      autoplaySuggestion.clear()
+      autoplaySuggestion.removeByProviderTrackId(suggestion.track.providerTrackId)
+      autoplaySuggestion.compactPositions()
       return {
         item,
         player: playerState.update({

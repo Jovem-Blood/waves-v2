@@ -17,32 +17,50 @@ beforeEach(() => {
 afterEach(() => connection.close())
 
 describe('AutoplaySuggestionRepository', () => {
-  it('persists canonical metadata separately and replaces the singleton atomically', () => {
+  it('persists ordered suggestions and removes one by provider track id', () => {
     const repository = new AutoplaySuggestionRepository(connection.db)
-    repository.replace({
-      track: {
-        id: 'spotify:one',
+    repository.replaceAll([
+      {
+        track: {
+          id: 'spotify:one',
+          provider: 'spotify',
+          providerTrackId: 'one',
+          title: 'One',
+          artists: ['Artist'],
+          albumName: 'Album',
+          durationMs: 123_000,
+          isrc: 'BRABC1234567',
+        },
         provider: 'spotify',
-        providerTrackId: 'one',
-        title: 'One',
-        artists: ['Artist'],
-        albumName: 'Album',
-        durationMs: 123_000,
-        isrc: 'BRABC1234567',
+        generatedAt,
+        seedFingerprint: 'seed-one',
       },
-      provider: 'spotify',
-      generatedAt,
-      seedFingerprint: 'seed-one',
-    })
+      {
+        track: {
+          id: 'spotify:two',
+          provider: 'spotify',
+          providerTrackId: 'two',
+          title: 'Two',
+          artists: ['Artist'],
+          durationMs: 124_000,
+        },
+        provider: 'spotify',
+        generatedAt,
+        seedFingerprint: 'seed-one',
+      },
+    ])
 
-    expect(repository.get()).toMatchObject({
-      track: { providerTrackId: 'one', albumName: 'Album', isrc: 'BRABC1234567' },
-      generatedAt,
-      provider: 'spotify',
-      seedFingerprint: 'seed-one',
-    })
+    expect(repository.list().map((suggestion) => suggestion.track.providerTrackId)).toEqual([
+      'one',
+      'two',
+    ])
+    expect(repository.removeByProviderTrackId('one')).toBe(true)
+    expect(repository.list().map((suggestion) => suggestion.track.providerTrackId)).toEqual(['two'])
+    expect(repository.removeByProviderTrackId('missing')).toBe(false)
+    repository.compactPositions()
+    expect(repository.list()).toMatchObject([{ track: { providerTrackId: 'two' } }])
     expect(repository.clear()).toBe(true)
-    expect(repository.get()).toBeUndefined()
+    expect(repository.list()).toEqual([])
   })
 
   it('returns only unexpired rejected Spotify IDs', () => {

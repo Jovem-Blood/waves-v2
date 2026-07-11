@@ -17,7 +17,7 @@ defineProps<{
   autoplayLoading?: boolean
   autoplayUpdating?: boolean
   autoplayError?: string
-  autoplayRejecting?: boolean
+  autoplayRejectingId?: string
 }>()
 
 const emit = defineEmits<{
@@ -27,7 +27,7 @@ const emit = defineEmits<{
   moveToPosition: [fromIndex: number, toIndex: number]
   dragStateChange: [dragging: boolean]
   autoplayChange: [enabled: boolean]
-  autoplayReject: []
+  autoplayReject: [providerTrackId: string]
 }>()
 
 const queueItemsRef = ref<HTMLElement | null>(null)
@@ -193,10 +193,11 @@ onBeforeUnmount(() => {
           @move="(movedItem, direction) => $emit('move', movedItem, direction)"
         />
         <AutoplaySuggestionRow
-          v-if="autoplay?.suggestion"
-          :suggestion="autoplay.suggestion"
-          :rejecting="autoplayRejecting"
-          @reject="$emit('autoplayReject')"
+          v-for="suggestion in autoplay?.suggestions ?? []"
+          :key="suggestion.track.providerTrackId"
+          :suggestion="suggestion"
+          :rejecting="autoplayRejectingId === suggestion.track.providerTrackId"
+          @reject="$emit('autoplayReject', suggestion.track.providerTrackId)"
         />
       </div>
 
