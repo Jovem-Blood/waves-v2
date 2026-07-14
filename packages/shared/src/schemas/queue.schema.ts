@@ -32,6 +32,26 @@ export const queueItemSchema = z
 
 export const queueSchema = z.array(queueItemSchema)
 
+export const historyCursorSchema = z
+  .object({
+    updatedAt: z.iso.datetime({ offset: true }),
+    id: requiredTextSchema,
+  })
+  .strict()
+
+export const historyQuerySchema = z
+  .object({
+    cursor: requiredTextSchema.optional(),
+  })
+  .strict()
+
+export const historyPageSchema = z
+  .object({
+    items: z.array(queueItemSchema),
+    nextCursor: requiredTextSchema.nullable(),
+  })
+  .strict()
+
 export const addQueueItemInputSchema = z
   .object({
     track: trackMetadataSchema,

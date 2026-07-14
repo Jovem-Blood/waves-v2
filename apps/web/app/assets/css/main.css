@@ -90,7 +90,8 @@ button {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+a:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 3px;
 }
@@ -131,6 +132,34 @@ input:focus-visible {
   min-width: 0;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.history-link,
+.history-back-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.history-link:hover,
+.history-back-link:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-strong);
 }
 
 .brand-mark {

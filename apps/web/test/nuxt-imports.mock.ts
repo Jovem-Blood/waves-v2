@@ -6,3 +6,7 @@ export function useRuntimeConfig() {
     },
   }
 }
+
+export function useHead() {
+  return undefined
+}

@@ -27,6 +27,7 @@ import { AuthService } from '../../server/services/auth.service'
 import { PlayerStateService } from '../../server/services/player-state.service'
 import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
+import { HistoryService } from '../../server/services/history.service'
 import type { WavesLogger } from '../../server/utils/logger'
 import type {
   PublicApiDependencies,
@@ -91,6 +92,7 @@ async function startTestApi(): Promise<TestContext> {
   })
   const dependencies: PublicApiDependencies = {
     queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
+    historyService: new HistoryService(queueRepository),
     playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
     operationalStatusService: new OperationalStatusService(
       operationalStatusRepository,

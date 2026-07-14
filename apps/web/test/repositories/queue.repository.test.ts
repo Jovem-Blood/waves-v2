@@ -87,6 +87,39 @@ describe('QueueRepository', () => {
     expect(repository.findById('played')?.status).toBe('played')
   })
 
+  it('paginates terminal history by updated date and id without active items', () => {
+    const repository = setup()
+    repository.insert({
+      ...queueItem('failed', 0, 'failed'),
+      updatedAt: '2026-06-18T12:00:00.000Z',
+    })
+    repository.insert({
+      ...queueItem('played-a', 1, 'played'),
+      updatedAt: '2026-06-18T12:01:00.000Z',
+    })
+    repository.insert({
+      ...queueItem('played-b', 2, 'played'),
+      updatedAt: '2026-06-18T12:01:00.000Z',
+    })
+    repository.insert({
+      ...queueItem('skipped', 3, 'skipped'),
+      updatedAt: '2026-06-18T12:02:00.000Z',
+    })
+    repository.insert({
+      ...queueItem('queued', 4, 'queued'),
+      updatedAt: '2026-06-18T12:03:00.000Z',
+    })
+
+    const firstPage = repository.listHistory({ limit: 2 })
+    expect(firstPage.map(({ id }) => id)).toEqual(['skipped', 'played-b'])
+
+    const secondPage = repository.listHistory({
+      limit: 2,
+      cursor: { updatedAt: firstPage[1]!.updatedAt, id: firstPage[1]!.id },
+    })
+    expect(secondPage.map(({ id }) => id)).toEqual(['played-a', 'failed'])
+  })
+
   it('updates multiple positions atomically without transient uniqueness conflicts', () => {
     const repository = setup()
     repository.insert(queueItem('first', 0))

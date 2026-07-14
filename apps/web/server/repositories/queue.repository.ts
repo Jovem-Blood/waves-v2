@@ -1,11 +1,12 @@
 import {
   publicUserSchema,
   queueItemSchema,
+  type HistoryCursor,
   type QueueItem,
   type QueueItemStatus,
   type TrackMetadata,
 } from '@waves/shared'
-import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lt, max, or } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
 import { queueItems, users } from '../db/schema'
@@ -139,6 +140,29 @@ export class QueueRepository {
       .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
       .where(eq(queueItems.status, 'played'))
       .orderBy(desc(queueItems.updatedAt))
+      .limit(limit)
+      .all()
+      .map(mapJoinedRow)
+  }
+
+  listHistory({ cursor, limit }: { cursor?: HistoryCursor; limit: number }): QueueItem[] {
+    const cursorPredicate = cursor
+      ? or(
+          lt(queueItems.updatedAt, cursor.updatedAt),
+          and(eq(queueItems.updatedAt, cursor.updatedAt), lt(queueItems.id, cursor.id)),
+        )
+      : undefined
+
+    return this.db
+      .select({ item: queueItems, user: users })
+      .from(queueItems)
+      .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
+      .where(
+        cursorPredicate
+          ? and(inArray(queueItems.status, ['played', 'failed', 'skipped']), cursorPredicate)
+          : inArray(queueItems.status, ['played', 'failed', 'skipped']),
+      )
+      .orderBy(desc(queueItems.updatedAt), desc(queueItems.id))
       .limit(limit)
       .all()
       .map(mapJoinedRow)

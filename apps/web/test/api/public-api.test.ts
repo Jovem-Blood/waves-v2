@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import {
   apiErrorSchema,
   autoplayStateSchema,
+  historyPageSchema,
   type AddQueueItemInput,
   type TrackMetadata,
 } from '@waves/shared'
@@ -24,6 +25,7 @@ import { createQueueMoveHandler } from '../../server/api/queue/[id]/move.post'
 import { createQueueRestoreHandler } from '../../server/api/queue/[id]/restore.post'
 import { createQueueListHandler } from '../../server/api/queue/index.get'
 import { createQueueAddHandler } from '../../server/api/queue/index.post'
+import { createHistoryListHandler } from '../../server/api/history/index.get'
 import { createSpotifySearchHandler } from '../../server/api/spotify/search.get'
 import { createOperationalStatusHandler } from '../../server/api/status.get'
 import { createAutoplayGetHandler } from '../../server/api/autoplay/index.get'
@@ -44,6 +46,7 @@ import { AuthService } from '../../server/services/auth.service'
 import { PlayerStateService } from '../../server/services/player-state.service'
 import { OperationalStatusService } from '../../server/services/operational-status.service'
 import { QueueService } from '../../server/services/queue.service'
+import { HistoryService } from '../../server/services/history.service'
 import { AutoplayService } from '../../server/services/autoplay.service'
 import type {
   PublicApiDependencies,
@@ -105,6 +108,7 @@ async function startTestApi(): Promise<TestContext> {
   }
   const dependencies: PublicApiDependencies = {
     queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
+    historyService: new HistoryService(queueRepository),
     playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
     operationalStatusService: new OperationalStatusService(
       operationalStatusRepository,
@@ -146,6 +150,7 @@ async function startTestApi(): Promise<TestContext> {
   router.get('/auth/discord-link', createDiscordLinkConsumeHandler(getDependencies))
   router.get('/api/spotify/search', createSpotifySearchHandler(getDependencies))
   router.get('/api/queue', createQueueListHandler(getDependencies))
+  router.get('/api/history', createHistoryListHandler(getDependencies))
   router.post('/api/queue', createQueueAddHandler(getDependencies))
   router.delete('/api/queue/:id', createQueueRemoveHandler(getDependencies))
   router.post('/api/queue/:id/move', createQueueMoveHandler(getDependencies))
@@ -155,10 +160,7 @@ async function startTestApi(): Promise<TestContext> {
   router.get('/api/status', createOperationalStatusHandler(getDependencies))
   router.get('/api/autoplay', createAutoplayGetHandler(getDependencies))
   router.put('/api/autoplay', createAutoplayUpdateHandler(getDependencies))
-  router.delete(
-    '/api/autoplay/suggestion',
-    createAutoplaySuggestionRejectHandler(getDependencies),
-  )
+  router.delete('/api/autoplay/suggestion', createAutoplaySuggestionRejectHandler(getDependencies))
 
   const app = createApp()
   app.use(router.handler)
@@ -400,6 +402,41 @@ describe('public API', () => {
       }),
       expect.objectContaining({ id: 'queue-2', position: 1, track: secondTrack }),
     ])
+  })
+
+  it('returns terminal history and rejects malformed cursors', async () => {
+    const repository = new QueueRepository(context?.connection.db)
+    repository.insert({
+      id: 'played',
+      track: firstTrack,
+      status: 'played',
+      position: 0,
+      createdAt: '2026-06-18T12:00:00.000Z',
+      updatedAt: '2026-06-18T12:03:00.000Z',
+    })
+    repository.insert({
+      id: 'queued',
+      track: secondTrack,
+      status: 'queued',
+      position: 1,
+      createdAt: '2026-06-18T12:00:00.000Z',
+      updatedAt: '2026-06-18T12:04:00.000Z',
+    })
+
+    const history = await request('/api/history')
+    expect(history.response.status).toBe(200)
+    expect(historyPageSchema.parse(history.body)).toMatchObject({
+      items: [{ id: 'played', status: 'played' }],
+      nextCursor: null,
+    })
+
+    const invalid = await request('/api/history?cursor=first&cursor=second')
+    expect(invalid.response.status).toBe(400)
+    expect(invalid.body).toMatchObject({
+      statusCode: 400,
+      statusMessage: 'Invalid request',
+      data: { code: 'VALIDATION_ERROR' },
+    })
   })
 
   it('requires a guest session before adding a track', async () => {

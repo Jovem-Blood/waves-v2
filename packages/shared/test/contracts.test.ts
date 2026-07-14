@@ -10,6 +10,8 @@ import {
   botEventSchema,
   botPlayInputSchema,
   completePlaybackInputSchema,
+  historyPageSchema,
+  historyQuerySchema,
   moveQueueItemInputSchema,
   operationalStatusSchema,
   playerStateSchema,
@@ -176,6 +178,31 @@ describe('queue contracts', () => {
       }).success,
     ).toBe(true)
     expect(botPlayInputSchema.safeParse({ query: 'daft punk' }).success).toBe(false)
+  })
+
+  it('validates cursor-paginated playback history', () => {
+    const cursor = 'eyJ1cGRhdGVkQXQiOiIyMDI2LTA2LTE4VDEyOjAwOjAwLjAwMFoiLCJpZCI6InEtMSJ9'
+
+    expect(historyQuerySchema.parse({ cursor })).toEqual({ cursor })
+    expect(
+      historyPageSchema.parse({
+        items: [
+          {
+            ...queueItemSchema.parse({
+              id: 'queue-1',
+              track: validTrack,
+              requestedByDisplayName: 'Luis',
+              status: 'played',
+              position: 0,
+              createdAt: '2026-06-18T12:00:00.000Z',
+              updatedAt: '2026-06-18T12:04:00.000Z',
+            }),
+          },
+        ],
+        nextCursor: null,
+      }).nextCursor,
+    ).toBeNull()
+    expect(historyQuerySchema.safeParse({ cursor: ['first', 'second'] }).success).toBe(false)
   })
 })
 

@@ -9,6 +9,7 @@ import type {
   RestoreQueueItemResult,
   TrackMetadata,
   AutoplayState,
+  HistoryPage,
   UpdateAutoplayInput,
   PlaybackTransitionResult,
   CompletePlaybackInput,
@@ -33,6 +34,7 @@ import type { SkipResult } from '../services/player-state.service'
 import { PlayerStateService } from '../services/player-state.service'
 import { OperationalStatusService } from '../services/operational-status.service'
 import { QueueService } from '../services/queue.service'
+import { HistoryService } from '../services/history.service'
 import { SpotifyService } from '../services/spotify.service'
 import { AutoplayService } from '../services/autoplay.service'
 import { AutoplayOrchestrator } from '../services/autoplay-orchestrator.service'
@@ -49,6 +51,10 @@ export interface PublicQueueService {
   remove(id: string): RemoveQueueItemResult
   restore(id: string): RestoreQueueItemResult
   move(id: string, input: MoveQueueItemInput): QueueItem[]
+}
+
+export interface PublicHistoryService {
+  list(cursor?: string): HistoryPage
 }
 
 export interface PublicOperationalStatusService {
@@ -95,6 +101,7 @@ export interface PublicAutoplayOrchestrator {
 export interface PublicApiDependencies {
   playerStateService: PublicPlayerStateService
   queueService: PublicQueueService
+  historyService: PublicHistoryService
   spotifyService: PublicSpotifyService
   operationalStatusService: PublicOperationalStatusService
   authService: AuthService
@@ -150,6 +157,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
 
   runtimeDependencies = {
     queueService: runtimeQueueService,
+    historyService: new HistoryService(queueRepository),
     playerStateService: runtimePlayerStateService,
     autoplayService: runtimeAutoplayService,
     autoplayOrchestrator: new AutoplayOrchestrator(
