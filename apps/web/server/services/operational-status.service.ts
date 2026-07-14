@@ -9,14 +9,17 @@ import {
 
 import type { OperationalStatusRepository } from '../repositories/operational-status.repository'
 import type { PlayerStateRepository } from '../repositories/player-state.repository'
+import type { RealtimePublisher } from '../utils/realtime-events'
 
 const BOT_OFFLINE_AFTER_MS = 15_000
+const noopPublish: RealtimePublisher = (event) => ({ id: '0', event })
 
 export class OperationalStatusService {
   constructor(
     private readonly operationalRepository: OperationalStatusRepository,
     private readonly playerRepository: PlayerStateRepository,
     private readonly now: () => Date = () => new Date(),
+    private readonly publishRealtime: RealtimePublisher = noopPublish,
   ) {}
 
   get(): OperationalStatus {
@@ -44,7 +47,9 @@ export class OperationalStatusService {
       botLastSeenAt: parsed.occurredAt,
       updatedAt: this.now().toISOString(),
     })
-    return this.get()
+    const status = this.get()
+    this.publishRealtime({ type: 'status.changed', status })
+    return status
   }
 
   setVoiceStatus(status: VoiceOperationalStatus): OperationalStatus {
@@ -52,7 +57,9 @@ export class OperationalStatusService {
       voiceStatus: status,
       updatedAt: this.now().toISOString(),
     })
-    return this.get()
+    const next = this.get()
+    this.publishRealtime({ type: 'status.changed', status: next })
+    return next
   }
 
   private voiceStatus(

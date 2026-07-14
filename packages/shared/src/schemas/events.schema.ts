@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+import { operationalStatusSchema } from './operational-status.schema.js'
+import { playerStateSchema } from './player.schema.js'
+import { queueItemSchema, queueSchema } from './queue.schema.js'
+
 const requiredTextSchema = z.string().trim().min(1)
 const optionalTextSchema = requiredTextSchema.optional()
 
@@ -96,3 +100,49 @@ export const botEventSchema = z
       }
     }
   })
+
+export const queueRealtimeReasonSchema = z.enum([
+  'added',
+  'removed',
+  'restored',
+  'moved',
+  'player_transition',
+  'voice_changed',
+])
+
+export const realtimeEventSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('sync.snapshot'),
+      queue: queueSchema,
+      player: playerStateSchema,
+      status: operationalStatusSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('queue.updated'),
+      queue: queueSchema,
+      reason: queueRealtimeReasonSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('queue.item_failed'),
+      item: queueItemSchema,
+      queue: queueSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('player.updated'),
+      player: playerStateSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('status.changed'),
+      status: operationalStatusSchema,
+    })
+    .strict(),
+])

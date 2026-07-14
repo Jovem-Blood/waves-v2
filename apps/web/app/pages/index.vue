@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from '#imports'
 import { AudioWaveform, Headphones, History } from '@lucide/vue'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 import CurrentUserMenu from '../components/CurrentUserMenu.vue'
 import GuestNamePrompt from '../components/GuestNamePrompt.vue'
@@ -16,6 +16,7 @@ import { useAuth } from '../composables/useAuth'
 import { usePlayerState } from '../composables/usePlayerState'
 import { useQueue } from '../composables/useQueue'
 import { useAutoplay } from '../composables/useAutoplay'
+import { useRealtimeEvents } from '../composables/useRealtimeEvents'
 
 defineOptions({ name: 'DashboardPage' })
 
@@ -27,6 +28,31 @@ const player = usePlayerState(apiBase)
 const operational = useOperationalStatus(apiBase)
 const auth = useAuth(apiBase)
 const autoplay = useAutoplay(apiBase)
+const realtime = useRealtimeEvents(apiBase, {
+  snapshot(event) {
+    queue.applyRealtimeQueue(event.queue)
+    player.replace(event.player)
+    operational.replace(event.status)
+  },
+  queueUpdated(event) {
+    queue.applyRealtimeQueue(event.queue)
+  },
+  queueItemFailed(event) {
+    queue.applyRealtimeFailedItem(event.item, event.queue)
+  },
+  playerUpdated(event) {
+    player.replace(event.player)
+  },
+  statusChanged(event) {
+    operational.replace(event.status)
+  },
+})
+
+watch(realtime.connected, (connected) => {
+  queue.setRealtimeConnected(connected)
+  player.setRealtimeConnected(connected)
+  operational.setRealtimeConnected(connected)
+})
 
 const activeTrackIds = computed(() =>
   queue.items.value

@@ -44,6 +44,7 @@ import { SpotifyCandidateResolver } from '../services/spotify-candidate-resolver
 import { DualProviderRecommendationService } from '../services/dual-provider-recommendation.service'
 import { parseLastFmConfig } from './lastfm-config'
 import { parseSpotifyConfig } from './spotify-config'
+import { getRealtimeEventBus } from './realtime-events'
 
 export interface PublicQueueService {
   list(): QueueItem[]
@@ -126,14 +127,28 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   const autoplayRepository = new AutoplayRepository(db)
   const autoplaySuggestionRepository = new AutoplaySuggestionRepository(db)
   const unitOfWork = new DatabaseUnitOfWork(db)
+  const publishRealtime = getRealtimeEventBus().publish
   let spotifyService: SpotifyService | undefined
   let lastFmClient: LastFmClient | undefined
   const runtimeAutoplayService = new AutoplayService(
     autoplayRepository,
     autoplaySuggestionRepository,
   )
-  const runtimeQueueService = new QueueService(queueRepository, unitOfWork)
-  const runtimePlayerStateService = new PlayerStateService(playerStateRepository, unitOfWork)
+  const runtimeQueueService = new QueueService(
+    queueRepository,
+    unitOfWork,
+    undefined,
+    undefined,
+    publishRealtime,
+  )
+  const runtimePlayerStateService = new PlayerStateService(
+    playerStateRepository,
+    unitOfWork,
+    undefined,
+    undefined,
+    undefined,
+    publishRealtime,
+  )
 
   const getSpotifyService = () => {
     spotifyService ??= new SpotifyService(new SpotifyClient(parseSpotifyConfig()))
@@ -171,6 +186,8 @@ export function usePublicApiDependencies(): PublicApiDependencies {
     operationalStatusService: new OperationalStatusService(
       operationalStatusRepository,
       playerStateRepository,
+      undefined,
+      publishRealtime,
     ),
     authService: new RuntimeAuthService(
       userRepository,

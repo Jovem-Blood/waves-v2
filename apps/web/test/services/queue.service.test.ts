@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 
-import type { AddQueueItemInput } from '@waves/shared'
+import type { AddQueueItemInput, RealtimeEvent } from '@waves/shared'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -31,7 +31,13 @@ const input: AddQueueItemInput = {
   requestedByDisplayName: 'Luis',
 }
 
-function setup(nowProvider: () => Date = now): {
+function setup({
+  nowProvider = now,
+  publishRealtime,
+}: {
+  nowProvider?: () => Date
+  publishRealtime?: (event: RealtimeEvent) => { id: string; event: RealtimeEvent }
+} = {}): {
   connection: DatabaseConnection
   repository: QueueRepository
   service: QueueService
@@ -50,6 +56,7 @@ function setup(nowProvider: () => Date = now): {
       new DatabaseUnitOfWork(connection.db, nowProvider),
       nowProvider,
       () => `queue-${++nextId}`,
+      publishRealtime,
     ),
   }
 }
@@ -86,6 +93,42 @@ describe('QueueService', () => {
       position: 0,
       createdAt: '2026-06-18T14:00:00.000Z',
       updatedAt: '2026-06-18T14:00:00.000Z',
+    })
+  })
+
+  it('publishes realtime queue updates after mutations', () => {
+    const published: RealtimeEvent[] = []
+    const { service } = setup({
+      publishRealtime: (event) => {
+        published.push(event)
+        return { id: String(published.length), event }
+      },
+    })
+
+    service.add(input)
+    service.add({
+      track: { ...input.track, id: 'spotify:track-2', providerTrackId: 'track-2' },
+    })
+    service.move('queue-2', { newPosition: 0 })
+    service.remove('queue-1')
+    service.restore('queue-1')
+
+    expect(published.map((event) => event.type)).toEqual([
+      'queue.updated',
+      'queue.updated',
+      'queue.updated',
+      'queue.updated',
+      'queue.updated',
+    ])
+    expect(
+      published.map((event) => (event.type === 'queue.updated' ? event.reason : undefined)),
+    ).toEqual(['added', 'added', 'moved', 'removed', 'restored'])
+    expect(published.at(-1)).toMatchObject({
+      type: 'queue.updated',
+      queue: [
+        expect.objectContaining({ id: 'queue-2', position: 0 }),
+        expect.objectContaining({ id: 'queue-1', position: 1 }),
+      ],
     })
   })
 
@@ -265,7 +308,7 @@ describe('QueueService', () => {
 
   it('rejects removing the playing item and restoring after ten seconds', () => {
     let currentTime = new Date('2026-06-18T14:00:00.000Z')
-    const { repository, service } = setup(() => currentTime)
+    const { repository, service } = setup({ nowProvider: () => currentTime })
     service.add(input)
     repository.updateStatusAndPosition('queue-1', {
       status: 'playing',

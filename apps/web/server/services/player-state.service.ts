@@ -14,6 +14,7 @@ import type { PlayerStateRepository } from '../repositories/player-state.reposit
 import type { UnitOfWork } from '../repositories/unit-of-work'
 import { PlaybackConflictError, QueueItemNotFoundError } from './domain-errors'
 import { type WavesLogger, useLogger } from '../utils/logger'
+import type { RealtimePublisher } from '../utils/realtime-events'
 import { randomUUID } from 'node:crypto'
 import { RECENT_PLAYED_LIMIT } from './autoplay-exclusions'
 
@@ -22,6 +23,8 @@ export interface SkipResult {
   queue: QueueItem[]
 }
 
+const noopPublish: RealtimePublisher = (event) => ({ id: '0', event })
+
 export class PlayerStateService {
   constructor(
     private readonly playerStateRepository: PlayerStateRepository,
@@ -29,6 +32,7 @@ export class PlayerStateService {
     private readonly now: () => Date = () => new Date(),
     private readonly logger: WavesLogger = useLogger(),
     private readonly generateId: () => string = randomUUID,
+    private readonly publishRealtime: RealtimePublisher = noopPublish,
   ) {}
 
   get(): PlayerState {
@@ -41,10 +45,12 @@ export class PlayerStateService {
     if (player.status !== 'playing' || !player.currentQueueItemId) {
       throw new PlaybackConflictError()
     }
-    return this.playerStateRepository.update({
+    const next = this.playerStateRepository.update({
       status: 'paused',
       updatedAt: this.now().toISOString(),
     })
+    this.publishPlayerUpdated(next)
+    return next
   }
 
   resume(): PlayerState {
@@ -52,18 +58,22 @@ export class PlayerStateService {
     if (player.status !== 'paused' || !player.currentQueueItemId) {
       throw new PlaybackConflictError()
     }
-    return this.playerStateRepository.update({
+    const next = this.playerStateRepository.update({
       status: 'playing',
       updatedAt: this.now().toISOString(),
     })
+    this.publishPlayerUpdated(next)
+    return next
   }
 
   setVolume(input: { volume: number }): PlayerState {
     const parsed = setPlayerVolumeInputSchema.parse(input)
-    return this.playerStateRepository.update({
+    const next = this.playerStateRepository.update({
       volume: parsed.volume,
       updatedAt: this.now().toISOString(),
     })
+    this.publishPlayerUpdated(next)
+    return next
   }
 
   updateProgress(input: { queueItemId: string; progressMs: number }): PlayerState {
@@ -74,13 +84,15 @@ export class PlayerStateService {
     }
     const current = this.unitOfWork.run(({ queue }) => queue.findById(parsed.queueItemId))
     if (!current) throw new QueueItemNotFoundError(parsed.queueItemId)
-    return this.playerStateRepository.update({
+    const next = this.playerStateRepository.update({
       progressMs: Math.min(
         Math.max(player.progressMs, parsed.progressMs),
         current.track.durationMs,
       ),
       updatedAt: this.now().toISOString(),
     })
+    this.publishPlayerUpdated(next)
+    return next
   }
 
   voiceConnected(
@@ -101,6 +113,7 @@ export class PlayerStateService {
       updatedAt: this.now().toISOString(),
     })
     this.logPlayerTransition('voice.connected', previous, next, { guildId, voiceChannelId })
+    this.publishPlayerUpdated(next)
     return next
   }
 
@@ -139,6 +152,10 @@ export class PlayerStateService {
       }
     })
     this.logPlayerTransition('voice.disconnected', result.previous, result.next, { guildId })
+    if (result.previous.updatedAt !== result.next.updatedAt) {
+      this.publishPlayerUpdated(result.next)
+      this.publishQueueUpdated(this.listActiveQueue(), 'voice_changed')
+    }
     return result.next
   }
 
@@ -215,6 +232,8 @@ export class PlayerStateService {
       },
       'Player skip transition completed',
     )
+    this.publishPlayerUpdated(result.player)
+    this.publishQueueUpdated(result.queue, 'player_transition')
     return result
   }
 
@@ -273,6 +292,8 @@ export class PlayerStateService {
       },
       'Playback claim transition completed',
     )
+    this.publishPlayerUpdated(result.player)
+    this.publishQueueUpdated(this.listActiveQueue(), 'player_transition')
     return result
   }
 
@@ -282,7 +303,7 @@ export class PlayerStateService {
   }
 
   promoteAutoplaySuggestion(expectedSeedFingerprint: string): PlaybackClaimResult {
-    return this.unitOfWork.run(({ autoplay, autoplaySuggestion, playerState, queue }) => {
+    const result = this.unitOfWork.run(({ autoplay, autoplaySuggestion, playerState, queue }) => {
       const state = autoplay.get()
       const suggestion = autoplaySuggestion.list()[0]
       const active = queue.listActive()
@@ -317,7 +338,7 @@ export class PlayerStateService {
       })
       autoplaySuggestion.removeByProviderTrackId(suggestion.track.providerTrackId)
       autoplaySuggestion.compactPositions()
-      return {
+      const result = {
         item,
         player: playerState.update({
           status: 'playing',
@@ -326,7 +347,13 @@ export class PlayerStateService {
           updatedAt: timestamp,
         }),
       }
+      return result
     })
+    if ('item' in result && result.item) {
+      this.publishPlayerUpdated(result.player)
+      this.publishQueueUpdated(this.listActiveQueue(), 'player_transition')
+    }
+    return result
   }
 
   private transitionCurrent(
@@ -400,7 +427,31 @@ export class PlayerStateService {
       },
       'Playback queue transition completed',
     )
+    if (outcome === 'failed') {
+      const failedItem = this.unitOfWork.run(({ queue }) => queue.findById(queueItemId))
+      if (failedItem) {
+        this.publishRealtime({
+          type: 'queue.item_failed',
+          item: failedItem,
+          queue: result.queue,
+        })
+      }
+    }
+    this.publishPlayerUpdated(result.player)
+    this.publishQueueUpdated(result.queue, 'player_transition')
     return result
+  }
+
+  private publishPlayerUpdated(player: PlayerState): void {
+    this.publishRealtime({ type: 'player.updated', player })
+  }
+
+  private publishQueueUpdated(queue: QueueItem[], reason: 'player_transition' | 'voice_changed') {
+    this.publishRealtime({ type: 'queue.updated', queue, reason })
+  }
+
+  private listActiveQueue(): QueueItem[] {
+    return this.unitOfWork.run(({ queue }) => queue.listActive())
   }
 
   private logPlayerTransition(

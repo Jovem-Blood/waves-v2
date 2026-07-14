@@ -202,7 +202,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="queue-footer">
-        <span><span class="live-dot" /> Atualização automática a cada 2,5s</span>
+        <span><span class="live-dot" /> Sincronização em tempo real</span>
         <span>{{ refreshing ? 'Sincronizando…' : 'Fila sincronizada' }}</span>
       </div>
     </div>

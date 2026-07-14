@@ -28,6 +28,8 @@ export function useQueue(apiBase: string) {
   let interactionLocked = false
   let refreshAfterInteraction = false
   let queueLoadErrorNotified = false
+  let mounted = false
+  let realtimeConnected = false
   const notifiedFailedItems = new Set<string>()
 
   function applyQueue(queue: Queue) {
@@ -107,6 +109,43 @@ export function useQueue(apiBase: string) {
       void notifyDisappearedFailures(previousItems, nextItems)
     }
     return applied
+  }
+
+  function applyRealtimeQueue(queue: Queue) {
+    queueLoadErrorNotified = false
+    return replace(queue, { notifyFailures: false })
+  }
+
+  function applyRealtimeFailedItem(item: QueueItem, queue: Queue) {
+    applyRealtimeQueue(queue)
+    if (notifiedFailedItems.has(item.id)) return
+
+    notifiedFailedItems.add(item.id)
+    toasts.error(
+      `NÃ£o foi possÃ­vel tocar "${item.track.title}". O bot marcou a faixa como falha apÃ³s tentar resolver ou reproduzir o Ã¡udio. Ela foi movida para o histÃ³rico.`,
+    )
+  }
+
+  function startPolling() {
+    if (!mounted || realtimeConnected || pollingTimer) return
+    pollingTimer = setInterval(() => void load(true), POLLING_INTERVAL_MS)
+  }
+
+  function stopPolling() {
+    if (!pollingTimer) return
+    clearInterval(pollingTimer)
+    pollingTimer = undefined
+  }
+
+  function setRealtimeConnected(connected: boolean) {
+    if (realtimeConnected === connected) return
+    realtimeConnected = connected
+    if (connected) {
+      stopPolling()
+      return
+    }
+    startPolling()
+    void load(true)
   }
 
   function refreshPendingQueue() {
@@ -267,12 +306,14 @@ export function useQueue(apiBase: string) {
   }
 
   onMounted(() => {
+    mounted = true
     void load()
-    pollingTimer = setInterval(() => void load(true), POLLING_INTERVAL_MS)
+    startPolling()
   })
 
   onUnmounted(() => {
-    if (pollingTimer) clearInterval(pollingTimer)
+    mounted = false
+    stopPolling()
   })
 
   return {
@@ -285,11 +326,14 @@ export function useQueue(apiBase: string) {
     addingPlacement,
     refresh: () => load(true),
     replace,
+    applyRealtimeQueue,
+    applyRealtimeFailedItem,
     add,
     remove,
     restore,
     move,
     moveToPosition,
     setInteractionLocked,
+    setRealtimeConnected,
   }
 }

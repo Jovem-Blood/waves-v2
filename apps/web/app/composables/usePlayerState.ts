@@ -15,6 +15,8 @@ export function usePlayerState(apiBase: string) {
   const error = ref<string>()
   let pollingTimer: ReturnType<typeof setInterval> | undefined
   let requestInFlight = false
+  let mounted = false
+  let realtimeConnected = false
 
   async function load() {
     if (requestInFlight) return
@@ -28,6 +30,34 @@ export function usePlayerState(apiBase: string) {
       loading.value = false
       requestInFlight = false
     }
+  }
+
+  function replace(player: PlayerState) {
+    state.value = playerStateSchema.parse(player)
+    error.value = undefined
+    loading.value = false
+  }
+
+  function startPolling() {
+    if (!mounted || realtimeConnected || pollingTimer) return
+    pollingTimer = setInterval(() => void load(), POLLING_INTERVAL_MS)
+  }
+
+  function stopPolling() {
+    if (!pollingTimer) return
+    clearInterval(pollingTimer)
+    pollingTimer = undefined
+  }
+
+  function setRealtimeConnected(connected: boolean) {
+    if (realtimeConnected === connected) return
+    realtimeConnected = connected
+    if (connected) {
+      stopPolling()
+      return
+    }
+    startPolling()
+    void load()
   }
 
   async function skip(): Promise<{ player: PlayerState; queue: Queue } | undefined> {
@@ -79,13 +109,27 @@ export function usePlayerState(apiBase: string) {
   }
 
   onMounted(() => {
+    mounted = true
     void load()
-    pollingTimer = setInterval(() => void load(), POLLING_INTERVAL_MS)
+    startPolling()
   })
 
   onUnmounted(() => {
-    if (pollingTimer) clearInterval(pollingTimer)
+    mounted = false
+    stopPolling()
   })
 
-  return { state, loading, skipping, mutating, error, refresh: load, skip, control, setVolume }
+  return {
+    state,
+    loading,
+    skipping,
+    mutating,
+    error,
+    refresh: load,
+    replace,
+    skip,
+    control,
+    setVolume,
+    setRealtimeConnected,
+  }
 }

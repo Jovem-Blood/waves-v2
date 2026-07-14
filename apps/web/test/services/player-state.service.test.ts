@@ -1,6 +1,6 @@
 ﻿import { fileURLToPath } from 'node:url'
 
-import type { QueueItem, QueueItemStatus } from '@waves/shared'
+import type { QueueItem, QueueItemStatus, RealtimeEvent } from '@waves/shared'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -36,7 +36,11 @@ function item(id: string, position: number, status: QueueItemStatus = 'queued'):
   }
 }
 
-function setup(): {
+function setup({
+  publishRealtime,
+}: {
+  publishRealtime?: (event: RealtimeEvent) => { id: string; event: RealtimeEvent }
+} = {}): {
   connection: DatabaseConnection
   playerRepository: PlayerStateRepository
   queueRepository: QueueRepository
@@ -54,7 +58,14 @@ function setup(): {
     connection,
     playerRepository,
     queueRepository,
-    service: new PlayerStateService(playerRepository, unitOfWork, now),
+    service: new PlayerStateService(
+      playerRepository,
+      unitOfWork,
+      now,
+      undefined,
+      undefined,
+      publishRealtime,
+    ),
     unitOfWork,
   }
 }
@@ -160,6 +171,36 @@ describe('PlayerStateService', () => {
       ],
     })
     expect(queueRepository.findById('current')?.status).toBe('skipped')
+  })
+
+  it('publishes realtime player and queue updates for skip transitions', () => {
+    const published: RealtimeEvent[] = []
+    const { playerRepository, queueRepository, service } = setup({
+      publishRealtime: (event) => {
+        published.push(event)
+        return { id: String(published.length), event }
+      },
+    })
+    queueRepository.insert(item('current', 0, 'playing'))
+    queueRepository.insert(item('next', 1))
+    playerRepository.update({
+      status: 'playing',
+      currentQueueItemId: 'current',
+    })
+
+    service.skip()
+
+    expect(published.map((event) => event.type)).toEqual(['player.updated', 'queue.updated'])
+    expect(
+      published[0]?.type === 'player.updated' ? published[0].player.currentQueueItemId : undefined,
+    ).toBe('next')
+    expect(published[1]).toMatchObject({
+      type: 'queue.updated',
+      reason: 'player_transition',
+    })
+    expect(published[1]?.type === 'queue.updated' ? published[1].queue[0] : undefined).toMatchObject(
+      { id: 'next', status: 'playing' },
+    )
   })
 
   it('uses the first active item when the player current item is absent or invalid', () => {
@@ -283,6 +324,41 @@ describe('PlayerStateService', () => {
       queue: [],
     })
     expect(queueRepository.findById('only')?.status).toBe('failed')
+  })
+
+  it('publishes an explicit queue failure event after failed completion', () => {
+    const published: RealtimeEvent[] = []
+    const { queueRepository, service } = setup({
+      publishRealtime: (event) => {
+        published.push(event)
+        return { id: String(published.length), event }
+      },
+    })
+    queueRepository.insert(item('only', 0))
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'ondas-da-noite')
+    service.claimPlayback()
+    published.length = 0
+
+    service.completePlayback({ queueItemId: 'only', outcome: 'failed' })
+
+    expect(published.map((event) => event.type)).toEqual([
+      'queue.item_failed',
+      'player.updated',
+      'queue.updated',
+    ])
+    expect(
+      published[0]?.type === 'queue.item_failed'
+        ? { item: published[0].item, queue: published[0].queue }
+        : undefined,
+    ).toMatchObject({ item: { id: 'only', status: 'failed' }, queue: [] })
+    expect(published[1]?.type === 'player.updated' ? published[1].player.status : undefined).toBe(
+      'idle',
+    )
+    expect(published[2]).toMatchObject({
+      type: 'queue.updated',
+      reason: 'player_transition',
+      queue: [],
+    })
   })
 
   it('rejects a transition for an item that is not current', () => {

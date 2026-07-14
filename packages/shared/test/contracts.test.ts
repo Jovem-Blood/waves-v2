@@ -18,6 +18,7 @@ import {
   queueItemSchema,
   rejectAutoplaySuggestionInputSchema,
   playbackTransitionResultSchema,
+  realtimeEventSchema,
   removeQueueItemResultSchema,
   trackMetadataSchema,
 } from '../src/index.js'
@@ -207,6 +208,30 @@ describe('queue contracts', () => {
 })
 
 describe('player, event and error contracts', () => {
+  const realtimeQueueItem = {
+    id: 'queue-1',
+    track: validTrack,
+    requestedByDisplayName: 'Luis',
+    status: 'queued',
+    position: 0,
+    createdAt: '2026-06-18T12:00:00.000Z',
+    updatedAt: '2026-06-18T12:00:00.000Z',
+  } as const
+
+  const realtimePlayer = {
+    status: 'playing',
+    currentQueueItemId: 'queue-1',
+    progressMs: 1200,
+    volume: 80,
+    updatedAt: '2026-06-18T12:00:00.000Z',
+  } as const
+
+  const realtimeStatus = {
+    web: { status: 'available', checkedAt: '2026-06-18T12:00:00.000Z' },
+    bot: { status: 'online', lastSeenAt: '2026-06-18T12:00:00.000Z' },
+    voice: { status: 'connected', guildName: 'Waves', voiceChannelName: 'ondas-da-noite' },
+  } as const
+
   it('accepts logical player state', () => {
     expect(
       playerStateSchema.safeParse({
@@ -225,6 +250,56 @@ describe('player, event and error contracts', () => {
         payload: { command: 'play' },
       }).success,
     ).toBe(true)
+  })
+
+  it('accepts realtime event envelopes', () => {
+    expect(
+      realtimeEventSchema.parse({
+        type: 'sync.snapshot',
+        queue: [realtimeQueueItem],
+        player: realtimePlayer,
+        status: realtimeStatus,
+      }),
+    ).toMatchObject({ type: 'sync.snapshot' })
+    expect(
+      realtimeEventSchema.parse({
+        type: 'queue.updated',
+        queue: [realtimeQueueItem],
+        reason: 'added',
+      }),
+    ).toMatchObject({ type: 'queue.updated' })
+    expect(
+      realtimeEventSchema.parse({
+        type: 'queue.item_failed',
+        item: { ...realtimeQueueItem, status: 'failed' },
+        queue: [],
+      }),
+    ).toMatchObject({ type: 'queue.item_failed' })
+    expect(realtimeEventSchema.parse({ type: 'player.updated', player: realtimePlayer })).toEqual({
+      type: 'player.updated',
+      player: realtimePlayer,
+    })
+    expect(realtimeEventSchema.parse({ type: 'status.changed', status: realtimeStatus })).toEqual({
+      type: 'status.changed',
+      status: realtimeStatus,
+    })
+  })
+
+  it('rejects malformed realtime events', () => {
+    expect(realtimeEventSchema.safeParse({ type: 'unknown', queue: [] }).success).toBe(false)
+    expect(
+      realtimeEventSchema.safeParse({
+        type: 'queue.updated',
+        queue: [realtimeQueueItem],
+        reason: 'not-a-known-reason',
+      }).success,
+    ).toBe(false)
+    expect(
+      realtimeEventSchema.safeParse({
+        type: 'player.updated',
+        player: { status: 'playing' },
+      }).success,
+    ).toBe(false)
   })
 
   it('requires guild and channel context for typed voice events', () => {

@@ -239,6 +239,30 @@ describe('queue polling', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('pauses queue polling while realtime is connected and resumes after disconnect', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue([])
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(QueueHarness)
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    queueHarnessState?.setRealtimeConnected(true)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    queueHarnessState?.setRealtimeConnected(false)
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(2500)
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+
+    wrapper.unmount()
+  })
+
   it('defers a polling response while the queue is being dragged', async () => {
     vi.useFakeTimers()
     const staleItem = {
@@ -307,6 +331,31 @@ describe('queue polling', () => {
     expect(useToasts().visible.value.at(0)?.message).toContain(
       'Não foi possível tocar "Luz da Madrugada"',
     )
+
+    wrapper.unmount()
+  })
+
+  it('notifies explicit realtime queue failures without reading history', async () => {
+    vi.useFakeTimers()
+    const failedItem: QueueItem = {
+      ...queueItem,
+      status: 'failed',
+      updatedAt: '2026-06-18T12:01:00.000Z',
+    }
+    const fetchMock = vi.fn().mockResolvedValue([queueItem, queuedItem])
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(QueueHarness)
+    await flushPromises()
+
+    queueHarnessState?.applyRealtimeFailedItem(failedItem, [queuedItem])
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/history')
+    expect(useToasts().visible.value.at(0)?.message).toContain(
+      'NÃ£o foi possÃ­vel tocar "Luz da Madrugada"',
+    )
+    expect(queueHarnessState?.items.value).toEqual([queuedItem])
 
     wrapper.unmount()
   })

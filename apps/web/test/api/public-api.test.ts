@@ -31,6 +31,7 @@ import { createOperationalStatusHandler } from '../../server/api/status.get'
 import { createAutoplayGetHandler } from '../../server/api/autoplay/index.get'
 import { createAutoplayUpdateHandler } from '../../server/api/autoplay/index.put'
 import { createAutoplaySuggestionRejectHandler } from '../../server/api/autoplay/suggestion.delete'
+import { createRealtimeEventsHandler } from '../../server/api/events.get'
 import { SpotifyUnavailableError } from '../../server/clients/spotify.errors'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
@@ -52,6 +53,7 @@ import type {
   PublicApiDependencies,
   PublicSpotifyService,
 } from '../../server/utils/public-api-dependencies'
+import { createRealtimeEventBus, type RealtimeEventBus } from '../../server/utils/realtime-events'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const now = () => new Date('2026-06-18T16:00:00.000Z')
@@ -78,6 +80,7 @@ interface TestContext {
   dependencies: PublicApiDependencies
   server: Server
   spotifySearch: ReturnType<typeof vi.fn<(query: string) => Promise<TrackMetadata[]>>>
+  realtimeBus: RealtimeEventBus
   sessionCookie?: string
 }
 
@@ -106,6 +109,7 @@ async function startTestApi(): Promise<TestContext> {
   const spotifyService: PublicSpotifyService = {
     searchTracks: spotifySearch,
   }
+  const realtimeBus = createRealtimeEventBus()
   const dependencies: PublicApiDependencies = {
     queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
     historyService: new HistoryService(queueRepository),
@@ -158,6 +162,7 @@ async function startTestApi(): Promise<TestContext> {
   router.get('/api/player', createPlayerGetHandler(getDependencies))
   router.post('/api/player/skip', createPlayerSkipHandler(getDependencies))
   router.get('/api/status', createOperationalStatusHandler(getDependencies))
+  router.get('/api/events', createRealtimeEventsHandler(getDependencies, () => realtimeBus))
   router.get('/api/autoplay', createAutoplayGetHandler(getDependencies))
   router.put('/api/autoplay', createAutoplayUpdateHandler(getDependencies))
   router.delete('/api/autoplay/suggestion', createAutoplaySuggestionRejectHandler(getDependencies))
@@ -182,6 +187,7 @@ async function startTestApi(): Promise<TestContext> {
     dependencies,
     server,
     spotifySearch,
+    realtimeBus,
   }
 }
 
@@ -402,6 +408,27 @@ describe('public API', () => {
       }),
       expect.objectContaining({ id: 'queue-2', position: 1, track: secondTrack }),
     ])
+  })
+
+  it('opens realtime SSE with an initial state snapshot', async () => {
+    await addTrack(firstTrack)
+    const controller = new AbortController()
+    const response = await fetch(`${context?.baseUrl}/api/events`, {
+      signal: controller.signal,
+    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('SSE response did not expose a body')
+    const chunk = await reader.read()
+    controller.abort()
+    await reader.cancel().catch(() => undefined)
+    const text = new TextDecoder().decode(chunk.value)
+
+    expect(text).toContain('event: sync.snapshot')
+    expect(text).toContain('"type":"sync.snapshot"')
+    expect(text).toContain('"queue"')
   })
 
   it('returns terminal history and rejects malformed cursors', async () => {

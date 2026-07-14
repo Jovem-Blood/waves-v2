@@ -12,6 +12,7 @@ import {
 
 import type { QueueRepository } from '../repositories/queue.repository'
 import type { UnitOfWork } from '../repositories/unit-of-work'
+import type { RealtimePublisher } from '../utils/realtime-events'
 import {
   DuplicateTrackError,
   QueueItemNotFoundError,
@@ -21,6 +22,7 @@ import {
 } from './domain-errors'
 
 const RESTORE_WINDOW_MS = 10_000
+const noopPublish: RealtimePublisher = (event) => ({ id: '0', event })
 
 function isActiveTrackConstraintError(error: unknown): boolean {
   return (
@@ -37,6 +39,7 @@ export class QueueService {
     private readonly unitOfWork: UnitOfWork,
     private readonly now: () => Date = () => new Date(),
     private readonly generateId: () => string = randomUUID,
+    private readonly publishRealtime: RealtimePublisher = noopPublish,
   ) {}
 
   list(): QueueItem[] {
@@ -46,7 +49,7 @@ export class QueueService {
   add(input: AddQueueItemInput): QueueItem {
     const parsed = addQueueItemInputSchema.parse(input)
     try {
-      return this.unitOfWork.run(({ queue }) => {
+      const item = this.unitOfWork.run(({ queue }) => {
         if (queue.findActiveByTrack(parsed.track.provider, parsed.track.providerTrackId)) {
           throw new DuplicateTrackError()
         }
@@ -87,6 +90,12 @@ export class QueueService {
 
         return queue.insert(item)
       })
+      this.publishRealtime({
+        type: 'queue.updated',
+        queue: this.queueRepository.listActive(),
+        reason: 'added',
+      })
+      return item
     } catch (error) {
       if (error instanceof DuplicateTrackError || isActiveTrackConstraintError(error)) {
         throw new DuplicateTrackError()
@@ -96,7 +105,7 @@ export class QueueService {
   }
 
   remove(id: string): RemoveQueueItemResult {
-    return this.unitOfWork.run(({ queue }) => {
+    const result = this.unitOfWork.run(({ queue }) => {
       const item = queue.findById(id)
       if (!item) {
         throw new QueueItemNotFoundError(id)
@@ -130,11 +139,13 @@ export class QueueService {
         },
       }
     })
+    this.publishRealtime({ type: 'queue.updated', queue: result.queue, reason: 'removed' })
+    return result
   }
 
   restore(id: string): RestoreQueueItemResult {
     try {
-      return this.unitOfWork.run(({ queue }) => {
+      const result = this.unitOfWork.run(({ queue }) => {
         const item = queue.findById(id)
         if (!item) throw new QueueItemNotFoundError(id)
         if (item.status !== 'removed') throw new QueueItemNotRestorableError(id)
@@ -166,6 +177,8 @@ export class QueueService {
 
         return { queue: queue.listActive(), restoredItem }
       })
+      this.publishRealtime({ type: 'queue.updated', queue: result.queue, reason: 'restored' })
+      return result
     } catch (error) {
       if (error instanceof DuplicateTrackError || isActiveTrackConstraintError(error)) {
         throw new DuplicateTrackError()
@@ -177,7 +190,7 @@ export class QueueService {
   move(id: string, input: MoveQueueItemInput): QueueItem[] {
     const { newPosition } = moveQueueItemInputSchema.parse(input)
 
-    return this.unitOfWork.run(({ queue }) => {
+    const result = this.unitOfWork.run(({ queue }) => {
       const activeItems = queue.listActive()
       const currentIndex = activeItems.findIndex((item) => item.id === id)
 
@@ -213,5 +226,7 @@ export class QueueService {
 
       return queue.listActive()
     })
+    this.publishRealtime({ type: 'queue.updated', queue: result, reason: 'moved' })
+    return result
   }
 }
