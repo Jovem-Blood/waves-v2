@@ -1,7 +1,12 @@
 ﻿import { createServer, type Server } from 'node:http'
 import { fileURLToPath } from 'node:url'
 
-import { apiErrorSchema, type AddQueueItemInput, type TrackMetadata } from '@waves/shared'
+import {
+  apiErrorSchema,
+  autoplayStateSchema,
+  type AddQueueItemInput,
+  type TrackMetadata,
+} from '@waves/shared'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { createApp, createRouter, toNodeListener } from 'h3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -453,8 +458,9 @@ describe('public API', () => {
       body: JSON.stringify({ providerTrackId: 'track-1' }),
     })
     expect(rejected.response.status).toBe(200)
-    expect(rejected.body.suggestions).toHaveLength(1)
-    expect(rejected.body.suggestions[0].track.providerTrackId).toBe('track-2')
+    const rejectedState = autoplayStateSchema.parse(rejected.body)
+    expect(rejectedState.suggestions).toHaveLength(1)
+    expect(rejectedState.suggestions[0]?.track.providerTrackId).toBe('track-2')
     expect(repository.listRejected('2026-06-18T16:30:00.000Z')).toEqual(new Set(['track-1']))
   })
 
