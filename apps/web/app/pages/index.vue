@@ -52,7 +52,7 @@ useHead({ title: pageTitle })
 
 async function handleSkip() {
   const result = await player.skip()
-  if (result) queue.replace(result.queue)
+  if (result) queue.replace(result.queue, { notifyFailures: false })
 }
 
 const controlsDisabledReason = computed(() => {

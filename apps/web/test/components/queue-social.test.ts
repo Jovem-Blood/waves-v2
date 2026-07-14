@@ -10,6 +10,7 @@ import QueuePanel from '../../app/components/QueuePanel.vue'
 import SpotifySearch from '../../app/components/SpotifySearch.vue'
 import TrackCard from '../../app/components/TrackCard.vue'
 import { useQueue } from '../../app/composables/useQueue'
+import { useToasts } from '../../app/composables/useToasts'
 
 const track: TrackMetadata = {
   id: 'track-1',
@@ -44,7 +45,19 @@ const player: PlayerState = {
   updatedAt: '2026-06-18T12:00:00.000Z',
 }
 
+let queueHarnessState: ReturnType<typeof useQueue> | undefined
+const QueueHarness = defineComponent({
+  setup() {
+    queueHarnessState = useQueue('/api')
+    return queueHarnessState
+  },
+  template: '<div />',
+})
+
 afterEach(() => {
+  queueHarnessState = undefined
+  const toasts = useToasts()
+  for (const toast of toasts.visible.value) toasts.remove(toast.id)
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -208,14 +221,7 @@ describe('queue polling', () => {
     )
     vi.stubGlobal('$fetch', fetchMock)
 
-    const Harness = defineComponent({
-      setup() {
-        return useQueue('/api')
-      },
-      template: '<div />',
-    })
-
-    const wrapper = mount(Harness)
+    const wrapper = mount(QueueHarness)
     await nextTick()
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
@@ -256,32 +262,51 @@ describe('queue polling', () => {
       .mockResolvedValueOnce([queueItem, freshItem])
     vi.stubGlobal('$fetch', fetchMock)
 
-    let queue: ReturnType<typeof useQueue> | undefined
-    const Harness = defineComponent({
-      setup() {
-        queue = useQueue('/api')
-        return {}
-      },
-      template: '<div />',
-    })
-
-    const wrapper = mount(Harness)
+    const wrapper = mount(QueueHarness)
     await flushPromises()
-    expect(queue?.items.value[1]?.track.title).toBe('Cidade Lunar')
+    expect(queueHarnessState?.items.value[1]?.track.title).toBe('Cidade Lunar')
 
     vi.advanceTimersByTime(2500)
     await nextTick()
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
-    queue?.setInteractionLocked(true)
+    queueHarnessState?.setInteractionLocked(true)
     resolvePollingRequest?.([queueItem, staleItem])
     await flushPromises()
-    expect(queue?.items.value[1]?.track.title).toBe('Cidade Lunar')
+    expect(queueHarnessState?.items.value[1]?.track.title).toBe('Cidade Lunar')
 
-    queue?.setInteractionLocked(false)
+    queueHarnessState?.setInteractionLocked(false)
     await flushPromises()
     expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(queue?.items.value[1]?.track.title).toBe('Resposta atual')
+    expect(queueHarnessState?.items.value[1]?.track.title).toBe('Resposta atual')
+
+    wrapper.unmount()
+  })
+
+  it('notifies when a disappeared queue item failed playback', async () => {
+    vi.useFakeTimers()
+    const failedItem: QueueItem = {
+      ...queueItem,
+      status: 'failed',
+      updatedAt: '2026-06-18T12:01:00.000Z',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce([queueItem, queuedItem])
+      .mockResolvedValueOnce([queuedItem])
+      .mockResolvedValueOnce({ items: [failedItem], nextCursor: null })
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(QueueHarness)
+    await flushPromises()
+
+    await vi.advanceTimersByTimeAsync(2500)
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/history')
+    expect(useToasts().visible.value.at(0)?.message).toContain(
+      'Não foi possível tocar "Luz da Madrugada"',
+    )
 
     wrapper.unmount()
   })

@@ -350,6 +350,7 @@ a:focus-visible {
     grid-template-rows: auto minmax(0, 1fr);
     gap: 18px 24px;
     max-width: 1440px;
+    height: calc(100dvh - 84px);
     min-height: calc(100dvh - 84px);
     margin: 0 auto;
     padding: 24px;
@@ -357,6 +358,7 @@ a:focus-visible {
 
   .dashboard-queue {
     min-width: 0;
+    min-height: 0;
   }
 
   .app-footer {

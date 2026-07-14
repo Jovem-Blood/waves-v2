@@ -1,4 +1,5 @@
 import {
+  historyPageSchema,
   queueItemSchema,
   queueSchema,
   removeQueueItemResultSchema,
@@ -26,6 +27,8 @@ export function useQueue(apiBase: string) {
   let mutationInFlight = false
   let interactionLocked = false
   let refreshAfterInteraction = false
+  let queueLoadErrorNotified = false
+  const notifiedFailedItems = new Set<string>()
 
   function applyQueue(queue: Queue) {
     if (interactionLocked) {
@@ -36,6 +39,33 @@ export function useQueue(apiBase: string) {
     items.value = queueSchema.parse(queue)
     error.value = undefined
     return true
+  }
+
+  async function notifyDisappearedFailures(previousItems: Queue, nextItems: Queue) {
+    if (previousItems.length === 0) return
+
+    const nextIds = new Set(nextItems.map((item) => item.id))
+    const disappearedIds = previousItems
+      .filter((item) => !nextIds.has(item.id) && !notifiedFailedItems.has(item.id))
+      .map((item) => item.id)
+
+    if (disappearedIds.length === 0) return
+
+    try {
+      const history = historyPageSchema.parse(await $fetch(`${apiBase}/history`))
+      for (const item of history.items) {
+        if (item.status !== 'failed' || !disappearedIds.includes(item.id)) continue
+
+        notifiedFailedItems.add(item.id)
+        toasts.error(
+          `Não foi possível tocar "${item.track.title}". O bot marcou a faixa como falha após tentar resolver ou reproduzir o áudio. Ela foi movida para o histórico.`,
+        )
+      }
+    } catch {
+      toasts.error(
+        'Uma faixa saiu da fila, mas não foi possível confirmar o motivo no histórico. Verifique a conexão com a API.',
+      )
+    }
   }
 
   async function load(isPolling = false) {
@@ -49,9 +79,19 @@ export function useQueue(apiBase: string) {
     else loading.value = true
 
     try {
-      applyQueue(queueSchema.parse(await $fetch(`${apiBase}/queue`)))
+      const previousItems = items.value
+      const nextItems = queueSchema.parse(await $fetch(`${apiBase}/queue`))
+      const applied = applyQueue(nextItems)
+      if (applied) {
+        queueLoadErrorNotified = false
+        void notifyDisappearedFailures(previousItems, nextItems)
+      }
     } catch {
       error.value = 'Não foi possível atualizar a fila.'
+      if (!queueLoadErrorNotified) {
+        queueLoadErrorNotified = true
+        toasts.error('Não foi possível sincronizar a fila. Verifique a comunicação com a API.')
+      }
     } finally {
       requestInFlight = false
       loading.value = false
@@ -59,8 +99,14 @@ export function useQueue(apiBase: string) {
     }
   }
 
-  function replace(queue: Queue) {
-    return applyQueue(queue)
+  function replace(queue: Queue, options: { notifyFailures?: boolean } = {}) {
+    const previousItems = items.value
+    const nextItems = queueSchema.parse(queue)
+    const applied = applyQueue(nextItems)
+    if (applied && options.notifyFailures !== false) {
+      void notifyDisappearedFailures(previousItems, nextItems)
+    }
+    return applied
   }
 
   function refreshPendingQueue() {
@@ -116,7 +162,7 @@ export function useQueue(apiBase: string) {
       const result = removeQueueItemResultSchema.parse(
         await $fetch(`${apiBase}/queue/${encodeURIComponent(id)}`, { method: 'DELETE' }),
       )
-      replace(result.queue)
+      replace(result.queue, { notifyFailures: false })
       toasts.success('Faixa removida.', {
         durationMs: Math.max(0, new Date(result.removal.expiresAt).getTime() - Date.now()),
         action: { label: 'Desfazer', run: () => restore(result.removal.queueItemId) },

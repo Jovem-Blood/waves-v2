@@ -409,7 +409,10 @@ h1 {
 
 @media (min-width: 72rem) {
   .queue-panel {
-    min-height: 100%;
+    display: flex;
+    min-height: 0;
+    max-height: calc(100dvh - 132px);
+    flex-direction: column;
     padding: 20px 20px 16px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -417,10 +420,12 @@ h1 {
   }
 
   .queue-header {
+    flex: none;
     min-height: 64px;
   }
 
   .queue-summary {
+    flex: none;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     min-height: 58px;
@@ -455,6 +460,7 @@ h1 {
   }
 
   .queue-table-header {
+    flex: none;
     display: grid;
     min-height: 38px;
     grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px;
@@ -469,6 +475,24 @@ h1 {
 
   .queue-table-header span {
     padding: 0 10px;
+  }
+
+  .queue-table {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .queue-items {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--border-strong) var(--surface-strong);
+  }
+
+  .queue-footer {
+    flex: none;
   }
 }
 
