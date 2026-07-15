@@ -331,6 +331,7 @@ export class PlayerStateService {
         id: this.generateId(),
         track: suggestion.track,
         requestedByDisplayName: 'Autoplay',
+        origin: 'autoplay',
         status: 'playing',
         position: 0,
         createdAt: timestamp,

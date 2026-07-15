@@ -58,25 +58,25 @@ describe('autoplay schemas', () => {
     const state = autoplayStateSchema.parse({
       enabled: true,
       failureCode: null,
-      suggestions: [
-        {
-          track: {
-            id: 'spotify:first',
-            provider: 'spotify',
-            providerTrackId: 'first',
-            title: 'First',
-            artists: ['Artist'],
-            durationMs: 120000,
-          },
+      suggestions: Array.from({ length: 6 }, (_, index) => ({
+        track: {
+          id: `spotify:${index}`,
           provider: 'spotify',
-          generatedAt: '2026-06-18T12:00:00.000Z',
-          seedFingerprint: 'seed',
+          providerTrackId: String(index),
+          title: `Track ${index}`,
+          artists: ['Artist'],
+          durationMs: 120000,
         },
-      ],
+        provider: 'spotify',
+        generatedAt: '2026-06-18T12:00:00.000Z',
+        seedFingerprint: 'seed',
+        strategy: index === 5 ? 'explore' : 'similar',
+      })),
       updatedAt: '2026-06-18T12:00:00.000Z',
     })
 
-    expect(state.suggestions).toHaveLength(1)
+    expect(state.suggestions).toHaveLength(6)
+    expect(state.suggestions[5]?.strategy).toBe('explore')
     expect(rejectAutoplaySuggestionInputSchema.parse({ providerTrackId: 'first' })).toEqual({
       providerTrackId: 'first',
     })
@@ -161,7 +161,7 @@ describe('queue contracts', () => {
       updatedAt: '2026-06-18T12:00:00.000Z',
     } as const
 
-    expect(queueItemSchema.parse(item)).toEqual(item)
+    expect(queueItemSchema.parse(item)).toEqual({ ...item, origin: 'human' })
     expect(addQueueItemInputSchema.parse({ track: validTrack })).toEqual({ track: validTrack })
   })
 

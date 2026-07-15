@@ -7,8 +7,10 @@ import {
   RecommendationProviderUnavailableError,
   RecommendationUnavailableError,
 } from './recommendation.errors'
-import type { RecommendationProvider } from './recommendation.types'
+import type { RecommendationCandidate, RecommendationProvider } from './recommendation.types'
 import type { SpotifyCandidateResolver } from './spotify-candidate-resolver.service'
+
+const TARGET_RECOMMENDATIONS = 6
 
 export class DualProviderRecommendationService {
   constructor(
@@ -22,7 +24,22 @@ export class DualProviderRecommendationService {
     seeds: readonly TrackMetadata[],
     excludedTrackIds: ReadonlySet<string>,
   ): Promise<TrackMetadata[]> {
+    const candidates = await this.getCandidates(seeds)
+    const resolved: TrackMetadata[] = []
+    const excluded = new Set(excludedTrackIds)
+    for (const candidate of candidates) {
+      if (resolved.length >= TARGET_RECOMMENDATIONS) break
+      const track = await this.resolveCandidate(candidate, excluded)
+      if (!track) continue
+      resolved.push(track)
+      excluded.add(track.providerTrackId)
+    }
+    return resolved
+  }
+
+  async getCandidates(seeds: readonly TrackMetadata[]): Promise<RecommendationCandidate[]> {
     let unavailableProviders = 0
+    const aggregated: RecommendationCandidate[] = []
     for (const provider of this.providers) {
       const startedAt = this.now()
       try {
@@ -37,8 +54,12 @@ export class DualProviderRecommendationService {
           },
           'Recommendation provider completed',
         )
-        const resolved = await this.spotifyResolver.resolve(candidates, excludedTrackIds)
-        if (resolved) return [resolved]
+        candidates.forEach((candidate) => {
+          if (!aggregated.some((existing) => existing.identityKey === candidate.identityKey)) {
+            aggregated.push(candidate)
+          }
+        })
+        if (aggregated.length >= 30) return aggregated.slice(0, 30)
       } catch (error) {
         if (error instanceof RecommendationMetadataUnavailableError) throw error
         unavailableProviders += 1
@@ -61,6 +82,13 @@ export class DualProviderRecommendationService {
     if (unavailableProviders === this.providers.length) {
       throw new RecommendationUnavailableError()
     }
-    return []
+    return aggregated.slice(0, 30)
+  }
+
+  async resolveCandidate(
+    candidate: RecommendationCandidate,
+    excludedTrackIds: ReadonlySet<string>,
+  ): Promise<TrackMetadata | undefined> {
+    return this.spotifyResolver.resolve([candidate], excludedTrackIds)
   }
 }

@@ -34,6 +34,7 @@ describe('AutoplaySuggestionRepository', () => {
         provider: 'spotify',
         generatedAt,
         seedFingerprint: 'seed-one',
+        strategy: 'similar',
       },
       {
         track: {
@@ -47,6 +48,7 @@ describe('AutoplaySuggestionRepository', () => {
         provider: 'spotify',
         generatedAt,
         seedFingerprint: 'seed-one',
+        strategy: 'adjacent',
       },
     ])
 
@@ -63,10 +65,23 @@ describe('AutoplaySuggestionRepository', () => {
     expect(repository.list()).toEqual([])
   })
 
-  it('returns only unexpired rejected Spotify IDs', () => {
+  it('persists six suggestions with their strategies', () => {
     const repository = new AutoplaySuggestionRepository(connection.db)
-    repository.reject('expired', generatedAt, '2026-06-18T17:30:00.000Z')
-    repository.reject('active', generatedAt, '2026-06-18T19:00:00.000Z')
-    expect(repository.listRejected('2026-06-18T18:00:00.000Z')).toEqual(new Set(['active']))
+    const suggestions = Array.from({ length: 6 }, (_, index) => ({
+      track: {
+        id: `spotify:${index}`,
+        provider: 'spotify' as const,
+        providerTrackId: String(index),
+        title: `Track ${index}`,
+        artists: ['Artist'],
+        durationMs: 120_000,
+      },
+      provider: 'spotify' as const,
+      generatedAt,
+      seedFingerprint: 'seed-six',
+      strategy: index === 5 ? ('explore' as const) : ('similar' as const),
+    }))
+    expect(repository.replaceAll(suggestions)).toHaveLength(6)
+    expect(repository.list()[5]?.strategy).toBe('explore')
   })
 })

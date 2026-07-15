@@ -18,6 +18,9 @@ export const queueItems = sqliteTable(
     requestedByUserId: text('requested_by_user_id').references(() => users.id),
     requestedByDiscordUserId: text('requested_by_discord_user_id'),
     requestedByDisplayName: text('requested_by_display_name'),
+    origin: text('origin', { enum: ['human', 'autoplay'] })
+      .notNull()
+      .default('human'),
     status: text('status', {
       enum: ['queued', 'playing', 'played', 'skipped', 'failed', 'removed'],
     }).notNull(),
@@ -39,6 +42,7 @@ export const queueItems = sqliteTable(
       .where(sql`${table.status} = 'playing'`),
     check('queue_items_position_nonnegative', sql`${table.position} >= 0`),
     check('queue_items_duration_nonnegative', sql`${table.durationMs} >= 0`),
+    check('queue_items_origin_valid', sql`${table.origin} in ('human', 'autoplay')`),
     uniqueIndex('queue_items_active_track_unique')
       .on(table.provider, table.providerTrackId)
       .where(sql`${table.status} in ('queued', 'playing')`),
@@ -160,23 +164,44 @@ export const autoplaySuggestions = sqliteTable(
     isrc: text('isrc'),
     generatedAt: text('generated_at').notNull(),
     seedFingerprint: text('seed_fingerprint').notNull(),
+    strategy: text('strategy', {
+      enum: ['similar', 'adjacent', 'explore', 'fallback'],
+    }).notNull(),
+    sourceTag: text('source_tag'),
   },
   (table) => [
     uniqueIndex('autoplay_suggestions_position_unique').on(table.position),
     uniqueIndex('autoplay_suggestions_track_unique').on(table.provider, table.providerTrackId),
-    check('autoplay_suggestions_position_range', sql`${table.position} between 0 and 2`),
+    check('autoplay_suggestions_position_range', sql`${table.position} between 0 and 5`),
     check('autoplay_suggestions_duration_nonnegative', sql`${table.durationMs} >= 0`),
   ],
 )
 
-export const autoplayRejections = sqliteTable(
-  'autoplay_rejections',
+export const autoplayCandidates = sqliteTable(
+  'autoplay_candidates',
   {
-    spotifyTrackId: text('spotify_track_id').primaryKey(),
-    expiresAt: text('expires_at').notNull(),
-    createdAt: text('created_at').notNull(),
+    id: integer('id').primaryKey(),
+    position: integer('position').notNull(),
+    identityKey: text('identity_key').notNull(),
+    title: text('title').notNull(),
+    artistsJson: text('artists_json').notNull(),
+    strategy: text('strategy', {
+      enum: ['similar', 'adjacent', 'explore', 'fallback'],
+    }).notNull(),
+    score: integer('score').notNull(),
+    baseScore: integer('base_score').notNull(),
+    seedTrackKey: text('seed_track_key').notNull(),
+    sourceTag: text('source_tag'),
+    seedFingerprint: text('seed_fingerprint').notNull(),
+    generatedAt: text('generated_at').notNull(),
   },
-  (table) => [index('autoplay_rejections_expires_at_idx').on(table.expiresAt)],
+  (table) => [
+    uniqueIndex('autoplay_candidates_position_unique').on(table.position),
+    uniqueIndex('autoplay_candidates_identity_unique').on(table.identityKey),
+    check('autoplay_candidates_position_range', sql`${table.position} between 0 and 29`),
+    check('autoplay_candidates_score_range', sql`${table.score} between -1000 and 1000`),
+    check('autoplay_candidates_base_score_range', sql`${table.baseScore} between -1000 and 1000`),
+  ],
 )
 
 export const playerState = sqliteTable(

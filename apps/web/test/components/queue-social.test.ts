@@ -117,18 +117,21 @@ describe('Queue Social components', () => {
     expect(wrapper.emitted('autoplayChange')).toEqual([[false]])
   })
 
-  it('renders three autoplay ghosts after human tracks and rejects one target accessibly', async () => {
-    const suggestions = ['Fantasma', 'Neblina', 'Aurora'].map((title, index) => ({
-      track: {
-        ...track,
-        id: `spotify:ghost-${index + 1}`,
-        providerTrackId: `ghost-${index + 1}`,
-        title,
-      },
-      provider: 'spotify' as const,
-      generatedAt: '2026-06-18T12:00:00.000Z',
-      seedFingerprint: 'seed',
-    }))
+  it('renders six autoplay ghosts after human tracks and rejects one target accessibly', async () => {
+    const suggestions = ['Fantasma', 'Neblina', 'Aurora', 'Horizonte', 'Prisma', 'Eclipse'].map(
+      (title, index) => ({
+        track: {
+          ...track,
+          id: `spotify:ghost-${index + 1}`,
+          providerTrackId: `ghost-${index + 1}`,
+          title,
+        },
+        provider: 'spotify' as const,
+        generatedAt: '2026-06-18T12:00:00.000Z',
+        seedFingerprint: 'seed',
+        strategy: index === 5 ? ('explore' as const) : ('similar' as const),
+      }),
+    )
     const wrapper = mount(QueuePanel, {
       props: {
         items: [queuedItem],
@@ -144,10 +147,14 @@ describe('Queue Social components', () => {
       },
     })
 
-    expect(wrapper.findAll('.autoplay-suggestion')).toHaveLength(3)
+    expect(wrapper.findAll('.autoplay-suggestion')).toHaveLength(6)
+    const rejectButtons = wrapper.findAll('.reject-button')
+    expect(rejectButtons[0]?.attributes('disabled')).toBe('')
+    expect(rejectButtons[0]?.find('.spinner').exists()).toBe(true)
+    expect(rejectButtons[1]?.attributes('disabled')).toBeUndefined()
     const rows = wrapper.findAll('.queue-items > *')
     expect(rows.at(-1)?.classes()).toContain('autoplay-suggestion')
-    await wrapper.get('[aria-label="Rejeitar sugestão Neblina"]').trigger('click')
+    await rejectButtons[1]?.trigger('click')
     expect(wrapper.emitted('autoplayReject')).toEqual([['ghost-2']])
   })
 
@@ -355,7 +362,7 @@ describe('queue polling', () => {
     expect(useToasts().visible.value.at(0)?.message).toContain(
       'NÃ£o foi possÃ­vel tocar "Luz da Madrugada"',
     )
-    expect(queueHarnessState?.items.value).toEqual([queuedItem])
+    expect(queueHarnessState?.items.value).toEqual([{ ...queuedItem, origin: 'human' }])
 
     wrapper.unmount()
   })

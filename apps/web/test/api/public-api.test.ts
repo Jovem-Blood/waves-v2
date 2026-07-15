@@ -162,7 +162,10 @@ async function startTestApi(): Promise<TestContext> {
   router.get('/api/player', createPlayerGetHandler(getDependencies))
   router.post('/api/player/skip', createPlayerSkipHandler(getDependencies))
   router.get('/api/status', createOperationalStatusHandler(getDependencies))
-  router.get('/api/events', createRealtimeEventsHandler(getDependencies, () => realtimeBus))
+  router.get(
+    '/api/events',
+    createRealtimeEventsHandler(getDependencies, () => realtimeBus),
+  )
   router.get('/api/autoplay', createAutoplayGetHandler(getDependencies))
   router.put('/api/autoplay', createAutoplayUpdateHandler(getDependencies))
   router.delete('/api/autoplay/suggestion', createAutoplaySuggestionRejectHandler(getDependencies))
@@ -495,7 +498,7 @@ describe('public API', () => {
     expect((await request('/api/autoplay')).body).toMatchObject({ enabled: true })
   })
 
-  it('requires authentication to reject a persisted autoplay suggestion', async () => {
+  it('requires authentication to reject an autoplay suggestion', async () => {
     const repository = new AutoplaySuggestionRepository(context?.connection.db)
     repository.replaceAll([
       {
@@ -525,7 +528,7 @@ describe('public API', () => {
     const rejectedState = autoplayStateSchema.parse(rejected.body)
     expect(rejectedState.suggestions).toHaveLength(1)
     expect(rejectedState.suggestions[0]?.track.providerTrackId).toBe('track-2')
-    expect(repository.listRejected('2026-06-18T16:30:00.000Z')).toEqual(new Set(['track-1']))
+    expect(repository.findByProviderTrackId('track-1')).toBeUndefined()
   })
 
   it('rejects invalid and extra queue fields', async () => {

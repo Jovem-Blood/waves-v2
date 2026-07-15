@@ -34,7 +34,7 @@ describe('database migrations', () => {
 
     expect(tables).toEqual([
       'allowed_users',
-      'autoplay_rejections',
+      'autoplay_candidates',
       'autoplay_state',
       'autoplay_suggestions',
       'discord_login_tokens',
@@ -51,6 +51,12 @@ describe('database migrations', () => {
       .all() as Array<{ name: string }>
 
     expect(suggestionColumns.map((column) => column.name)).toContain('position')
+    expect(suggestionColumns.map((column) => column.name)).toContain('strategy')
+
+    const queueColumns = sqlite.prepare("pragma table_info('queue_items')").all() as Array<{
+      name: string
+    }>
+    expect(queueColumns.map((column) => column.name)).toContain('origin')
   })
 
   it('deduplicates active tracks and compacts positions before creating the unique index', () => {

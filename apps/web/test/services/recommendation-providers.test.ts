@@ -31,22 +31,56 @@ describe('recommendation providers', () => {
       .fn()
       .mockResolvedValueOnce([{ name: 'Result', match: 0.8, artist: { name: 'Artist' } }])
       .mockResolvedValueOnce([{ name: 'RESULT', match: 0.9, artist: { name: 'ARTIST' } }])
-    const provider = new LastFmRecommendationProvider({ getSimilarTracks })
+    const provider = new LastFmRecommendationProvider({
+      getSimilarTracks,
+      getArtistInfo: vi.fn().mockResolvedValue({ name: 'Seed Artist' }),
+      getArtistTopTracks: vi.fn(),
+      getSimilarTags: vi.fn(),
+      getTagTopTracks: vi.fn(),
+    })
 
     const candidates = await provider.getCandidates([seed, { ...seed, id: 'two' }])
 
     expect(candidates).toHaveLength(1)
-    expect(candidates[0]).toMatchObject({ title: 'Result', score: 0.8 })
+    expect(candidates[0]).toMatchObject({ title: 'Result', strategy: 'similar' })
+    expect(candidates[0]?.score).toBeCloseTo(0.84)
     expect(getSimilarTracks).toHaveBeenCalledTimes(2)
   })
 
   it('reports Last.fm unavailable only when every seed fails', async () => {
     const provider = new LastFmRecommendationProvider({
       getSimilarTracks: vi.fn().mockRejectedValue(new LastFmUnavailableError(503)),
+      getArtistInfo: vi.fn().mockRejectedValue(new LastFmUnavailableError(503)),
+      getArtistTopTracks: vi.fn(),
+      getSimilarTags: vi.fn(),
+      getTagTopTracks: vi.fn(),
     })
     await expect(provider.getCandidates([seed])).rejects.toBeInstanceOf(
       RecommendationProviderUnavailableError,
     )
+  })
+
+  it('builds adjacent and exploratory candidates when one discovery route is available', async () => {
+    const provider = new LastFmRecommendationProvider({
+      getSimilarTracks: vi.fn().mockResolvedValue([]),
+      getArtistInfo: vi.fn().mockResolvedValue({
+        name: 'Seed Artist',
+        similar: { artist: [{ name: 'Related Artist' }] },
+        tags: { tag: [{ name: 'rock' }] },
+      }),
+      getArtistTopTracks: vi
+        .fn()
+        .mockResolvedValue([{ name: 'Adjacent', artist: { name: 'Related Artist' } }]),
+      getSimilarTags: vi.fn().mockResolvedValue([{ name: 'alternative rock' }]),
+      getTagTopTracks: vi
+        .fn()
+        .mockResolvedValue([{ name: 'Explore', artist: { name: 'New Artist' } }]),
+    })
+
+    const candidates = await provider.getCandidates([seed])
+
+    expect(candidates.map((entry) => entry.strategy)).toEqual(['adjacent', 'explore'])
+    expect(candidates[1]).toMatchObject({ sourceTag: 'alternative rock' })
   })
 
   it('strictly matches a YouTube seed before requesting automix', async () => {
@@ -64,9 +98,12 @@ describe('recommendation providers', () => {
     await expect(provider.getCandidates([seed])).resolves.toEqual([
       {
         provider: 'youtube_music',
+        identityKey: 'next::next artist',
         title: 'Next',
         artists: ['Next Artist'],
         score: 1,
+        strategy: 'fallback',
+        seedTrackKey: 'spotify:seed',
       },
     ])
     expect(getUpNextSongs).toHaveBeenCalledWith('seed-video', 10)

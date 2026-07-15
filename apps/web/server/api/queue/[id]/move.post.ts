@@ -16,7 +16,10 @@ export function createQueueMoveHandler(
   return definePublicApiHandler(async (event) => {
     const id = routeIdSchema.parse(getRouterParam(event, 'id'))
     const input = moveQueueItemInputSchema.parse(await readBody(event))
-    return queueSchema.parse(getDependencies().queueService.move(id, input))
+    const dependencies = getDependencies()
+    const queue = dependencies.queueService.move(id, input)
+    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    return queueSchema.parse(queue)
   })
 }
 

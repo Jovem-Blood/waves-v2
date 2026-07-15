@@ -1,10 +1,18 @@
-import { autoplaySuggestionSchema, type AutoplaySuggestion, type TrackMetadata } from '@waves/shared'
-import { asc, eq, gt, lte } from 'drizzle-orm'
+import {
+  autoplaySuggestionSchema,
+  type AutoplaySuggestion,
+  type TrackMetadata,
+} from '@waves/shared'
+import { asc, eq } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
-import { autoplayRejections, autoplaySuggestions } from '../db/schema'
+import { autoplaySuggestions } from '../db/schema'
 
-const MAX_AUTOPLAY_SUGGESTIONS = 3
+const MAX_AUTOPLAY_SUGGESTIONS = 6
+
+export interface StoredAutoplaySuggestion extends AutoplaySuggestion {
+  sourceTag?: string
+}
 
 type SuggestionRow = typeof autoplaySuggestions.$inferSelect
 
@@ -19,7 +27,7 @@ function parseArtists(value: string): string[] {
 export class AutoplaySuggestionRepository {
   constructor(private readonly db: WavesDatabaseExecutor) {}
 
-  list(): AutoplaySuggestion[] {
+  list(): StoredAutoplaySuggestion[] {
     return this.db
       .select()
       .from(autoplaySuggestions)
@@ -28,10 +36,11 @@ export class AutoplaySuggestionRepository {
       .map((row) => this.mapRow(row))
   }
 
-  replaceAll(suggestions: AutoplaySuggestion[]): AutoplaySuggestion[] {
-    const parsed = suggestions
-      .slice(0, MAX_AUTOPLAY_SUGGESTIONS)
-      .map((suggestion) => autoplaySuggestionSchema.parse(suggestion))
+  replaceAll(suggestions: StoredAutoplaySuggestion[]): StoredAutoplaySuggestion[] {
+    const parsed = suggestions.slice(0, MAX_AUTOPLAY_SUGGESTIONS).map((suggestion) => ({
+      ...autoplaySuggestionSchema.parse(suggestion),
+      ...(suggestion.sourceTag === undefined ? {} : { sourceTag: suggestion.sourceTag }),
+    }))
 
     this.clear()
     parsed.forEach((suggestion, position) => {
@@ -53,10 +62,11 @@ export class AutoplaySuggestionRepository {
           isrc: track.isrc ?? null,
           generatedAt: suggestion.generatedAt,
           seedFingerprint: suggestion.seedFingerprint,
+          strategy: suggestion.strategy,
+          sourceTag: suggestion.sourceTag ?? null,
         })
         .run()
     })
-
     return this.list()
   }
 
@@ -73,12 +83,15 @@ export class AutoplaySuggestionRepository {
     )
   }
 
-  compactPositions(): AutoplaySuggestion[] {
-    const current = this.list()
-    return this.replaceAll(current)
+  findByProviderTrackId(providerTrackId: string): StoredAutoplaySuggestion | undefined {
+    return this.list().find((suggestion) => suggestion.track.providerTrackId === providerTrackId)
   }
 
-  private mapRow(row: SuggestionRow): AutoplaySuggestion {
+  compactPositions(): StoredAutoplaySuggestion[] {
+    return this.replaceAll(this.list())
+  }
+
+  private mapRow(row: SuggestionRow): StoredAutoplaySuggestion {
     const track: TrackMetadata = {
       id: row.trackId,
       provider: row.provider,
@@ -91,31 +104,13 @@ export class AutoplaySuggestionRepository {
       ...(row.externalUrl === null ? {} : { externalUrl: row.externalUrl }),
       ...(row.isrc === null ? {} : { isrc: row.isrc }),
     }
-    return autoplaySuggestionSchema.parse({
+    const suggestion = autoplaySuggestionSchema.parse({
       track,
       generatedAt: row.generatedAt,
       provider: row.provider,
       seedFingerprint: row.seedFingerprint,
+      strategy: row.strategy,
     })
-  }
-
-  reject(spotifyTrackId: string, createdAt: string, expiresAt: string): void {
-    this.db
-      .insert(autoplayRejections)
-      .values({ spotifyTrackId, createdAt, expiresAt })
-      .onConflictDoUpdate({ target: autoplayRejections.spotifyTrackId, set: { createdAt, expiresAt } })
-      .run()
-  }
-
-  listRejected(now: string): Set<string> {
-    this.db.delete(autoplayRejections).where(lte(autoplayRejections.expiresAt, now)).run()
-    return new Set(
-      this.db
-        .select({ id: autoplayRejections.spotifyTrackId })
-        .from(autoplayRejections)
-        .where(gt(autoplayRejections.expiresAt, now))
-        .all()
-        .map(({ id }) => id),
-    )
+    return { ...suggestion, ...(row.sourceTag === null ? {} : { sourceTag: row.sourceTag }) }
   }
 }

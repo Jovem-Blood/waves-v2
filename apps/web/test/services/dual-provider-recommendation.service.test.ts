@@ -29,35 +29,73 @@ function provider(name: RecommendationProvider['name'], result: unknown): Recomm
   }
 }
 
+function candidate(name: string, providerName: RecommendationProvider['name'] = 'lastfm') {
+  return {
+    provider: providerName,
+    identityKey: `${name.toLowerCase()}::a`,
+    title: name,
+    artists: ['A'],
+    score: 1,
+    strategy: providerName === 'youtube_music' ? ('fallback' as const) : ('similar' as const),
+    seedTrackKey: 'spotify:seed',
+  }
+}
+
 describe('DualProviderRecommendationService', () => {
-  it('uses Last.fm without calling YouTube when Spotify resolves it', async () => {
-    const lastFm = provider('lastfm', [
-      { provider: 'lastfm', title: 'Result', artists: ['A'], score: 1 },
-    ])
+  it('uses a partial Last.fm pool and asks YouTube for fallback candidates', async () => {
+    const lastFm = provider('lastfm', [candidate('Result')])
     const youtube = provider('youtube_music', [])
-    const resolver = { resolve: vi.fn().mockResolvedValue(resolved) }
-    const service = new DualProviderRecommendationService([lastFm, youtube], resolver)
-
-    await expect(service.getRecommendations([seed], new Set())).resolves.toEqual([resolved])
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(youtube.getCandidates).not.toHaveBeenCalled()
-  })
-
-  it('falls back to YouTube when Last.fm has no usable Spotify match', async () => {
-    const lastFm = provider('lastfm', [
-      { provider: 'lastfm', title: 'Bad', artists: ['A'], score: 1 },
-    ])
-    const youtube = provider('youtube_music', [
-      { provider: 'youtube_music', title: 'Result', artists: ['A'], score: 1 },
-    ])
     const resolver = {
-      resolve: vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(resolved),
+      resolve: vi.fn().mockResolvedValueOnce(resolved).mockResolvedValueOnce(undefined),
     }
     const service = new DualProviderRecommendationService([lastFm, youtube], resolver)
 
     await expect(service.getRecommendations([seed], new Set())).resolves.toEqual([resolved])
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(youtube.getCandidates).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to YouTube when Last.fm has no usable Spotify match', async () => {
+    const lastFm = provider('lastfm', [candidate('Bad')])
+    const youtube = provider('youtube_music', [candidate('Result', 'youtube_music')])
+    const resolver = {
+      resolve: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce(resolved)
+        .mockResolvedValueOnce(undefined),
+    }
+    const service = new DualProviderRecommendationService([lastFm, youtube], resolver)
+
+    await expect(service.getRecommendations([seed], new Set())).resolves.toEqual([resolved])
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(youtube.getCandidates).toHaveBeenCalledOnce()
+  })
+
+  it('returns resolved Spotify recommendations from one provider', async () => {
+    const first = resolved
+    const second = { ...seed, id: 'spotify:second', providerTrackId: 'second', title: 'Second' }
+    const third = { ...seed, id: 'spotify:third', providerTrackId: 'third', title: 'Third' }
+    const lastFm = provider('lastfm', [
+      candidate('Result'),
+      candidate('Second'),
+      candidate('Third'),
+    ])
+    const resolver = {
+      resolve: vi
+        .fn()
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second)
+        .mockResolvedValueOnce(third),
+    }
+    const service = new DualProviderRecommendationService([lastFm], resolver)
+
+    await expect(service.getRecommendations([seed], new Set())).resolves.toEqual([
+      first,
+      second,
+      third,
+    ])
+    expect(resolver.resolve).toHaveBeenCalledTimes(3)
   })
 
   it('distinguishes total provider failure from valid exhaustion', async () => {
@@ -81,13 +119,13 @@ describe('DualProviderRecommendationService', () => {
   it('does not try the fallback when Spotify metadata is unavailable', async () => {
     const youtube = provider('youtube_music', [])
     const service = new DualProviderRecommendationService(
-      [provider('lastfm', [{ provider: 'lastfm', title: 'X', artists: ['A'], score: 1 }]), youtube],
+      [provider('lastfm', [candidate('X')]), youtube],
       { resolve: vi.fn().mockRejectedValue(new RecommendationMetadataUnavailableError()) },
     )
     await expect(service.getRecommendations([seed], new Set())).rejects.toBeInstanceOf(
       RecommendationMetadataUnavailableError,
     )
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(youtube.getCandidates).not.toHaveBeenCalled()
+    expect(youtube.getCandidates).toHaveBeenCalledOnce()
   })
 })

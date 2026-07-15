@@ -31,6 +31,7 @@ const item: QueueItem = {
     artists: ['Artist One'],
     durationMs: 120_000,
   },
+  origin: 'human',
   status: 'playing',
   position: 0,
   createdAt: '2026-06-20T12:00:00.000Z',

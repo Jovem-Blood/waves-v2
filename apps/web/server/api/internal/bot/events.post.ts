@@ -6,6 +6,7 @@ import { defineInternalApiHandler } from '../../../utils/internal-auth'
 import { type WavesLogger, useLogger } from '../../../utils/logger'
 import {
   type PublicOperationalStatusService,
+  type PublicAutoplayOrchestrator,
   type PublicPlayerStateService,
   usePublicApiDependencies,
 } from '../../../utils/public-api-dependencies'
@@ -21,6 +22,8 @@ export function createInternalEventsHandler(
     usePublicApiDependencies().playerStateService,
   getOperationalStatusService: () => PublicOperationalStatusService = () =>
     usePublicApiDependencies().operationalStatusService,
+  getAutoplayOrchestrator: () => PublicAutoplayOrchestrator | undefined = () =>
+    usePublicApiDependencies().autoplayOrchestrator,
 ) {
   return defineInternalApiHandler(async (event) => {
     const startedAt = Date.now()
@@ -45,7 +48,9 @@ export function createInternalEventsHandler(
       )
       getOperationalStatusService().setVoiceStatus('connected')
     } else if (botEvent.type === 'voice.disconnected') {
-      getPlayerStateService().voiceDisconnected(botEvent.guildId!)
+      const orchestrator = getAutoplayOrchestrator()
+      if (orchestrator) orchestrator.voiceDisconnected(botEvent.guildId!)
+      else getPlayerStateService().voiceDisconnected(botEvent.guildId!)
       getOperationalStatusService().setVoiceStatus('disconnected')
     } else if (botEvent.type === 'voice.reconnecting') {
       getOperationalStatusService().setVoiceStatus('reconnecting')

@@ -23,6 +23,7 @@ const track = {
 const item = {
   id: 'queue-1',
   track,
+  origin: 'human' as const,
   status: 'queued' as const,
   position: 0,
   createdAt: '2026-06-18T18:00:00.000Z',

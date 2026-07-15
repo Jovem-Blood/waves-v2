@@ -20,9 +20,13 @@ export function createInternalSkipHandler(
 ) {
   return defineInternalApiHandler(
     () =>
-      loggedOperation(useLogger(), { operation: 'route.internal.skip' }, () =>
-        skipResultSchema.parse(getDependencies().playerStateService.skip()),
-      ),
+      loggedOperation(useLogger(), { operation: 'route.internal.skip' }, async () => {
+        const dependencies = getDependencies()
+        const result = dependencies.autoplayOrchestrator
+          ? await dependencies.autoplayOrchestrator.skip()
+          : dependencies.playerStateService.skip()
+        return skipResultSchema.parse(result)
+      }),
     getExpectedToken,
   )
 }

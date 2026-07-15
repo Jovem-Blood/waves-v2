@@ -5,6 +5,7 @@ import { YouTubeMusicUnavailableError } from '../clients/youtube-music.errors'
 import { analyzeYouTubeMusicCandidates } from './audio-source-matching'
 import { RecommendationProviderUnavailableError } from './recommendation.errors'
 import type { RecommendationCandidate, RecommendationProvider } from './recommendation.types'
+import { normalizeMusicText } from './audio-source-matching'
 
 export class YouTubeMusicRecommendationProvider implements RecommendationProvider {
   readonly name = 'youtube_music' as const
@@ -24,9 +25,12 @@ export class YouTubeMusicRecommendationProvider implements RecommendationProvide
       const automix = await this.client.getUpNextSongs(matched.videoId, 10)
       return automix.map((track, index) => ({
         provider: this.name,
+        identityKey: `${normalizeMusicText(track.title)}::${normalizeMusicText(track.artists[0] ?? '')}`,
         title: track.title,
         artists: track.artists,
         score: 1 - index / Math.max(automix.length, 1),
+        strategy: 'fallback' as const,
+        seedTrackKey: `${seed.provider}:${seed.providerTrackId}`,
       }))
     } catch (error) {
       throw new RecommendationProviderUnavailableError(this.name, {

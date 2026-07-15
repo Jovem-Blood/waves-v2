@@ -16,6 +16,7 @@ function item(index: number): QueueItem {
   return {
     id: `item-${index}`,
     track,
+    origin: 'human',
     status: 'played',
     position: index,
     createdAt: '2026-06-18T12:00:00.000Z',

@@ -73,6 +73,7 @@ function mapRow(row: QueueItemRow, user?: UserRow | null): QueueItem {
     ...(row.requestedByDisplayName === null
       ? {}
       : { requestedByDisplayName: row.requestedByDisplayName }),
+    origin: row.origin,
     status: row.status,
     position: row.position,
     createdAt: row.createdAt,
@@ -108,6 +109,7 @@ function toInsert(item: QueueItem): typeof queueItems.$inferInsert {
     ...(parsed.requestedByDisplayName === undefined
       ? {}
       : { requestedByDisplayName: parsed.requestedByDisplayName }),
+    origin: parsed.origin,
     status: parsed.status,
     position: parsed.position,
     createdAt: parsed.createdAt,

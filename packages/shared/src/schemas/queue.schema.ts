@@ -15,6 +15,8 @@ export const queueItemStatusSchema = z.enum([
   'removed',
 ])
 
+export const queueItemOriginSchema = z.enum(['human', 'autoplay'])
+
 export const queueItemSchema = z
   .object({
     id: requiredTextSchema,
@@ -23,6 +25,7 @@ export const queueItemSchema = z
     requestedByUser: publicUserSchema.optional(),
     requestedByDiscordUserId: optionalTextSchema,
     requestedByDisplayName: optionalTextSchema,
+    origin: queueItemOriginSchema.default('human'),
     status: queueItemStatusSchema,
     position: z.number().int().nonnegative(),
     createdAt: z.iso.datetime({ offset: true }),

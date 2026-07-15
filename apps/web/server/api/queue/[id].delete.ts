@@ -13,9 +13,12 @@ const routeIdSchema = z.string().trim().min(1)
 export function createQueueRemoveHandler(
   getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
 ) {
-  return definePublicApiHandler((event) => {
+  return definePublicApiHandler(async (event) => {
     const id = routeIdSchema.parse(getRouterParam(event, 'id'))
-    return removeQueueItemResultSchema.parse(getDependencies().queueService.remove(id))
+    const dependencies = getDependencies()
+    const result = dependencies.queueService.remove(id)
+    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    return removeQueueItemResultSchema.parse(result)
   })
 }
 

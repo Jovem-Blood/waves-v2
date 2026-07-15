@@ -48,30 +48,92 @@ function duration(durationMs: number) {
   opacity: 0.64;
 }
 
-.suggestion-icon { color: var(--accent-secondary); }
-.suggestion-track { min-width: 0; }
+.suggestion-icon {
+  color: var(--accent-secondary);
+}
+.suggestion-track {
+  min-width: 0;
+}
 .suggestion-track strong,
-.suggestion-track span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.suggestion-track strong { font-size: 12px; }
-.suggestion-track span { color: var(--text-muted); font-size: 10px; }
+.suggestion-track span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion-track strong {
+  font-size: 12px;
+}
+.suggestion-track span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
 .suggestion-track small,
-.suggestion-state { color: var(--accent-secondary); font-family: 'Geist Mono Variable', monospace; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+.suggestion-state {
+  color: var(--accent-secondary);
+  font-family: 'Geist Mono Variable', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 .suggestion-requester,
 .suggestion-duration,
-.suggestion-state { display: none; }
-.reject-button { display: inline-grid; width: 44px; height: 44px; place-items: center; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text-muted); background: transparent; cursor: pointer; }
-.reject-button:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
-.reject-button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; opacity: 1; }
-.reject-button:active:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); }
-.reject-button:disabled { cursor: not-allowed; opacity: 0.5; }
+.suggestion-state {
+  display: none;
+}
+.reject-button {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.reject-button:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.reject-button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  opacity: 1;
+}
+.reject-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.reject-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 
 @media (min-width: 72rem) {
-  .autoplay-suggestion { grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px; gap: 0; padding: 0; }
-  .autoplay-suggestion > * { padding: 0 10px; }
+  .autoplay-suggestion {
+    grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px;
+    gap: 0;
+    padding: 0;
+  }
+  .autoplay-suggestion > * {
+    padding: 0 10px;
+  }
   .suggestion-requester,
   .suggestion-duration,
-  .suggestion-state { display: block; color: var(--text-muted); font-size: 10px; }
-  .suggestion-state { color: var(--accent-secondary); }
-  .reject-button { justify-self: center; padding: 0; opacity: 0.65; }
+  .suggestion-state {
+    display: block;
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+  .suggestion-state {
+    color: var(--accent-secondary);
+  }
+  .reject-button {
+    width: 48px;
+    height: 48px;
+    justify-self: center;
+    padding: 0;
+    opacity: 0.65;
+  }
 }
 </style>

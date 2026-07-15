@@ -20,6 +20,7 @@ import { LastFmClient } from '../clients/lastfm.client'
 import { YouTubeMusicClient } from '../clients/youtube-music.client'
 import { AutoplayRepository } from '../repositories/autoplay.repository'
 import { AutoplaySuggestionRepository } from '../repositories/autoplay-suggestion.repository'
+import { AutoplayCandidateRepository } from '../repositories/autoplay-candidate.repository'
 import { useDatabase } from '../db/client'
 import { PlayerStateRepository } from '../repositories/player-state.repository'
 import { OperationalStatusRepository } from '../repositories/operational-status.repository'
@@ -97,6 +98,9 @@ export interface PublicAutoplayService {
 export interface PublicAutoplayOrchestrator {
   completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult>
   queueChanged(): Promise<void>
+  skip(): Promise<SkipResult>
+  rejectSuggestion(providerTrackId: string): Promise<AutoplayState>
+  voiceDisconnected(guildId: string): PlayerState
 }
 
 export interface PublicApiDependencies {
@@ -126,6 +130,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   const operationalStatusRepository = new OperationalStatusRepository(db)
   const autoplayRepository = new AutoplayRepository(db)
   const autoplaySuggestionRepository = new AutoplaySuggestionRepository(db)
+  const autoplayCandidateRepository = new AutoplayCandidateRepository(db)
   const unitOfWork = new DatabaseUnitOfWork(db)
   const publishRealtime = getRealtimeEventBus().publish
   let spotifyService: SpotifyService | undefined
@@ -162,6 +167,11 @@ export function usePublicApiDependencies(): PublicApiDependencies {
     [
       new LastFmRecommendationProvider({
         getSimilarTracks: async (seed, limit) => getLastFmClient().getSimilarTracks(seed, limit),
+        getArtistInfo: async (artist) => getLastFmClient().getArtistInfo(artist),
+        getArtistTopTracks: async (artist, limit) =>
+          getLastFmClient().getArtistTopTracks(artist, limit),
+        getSimilarTags: async (tag) => getLastFmClient().getSimilarTags(tag),
+        getTagTopTracks: async (tag, limit) => getLastFmClient().getTagTopTracks(tag, limit),
       }),
       new YouTubeMusicRecommendationProvider(new YouTubeMusicClient()),
     ],
@@ -180,6 +190,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
       runtimeQueueService,
       queueRepository,
       autoplaySuggestionRepository,
+      autoplayCandidateRepository,
       runtimePlayerStateService,
       recommendationService,
     ),

@@ -150,6 +150,7 @@ async function startTestApi(): Promise<TestContext> {
       () => logger,
       () => dependencies.playerStateService,
       () => dependencies.operationalStatusService,
+      () => dependencies.autoplayOrchestrator,
     ),
   )
   router.post(

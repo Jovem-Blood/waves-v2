@@ -2,6 +2,7 @@ import type { z } from 'zod'
 
 import type {
   autoplayFailureCodeSchema,
+  autoplaySuggestionStrategySchema,
   autoplaySuggestionSchema,
   autoplayStateSchema,
   rejectAutoplaySuggestionInputSchema,
@@ -9,6 +10,7 @@ import type {
 } from '../schemas/autoplay.schema.js'
 
 export type AutoplayFailureCode = z.infer<typeof autoplayFailureCodeSchema>
+export type AutoplaySuggestionStrategy = z.infer<typeof autoplaySuggestionStrategySchema>
 export type AutoplayState = z.infer<typeof autoplayStateSchema>
 export type UpdateAutoplayInput = z.infer<typeof updateAutoplayInputSchema>
 export type RejectAutoplaySuggestionInput = z.infer<typeof rejectAutoplaySuggestionInputSchema>

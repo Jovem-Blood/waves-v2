@@ -15,9 +15,13 @@ const skipResultSchema = z.strictObject({
 export function createPlayerSkipHandler(
   getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
 ) {
-  return definePublicApiHandler(() =>
-    skipResultSchema.parse(getDependencies().playerStateService.skip()),
-  )
+  return definePublicApiHandler(async () => {
+    const dependencies = getDependencies()
+    const result = dependencies.autoplayOrchestrator
+      ? await dependencies.autoplayOrchestrator.skip()
+      : dependencies.playerStateService.skip()
+    return skipResultSchema.parse(result)
+  })
 }
 
 export default createPlayerSkipHandler()

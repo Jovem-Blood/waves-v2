@@ -4,6 +4,7 @@ import { QueueRepository } from './queue.repository'
 import { OperationalStatusRepository } from './operational-status.repository'
 import { AutoplayRepository } from './autoplay.repository'
 import { AutoplaySuggestionRepository } from './autoplay-suggestion.repository'
+import { AutoplayCandidateRepository } from './autoplay-candidate.repository'
 
 export interface RepositoryContext {
   playerState: PlayerStateRepository
@@ -11,6 +12,7 @@ export interface RepositoryContext {
   operationalStatus: OperationalStatusRepository
   autoplay: AutoplayRepository
   autoplaySuggestion: AutoplaySuggestionRepository
+  autoplayCandidate: AutoplayCandidateRepository
 }
 
 export interface UnitOfWork {
@@ -31,6 +33,7 @@ export class DatabaseUnitOfWork implements UnitOfWork {
         operationalStatus: new OperationalStatusRepository(transaction, this.now),
         autoplay: new AutoplayRepository(transaction, this.now),
         autoplaySuggestion: new AutoplaySuggestionRepository(transaction),
+        autoplayCandidate: new AutoplayCandidateRepository(transaction),
       }),
     )
   }

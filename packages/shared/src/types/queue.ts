@@ -11,11 +11,13 @@ import type {
   removeQueueItemResultSchema,
   restoreQueueItemResultSchema,
   queueItemSchema,
+  queueItemOriginSchema,
   queueItemStatusSchema,
   queueSchema,
 } from '../schemas/queue.schema.js'
 
 export type QueueItemStatus = z.infer<typeof queueItemStatusSchema>
+export type QueueItemOrigin = z.infer<typeof queueItemOriginSchema>
 export type QueueItem = z.infer<typeof queueItemSchema>
 export type Queue = z.infer<typeof queueSchema>
 export type HistoryCursor = z.infer<typeof historyCursorSchema>

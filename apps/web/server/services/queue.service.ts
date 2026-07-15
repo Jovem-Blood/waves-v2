@@ -82,6 +82,7 @@ export class QueueService {
           ...(parsed.requestedByDisplayName === undefined
             ? {}
             : { requestedByDisplayName: parsed.requestedByDisplayName }),
+          origin: 'human',
           status: 'queued',
           position: targetPosition,
           createdAt: timestamp,

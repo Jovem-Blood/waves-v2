@@ -32,6 +32,7 @@ function queueItem(id: string, position: number, status: QueueItemStatus = 'queu
       externalUrl: 'https://example.com/track',
       isrc: 'GBARL9300135',
     },
+    origin: 'human',
     requestedByDiscordUserId: 'discord-1',
     requestedByDisplayName: 'Luis',
     status,

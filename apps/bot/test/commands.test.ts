@@ -21,6 +21,7 @@ const track = {
 const item: QueueItem = {
   id: 'queue-1',
   track,
+  origin: 'human',
   requestedByDisplayName: 'Luis',
   status: 'queued',
   position: 0,

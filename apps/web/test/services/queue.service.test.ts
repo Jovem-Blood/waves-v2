@@ -88,6 +88,7 @@ describe('QueueService', () => {
     expect(service.add(input)).toEqual({
       id: 'queue-1',
       track: input.track,
+      origin: 'human',
       requestedByDisplayName: 'Luis',
       status: 'queued',
       position: 0,

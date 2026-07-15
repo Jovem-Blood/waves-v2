@@ -65,4 +65,50 @@ describe('LastFmClient', () => {
     )
     await expect(client.getSimilarTracks(seed)).rejects.toBeInstanceOf(LastFmInvalidResponseError)
   })
+
+  it('validates discovery routes and caches repeated session requests', async () => {
+    const request = vi.fn<LastFmFetch>().mockImplementation((input) => {
+      const method = (input as URL).searchParams.get('method')
+      if (method === 'artist.getInfo') {
+        return Promise.resolve(
+          response({
+            artist: {
+              name: 'Seed Artist',
+              similar: { artist: [{ name: 'Related Artist' }] },
+              tags: { tag: [{ name: 'rock' }] },
+            },
+          }),
+        )
+      }
+      if (method === 'artist.getTopTracks') {
+        return Promise.resolve(
+          response({ toptracks: { track: [{ name: 'Related Track', playcount: '10' }] } }),
+        )
+      }
+      if (method === 'tag.getSimilar') {
+        return Promise.resolve(response({ similartags: { tag: [{ name: 'alternative rock' }] } }))
+      }
+      return Promise.resolve(
+        response({
+          tracks: {
+            track: [{ name: 'Tag Track', artist: { name: 'Tag Artist' }, playcount: '5' }],
+          },
+        }),
+      )
+    })
+    const client = new LastFmClient({ apiKey: 'api-key' }, request)
+
+    await expect(client.getArtistInfo('Seed Artist')).resolves.toMatchObject({
+      similar: { artist: [{ name: 'Related Artist' }] },
+    })
+    await client.getArtistInfo('Seed Artist')
+    await expect(client.getArtistTopTracks('Related Artist')).resolves.toMatchObject([
+      { name: 'Related Track', artist: { name: 'Related Artist' } },
+    ])
+    await expect(client.getSimilarTags('rock')).resolves.toEqual([{ name: 'alternative rock' }])
+    await expect(client.getTagTopTracks('alternative rock')).resolves.toMatchObject([
+      { name: 'Tag Track', artist: { name: 'Tag Artist' } },
+    ])
+    expect(request).toHaveBeenCalledTimes(4)
+  })
 })
