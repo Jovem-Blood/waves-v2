@@ -126,6 +126,9 @@ describe('AuthService', () => {
     expect(link.url).toBe('https://waves.example.com/auth/discord-link?token=discord-link-token')
     expect(link.expiresAt).toBe('2026-06-18T16:10:00.000Z')
 
+    expect(() => service.validateDiscordLink('discord-link-token')).not.toThrow()
+    expect(() => service.validateDiscordLink('discord-link-token')).not.toThrow()
+
     const consumed = service.consumeDiscordLink('discord-link-token')
     expect(consumed).toMatchObject({
       token: 'discord-link-token',

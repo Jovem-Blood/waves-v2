@@ -201,21 +201,23 @@ export class AuthService {
     return { url: url.toString(), expiresAt }
   }
 
+  validateDiscordLink(token: string): void {
+    if (!this.discordLoginTokens) {
+      throw new Error('Discord login token repository is required')
+    }
+
+    const tokenHash = hashSessionToken(token)
+    this.requireUsableDiscordLink(tokenHash)
+  }
+
   consumeDiscordLink(token: string, existingSessionToken?: string): ConsumedDiscordLinkSession {
     if (!this.discordLoginTokens) {
       throw new Error('Discord login token repository is required')
     }
 
     const tokenHash = hashSessionToken(token)
-    const link = this.discordLoginTokens.findByTokenHash(tokenHash)
-    if (!link) throw new DiscordLinkInvalidError()
-    if (link.usedAt !== null) throw new DiscordLinkUsedError()
-
+    const link = this.requireUsableDiscordLink(tokenHash)
     const now = this.now()
-    if (new Date(link.expiresAt).getTime() <= now.getTime()) {
-      throw new DiscordLinkExpiredError()
-    }
-
     const timestamp = now.toISOString()
     const displayName = link.discordGlobalName ?? link.discordUsername
     const user = this.users.upsertDiscordUser({
@@ -270,5 +272,22 @@ export class AuthService {
     })
 
     return { token, user: toPublicUser(user), expiresAt }
+  }
+
+  private requireUsableDiscordLink(tokenHash: string) {
+    if (!this.discordLoginTokens) {
+      throw new Error('Discord login token repository is required')
+    }
+
+    const link = this.discordLoginTokens.findByTokenHash(tokenHash)
+    if (!link) throw new DiscordLinkInvalidError()
+    if (link.usedAt !== null) throw new DiscordLinkUsedError()
+
+    const now = this.now()
+    if (new Date(link.expiresAt).getTime() <= now.getTime()) {
+      throw new DiscordLinkExpiredError()
+    }
+
+    return link
   }
 }

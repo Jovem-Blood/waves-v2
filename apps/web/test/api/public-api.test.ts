@@ -17,6 +17,7 @@ import { createGuestAuthHandler } from '../../server/api/auth/guest.post'
 import { createLogoutHandler } from '../../server/api/auth/logout.post'
 import { createDiscordLinkCreateHandler } from '../../server/api/auth/discord-link/create.post'
 import { createDiscordLinkConsumeHandler } from '../../server/routes/auth/discord-link.get'
+import { createDiscordLinkConfirmHandler } from '../../server/routes/auth/discord-link.post'
 import { createMeHandler } from '../../server/api/me.get'
 import { createPlayerGetHandler } from '../../server/api/player/index.get'
 import { createPlayerSkipHandler } from '../../server/api/player/skip.post'
@@ -152,6 +153,7 @@ async function startTestApi(): Promise<TestContext> {
     ),
   )
   router.get('/auth/discord-link', createDiscordLinkConsumeHandler(getDependencies))
+  router.post('/auth/discord-link', createDiscordLinkConfirmHandler(getDependencies))
   router.get('/api/spotify/search', createSpotifySearchHandler(getDependencies))
   router.get('/api/queue', createQueueListHandler(getDependencies))
   router.get('/api/history', createHistoryListHandler(getDependencies))
@@ -344,7 +346,7 @@ describe('public API', () => {
     })
   })
 
-  it('consumes a Discord link and authenticates the browser session', async () => {
+  it('confirms a Discord link before authenticating the browser session', async () => {
     const authorized = await postJson(
       '/api/auth/discord-link/create',
       {
@@ -358,7 +360,17 @@ describe('public API', () => {
     expect(authorized.response.status).toBe(200)
 
     const link = new URL((authorized.body as { url: string }).url)
-    const consume = await fetch(`${context?.baseUrl}${link.pathname}${link.search}`, {
+    const confirmation = await fetch(`${context?.baseUrl}${link.pathname}${link.search}`)
+    expect(confirmation.status).toBe(200)
+    expect(await confirmation.text()).toContain('Vincular Discord')
+
+    const repeatedConfirmation = await fetch(`${context?.baseUrl}${link.pathname}${link.search}`)
+    expect(repeatedConfirmation.status).toBe(200)
+    expect(await repeatedConfirmation.text()).toContain('Vincular Discord')
+
+    const consume = await fetch(`${context?.baseUrl}${link.pathname}`, {
+      method: 'POST',
+      body: new URLSearchParams({ token: link.searchParams.get('token') ?? '' }),
       redirect: 'manual',
     })
     expect(consume.status).toBe(302)
