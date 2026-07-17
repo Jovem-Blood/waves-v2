@@ -1,4 +1,4 @@
-import { createBrandedQrCode } from '../qr-code.js'
+import { sendControlLinkFollowUp } from './control-link.js'
 import type { BotCommand } from './types.js'
 
 export const joinCommand: BotCommand = {
@@ -62,11 +62,7 @@ export const joinCommand: BotCommand = {
         ? `${connectionMessage} A reprodução da fila começou.`
         : connectionMessage,
     )
-    const qrCode = await createBrandedQrCode(context.appHostname)
-    await context.responder.followUpPublic({
-      content: `Controle essa Jam pelo link/qrcode:\n${context.appHostname}`,
-      files: [{ attachment: qrCode, name: 'waves-qrcode.png' }],
-    })
+    await sendControlLinkFollowUp(context)
     context.logger?.info(
       {
         operation: 'command.join',

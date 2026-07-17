@@ -101,7 +101,13 @@ export function createRangedAudioStream(
     )
 
     while (totalLength === undefined || offset < totalLength) {
-      const end = offset + SOURCE_CHUNK_SIZE - 1
+      const end =
+        totalLength === undefined
+          ? offset + SOURCE_CHUNK_SIZE - 1
+          : Math.min(offset + SOURCE_CHUNK_SIZE - 1, totalLength - 1)
+      if (end < offset) {
+        break
+      }
       const controller = new AbortController()
       const abortFromContext = () => controller.abort()
       if (context?.signal?.aborted) {
@@ -344,6 +350,10 @@ export class AudioPlayerManager implements PlaybackManager {
     } finally {
       this.startingGuilds.delete(guildId)
     }
+  }
+
+  hasActivePlayback(guildId: string): boolean {
+    return this.sessions.get(guildId)?.current !== undefined
   }
 
   async skip(guildId: string): Promise<SkipPlaybackResult> {

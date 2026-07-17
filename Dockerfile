@@ -57,6 +57,7 @@ COPY --from=build --chown=node:node /app/apps/web/.output ./apps/web/.output
 COPY --from=build --chown=node:node /app/apps/web/drizzle ./apps/web/drizzle
 COPY --from=build --chown=node:node /app/apps/web/docker-migrate.mjs ./apps/web/docker-migrate.mjs
 COPY --from=build --chown=node:node /app/apps/bot/dist ./apps/bot/dist
+COPY --from=build --chown=node:node /app/exports ./exports
 COPY --from=build --chown=node:node /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build --chown=node:node /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build --chown=node:node /app/apps/bot/package.json ./apps/bot/package.json

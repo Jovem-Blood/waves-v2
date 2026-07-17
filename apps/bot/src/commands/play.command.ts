@@ -1,4 +1,5 @@
 import type { BotCommand } from './types.js'
+import { sendControlLinkFollowUp } from './control-link.js'
 import { friendlyApiError } from './errors.js'
 
 export const playCommand: BotCommand = {
@@ -18,6 +19,7 @@ export const playCommand: BotCommand = {
     await context.responder.deferEphemeral()
 
     try {
+      let joinedVoice = false
       if (!voiceManager.isConnected(context.guildId)) {
         const connectionResult = await voiceManager.join({
           guildId: context.guildId,
@@ -33,6 +35,7 @@ export const playCommand: BotCommand = {
           voiceChannelName: context.voiceChannelName,
           payload: { result: connectionResult },
         })
+        joinedVoice = true
       }
 
       const result = await api.play({
@@ -62,6 +65,9 @@ export const playCommand: BotCommand = {
       await context.responder.public(
         `Adicionada à fila: **${result.track.title}** — ${result.track.artists.join(', ')}.${suffix}`,
       )
+      if (joinedVoice) {
+        await sendControlLinkFollowUp(context)
+      }
     } catch (error) {
       await context.responder.ephemeral(friendlyApiError(error))
     }

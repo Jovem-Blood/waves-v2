@@ -553,7 +553,37 @@ describe('createRangedAudioStream', () => {
       'bytes=262144-524287',
     )
     expect(new Headers(request.mock.calls[2]?.[1]?.headers).get('range')).toBe(
-      'bytes=524288-786431',
+      'bytes=524288-599999',
+    )
+  }, 10_000)
+
+  it('does not request past the known source length', async () => {
+    const source = new Uint8Array(512 * 1024).map((_, index) => index % 251)
+    const request = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      const range = new Headers(init?.headers).get('range')
+      const match = range?.match(/^bytes=(\d+)-(\d+)$/)
+      if (!match) {
+        throw new Error('Missing range')
+      }
+      const start = Number(match[1])
+      const end = Number(match[2])
+      return Promise.resolve(
+        new Response(source.slice(start, end + 1), {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${start}-${end}/${source.byteLength}`,
+          },
+        }),
+      )
+    })
+
+    for await (const _chunk of createRangedAudioStream('https://media.example/audio', request)) {
+      // drain stream
+    }
+
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(new Headers(request.mock.calls[1]?.[1]?.headers).get('range')).toBe(
+      'bytes=262144-524287',
     )
   }, 10_000)
 

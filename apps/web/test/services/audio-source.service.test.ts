@@ -131,6 +131,23 @@ describe('AudioSourceService', () => {
     )
   })
 
+  it('renews a resolution before it enters the expiry margin', async () => {
+    const { resolve, service, setTime } = setup()
+    await service.resolve('queue-1')
+    setTime('2026-06-20T12:04:01.000Z')
+    resolve.mockResolvedValue({
+      ...source,
+      sourceIdentifier: 'audius-2',
+      streamUrl: 'https://stream.example/renewed',
+      expiresAt: '2026-06-20T12:10:00.000Z',
+    })
+
+    await expect(service.resolve('queue-1')).resolves.toMatchObject({
+      source: { sourceIdentifier: 'audius-2' },
+    })
+    expect(resolve).toHaveBeenCalledTimes(2)
+  })
+
   it('fails before contacting the provider for a missing queue item', async () => {
     const { resolve, service } = setup()
 

@@ -11,6 +11,8 @@ import { QueueItemNotFoundError } from './domain-errors'
 import { type WavesLogger, useLogger } from '../utils/logger'
 import { classifyExternalError } from '../utils/observability'
 
+const SOURCE_EXPIRY_REFRESH_MARGIN_MS = 60_000
+
 export class AudioSourceService {
   constructor(
     private readonly queueRepository: QueueRepository,
@@ -38,10 +40,12 @@ export class AudioSourceService {
       throw new QueueItemNotFoundError(queueItemId)
     }
 
-    const timestamp = this.now().toISOString()
+    const now = this.now()
+    const timestamp = now.toISOString()
+    const reusableUntil = new Date(now.getTime() + SOURCE_EXPIRY_REFRESH_MARGIN_MS).toISOString()
     const cached = options.forceRefresh
       ? undefined
-      : this.resolvedSourceRepository.findReusable(queueItemId, timestamp)
+      : this.resolvedSourceRepository.findReusable(queueItemId, reusableUntil)
     let source: ResolvedAudioSource
 
     if (cached) {

@@ -68,8 +68,10 @@ export async function startBot(): Promise<Client> {
           if (queue.length === 0) {
             return
           }
-          await playbackManager.start(guildId)
           await playbackManager.synchronize(guildId)
+          if (!playbackManager.hasActivePlayback(guildId)) {
+            await playbackManager.start(guildId)
+          }
         } catch {
           logger.error(
             {
