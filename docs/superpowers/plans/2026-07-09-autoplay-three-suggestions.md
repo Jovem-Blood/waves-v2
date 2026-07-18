@@ -34,6 +34,7 @@ Implementation note: preserve existing uncommitted work unless it directly confl
 ### Task 1: Shared Autoplay Schema Shape
 
 **Files:**
+
 - Modify: `packages/shared/src/schemas/autoplay.schema.ts`
 - Modify: `packages/shared/src/types/autoplay.ts`
 - Test: `packages/shared/test/contracts.test.ts`
@@ -120,6 +121,7 @@ Expected: TypeScript typecheck exits 0.
 ### Task 2: Database Schema And Migration For Ordered Suggestions
 
 **Files:**
+
 - Add: `apps/web/drizzle/0008_autoplay_three_suggestions.sql`
 - Modify: `apps/web/server/db/schema.ts`
 - Test: `apps/web/test/repositories/database.test.ts`
@@ -229,6 +231,7 @@ Expected: PASS.
 ### Task 3: Repository Support For Three Suggestions
 
 **Files:**
+
 - Modify: `apps/web/server/repositories/autoplay-suggestion.repository.ts`
 - Test: `apps/web/test/repositories/autoplay-suggestion.repository.test.ts`
 
@@ -398,6 +401,7 @@ Expected: PASS.
 ### Task 4: Autoplay Exclusion Helper
 
 **Files:**
+
 - Create: `apps/web/server/services/autoplay-exclusions.ts`
 - Test: `apps/web/test/services/autoplay-exclusions.test.ts`
 
@@ -409,7 +413,10 @@ Create `apps/web/test/services/autoplay-exclusions.test.ts`:
 import type { AutoplaySuggestion, QueueItem, TrackMetadata } from '@waves/shared'
 import { describe, expect, it } from 'vitest'
 
-import { buildAutoplayExcludedTrackIds, RECENT_PLAYED_LIMIT } from '../../server/services/autoplay-exclusions'
+import {
+  buildAutoplayExcludedTrackIds,
+  RECENT_PLAYED_LIMIT,
+} from '../../server/services/autoplay-exclusions'
 
 const track = (providerTrackId: string): TrackMetadata => ({
   id: `spotify:${providerTrackId}`,
@@ -497,6 +504,7 @@ Expected: PASS.
 ### Task 5: Autoplay Service And API Targeted Rejection
 
 **Files:**
+
 - Modify: `apps/web/server/services/autoplay.service.ts`
 - Modify: `apps/web/server/api/autoplay/suggestion.delete.ts`
 - Modify: `apps/web/test/api/public-api.test.ts`
@@ -627,6 +635,7 @@ Expected: PASS.
 ### Task 6: Orchestrator Multi-Suggestion Fill And Continuous Backfill
 
 **Files:**
+
 - Modify: `apps/web/server/services/autoplay-orchestrator.service.ts`
 - Modify: `apps/web/server/services/player-state.service.ts`
 - Test: `apps/web/test/services/autoplay-orchestrator.service.test.ts`
@@ -696,9 +705,9 @@ it('does not persist recently played recommendations', async () => {
 
   await harness.orchestrator.completePlayback({ queueItemId: item.id, outcome: 'played' })
 
-  expect(harness.suggestionRepository.list().map((entry) => entry.track.providerTrackId)).not.toContain(
-    'first',
-  )
+  expect(
+    harness.suggestionRepository.list().map((entry) => entry.track.providerTrackId),
+  ).not.toContain('first')
 })
 ```
 
@@ -716,7 +725,9 @@ In `apps/web/server/services/player-state.service.ts`, update `promoteAutoplaySu
 const suggestions = autoplaySuggestion.list()
 const suggestion = suggestions[0]
 const active = queue.listActive()
-const recentIds = new Set(queue.listRecentPlayed(RECENT_PLAYED_LIMIT).map((item) => item.track.providerTrackId))
+const recentIds = new Set(
+  queue.listRecentPlayed(RECENT_PLAYED_LIMIT).map((item) => item.track.providerTrackId),
+)
 ```
 
 Import `RECENT_PLAYED_LIMIT` from `./autoplay-exclusions`.
@@ -735,10 +746,7 @@ Keep the same guards: autoplay enabled, no active queue, matching `seedFingerpri
 In `apps/web/server/services/autoplay-orchestrator.service.ts`, import:
 
 ```ts
-import {
-  buildAutoplayExcludedTrackIds,
-  RECENT_PLAYED_LIMIT,
-} from './autoplay-exclusions'
+import { buildAutoplayExcludedTrackIds, RECENT_PLAYED_LIMIT } from './autoplay-exclusions'
 ```
 
 Add class constant near top-level if preferred:
@@ -760,7 +768,9 @@ if (!state.enabled) {
 const existing = this.suggestionRepository.list()
 if (active.length !== 1) {
   const recentIds = new Set(
-    this.queueRepository.listRecentPlayed(RECENT_PLAYED_LIMIT).map((item) => item.track.providerTrackId),
+    this.queueRepository
+      .listRecentPlayed(RECENT_PLAYED_LIMIT)
+      .map((item) => item.track.providerTrackId),
   )
   const activeIds = new Set(active.map((item) => item.track.providerTrackId))
   const fingerprint = this.seedFingerprint(this.currentSeeds())
@@ -839,6 +849,7 @@ Expected: PASS.
 ### Task 7: UI And Composable For Three Suggestion Rows
 
 **Files:**
+
 - Modify: `apps/web/app/composables/useAutoplay.ts`
 - Modify: `apps/web/app/components/QueuePanel.vue`
 - Modify: `apps/web/app/components/AutoplaySuggestionRow.vue`
@@ -970,6 +981,7 @@ Expected: PASS.
 ### Task 8: Full Focused Verification And Cleanup
 
 **Files:**
+
 - Review all modified files.
 - Do not modify Docker state.
 

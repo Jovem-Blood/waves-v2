@@ -198,9 +198,9 @@ describe('PlayerStateService', () => {
       type: 'queue.updated',
       reason: 'player_transition',
     })
-    expect(published[1]?.type === 'queue.updated' ? published[1].queue[0] : undefined).toMatchObject(
-      { id: 'next', status: 'playing' },
-    )
+    expect(
+      published[1]?.type === 'queue.updated' ? published[1].queue[0] : undefined,
+    ).toMatchObject({ id: 'next', status: 'playing' })
   })
 
   it('uses the first active item when the player current item is absent or invalid', () => {

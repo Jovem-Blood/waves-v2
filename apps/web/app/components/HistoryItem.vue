@@ -32,7 +32,9 @@ function requesterName(item: QueueItem) {
 }
 
 const statusLabel = computed(() =>
-  props.item.status === 'played' || props.item.status === 'skipped' || props.item.status === 'failed'
+  props.item.status === 'played' ||
+  props.item.status === 'skipped' ||
+  props.item.status === 'failed'
     ? statusLabels[props.item.status]
     : props.item.status,
 )

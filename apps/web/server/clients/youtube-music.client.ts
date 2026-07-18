@@ -37,6 +37,7 @@ Platform.shim.eval = (data, environment) => {
 
 export interface YouTubeMusicClientPort {
   searchSongs(query: string, limit?: number): Promise<YouTubeMusicCandidate[]>
+  searchVideos(query: string, limit?: number): Promise<YouTubeMusicCandidate[]>
   getUpNextSongs(videoId: string, limit?: number): Promise<YouTubeMusicCandidate[]>
   resolveAudioFormat(videoId: string): Promise<YouTubeAudioFormat>
 }
@@ -168,6 +169,39 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
           isTopic: Boolean(channelName && /-\s*topic$/i.test(channelName)),
         })
         return candidate.success ? [candidate.data] : []
+      })
+    } catch (error) {
+      if (error instanceof YouTubeMusicUnavailableError) {
+        throw error
+      }
+      throw new YouTubeMusicUnavailableError({ cause: error })
+    }
+  }
+
+  async searchVideos(query: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+    try {
+      const innertube = await this.getSession()
+      const search = await withTimeout(
+        innertube.music.search(query, { type: 'video' }),
+        this.timeoutMs,
+      )
+      const contents = search.videos?.contents ?? []
+
+      return contents.slice(0, limit).flatMap((item) => {
+        const labels = safeBadgeLabels(item.badges)
+        const authors = item.authors?.map((author) => author.name).filter(Boolean) ?? []
+        const channelName = item.author?.name ?? authors[0]
+        const parsed = youtubeMusicCandidateSchema.safeParse({
+          videoId: item.id,
+          title: item.title,
+          artists: authors.length > 0 ? authors : channelName ? [channelName] : undefined,
+          durationMs:
+            item.duration?.seconds === undefined ? undefined : item.duration.seconds * 1000,
+          ...(channelName ? { channelName } : {}),
+          isOfficial: labels.some((label) => /official|verified/i.test(label)),
+          isTopic: Boolean(channelName && /-\s*topic$/i.test(channelName)),
+        })
+        return parsed.success ? [parsed.data] : []
       })
     } catch (error) {
       if (error instanceof YouTubeMusicUnavailableError) {

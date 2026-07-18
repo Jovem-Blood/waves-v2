@@ -76,12 +76,10 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
       }
     }
 
+    const query = `${track.title} ${track.artists.join(' ')}`
     let candidates
     try {
-      candidates = await this.client.searchSongs(
-        `${track.title} ${track.artists.join(' ')}`,
-        this.searchLimit,
-      )
+      candidates = await this.client.searchSongs(query, this.searchLimit)
       if (track.isrc) {
         const isrcCandidates = await this.client.searchSongs(track.isrc, this.searchLimit)
         candidates = [...candidates, ...isrcCandidates]
@@ -90,14 +88,35 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
       throw this.translateError(error)
     }
 
-    const match = analyzeYouTubeMusicCandidates(track, [
+    let searchSurface = 'songs'
+    let match = analyzeYouTubeMusicCandidates(track, [
       ...new Map(candidates.map((candidate) => [candidate.videoId, candidate])).values(),
     ])
+
+    if (!match.candidate) {
+      try {
+        const videoCandidates = await this.client.searchVideos(query, this.searchLimit)
+        searchSurface = 'songs_videos'
+        match = analyzeYouTubeMusicCandidates(track, [
+          ...new Map(
+            [...candidates, ...videoCandidates].map((candidate) => [candidate.videoId, candidate]),
+          ).values(),
+        ])
+      } catch (error) {
+        throw this.translateError(error)
+      }
+    }
+
     const selected = match.candidate
     this.logger.info(
       {
         operation: 'youtube_music.match',
         provider: 'youtube_music',
+        searchSurface,
+        trackTitle: track.title,
+        trackArtists: track.artists,
+        trackDurationMs: track.durationMs,
+        trackIsrc: track.isrc,
         outcome: selected ? 'selected' : match.diagnostics.ambiguous ? 'ambiguous' : 'not_found',
         candidateCount: match.diagnostics.candidateCount,
         rejectedByQualifier: match.diagnostics.rejectedByQualifier,
@@ -107,13 +126,39 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
         ambiguous: match.diagnostics.ambiguous,
         sourceIdentifier: match.diagnostics.selected?.videoId,
         selectedScore: match.diagnostics.selected?.score,
+        candidateDetails: match.diagnostics.candidateDetails,
       },
       'YouTube Music candidate matching completed',
     )
     if (!selected) {
       throw new AudioSourceNotFoundError()
     }
-    return this.resolveVideoId(selected.videoId)
+
+    let lastError: Error | undefined
+    for (const candidate of match.ranked) {
+      try {
+        return await this.resolveVideoId(candidate.videoId)
+      } catch (error) {
+        if (
+          !(error instanceof AudioSourceNotFoundError) &&
+          !(error instanceof AudioSourceUnavailableError)
+        ) {
+          throw error
+        }
+        lastError = error
+        this.logger.warn(
+          {
+            operation: 'youtube_music.resolve_candidate',
+            provider: 'youtube_music',
+            sourceIdentifier: candidate.videoId,
+            outcome: 'unavailable',
+            ...classifyExternalError(error),
+          },
+          'YouTube Music candidate unavailable, trying next',
+        )
+      }
+    }
+    throw lastError ?? new AudioSourceNotFoundError()
   }
 
   private async resolveVideoId(videoId: string): Promise<ResolvedAudioSource> {

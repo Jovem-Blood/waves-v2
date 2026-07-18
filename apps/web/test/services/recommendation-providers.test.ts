@@ -91,6 +91,7 @@ describe('recommendation providers', () => {
       ])
     const provider = new YouTubeMusicRecommendationProvider({
       searchSongs: vi.fn().mockResolvedValue([youtubeCandidate]),
+      searchVideos: vi.fn(),
       getUpNextSongs,
       resolveAudioFormat: vi.fn(),
     })
@@ -112,6 +113,7 @@ describe('recommendation providers', () => {
   it('maps YouTube automix failures to provider unavailable', async () => {
     const provider = new YouTubeMusicRecommendationProvider({
       searchSongs: vi.fn().mockRejectedValue(new YouTubeMusicUnavailableError()),
+      searchVideos: vi.fn(),
       getUpNextSongs: vi.fn(),
       resolveAudioFormat: vi.fn(),
     })

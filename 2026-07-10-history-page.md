@@ -31,6 +31,7 @@
 ### Task 1: Define the Shared History Contract
 
 **Files:**
+
 - Modify: `packages/shared/src/schemas/queue.schema.ts`
 - Modify: `packages/shared/src/types/queue.ts`
 - Modify: `packages/shared/src/index.ts`
@@ -44,11 +45,16 @@ Append tests that assert a page accepts a `null` next cursor and terminal queue 
 import { historyPageSchema, historyQuerySchema } from '../src/index.js'
 
 it('validates cursor-paginated playback history', () => {
-  expect(historyQuerySchema.parse({ cursor: 'eyJ1cGRhdGVkQXQiOiIyMDI2LTA2LTE4VDEyOjAwOjAwLjAwMFoiLCJpZCI6InEtMSJ9' }))
-    .toEqual({ cursor: 'eyJ1cGRhdGVkQXQiOiIyMDI2LTA2LTE4VDEyOjAwOjAwLjAwMFoiLCJpZCI6InEtMSJ9' })
+  expect(
+    historyQuerySchema.parse({
+      cursor: 'eyJ1cGRhdGVkQXQiOiIyMDI2LTA2LTE4VDEyOjAwOjAwLjAwMFoiLCJpZCI6InEtMSJ9',
+    }),
+  ).toEqual({ cursor: 'eyJ1cGRhdGVkQXQiOiIyMDI2LTA2LTE4VDEyOjAwOjAwLjAwMFoiLCJpZCI6InEtMSJ9' })
 
-  expect(historyPageSchema.parse({ items: [], nextCursor: null }))
-    .toEqual({ items: [], nextCursor: null })
+  expect(historyPageSchema.parse({ items: [], nextCursor: null })).toEqual({
+    items: [],
+    nextCursor: null,
+  })
   expect(historyQuerySchema.safeParse({ cursor: ['first', 'second'] }).success).toBe(false)
 })
 ```
@@ -103,6 +109,7 @@ git commit -m "feat: add playback history contracts"
 ### Task 2: Add Stable Terminal-Item Pagination
 
 **Files:**
+
 - Modify: `apps/web/server/repositories/queue.repository.ts`
 - Modify: `apps/web/test/repositories/queue.repository.test.ts`
 
@@ -174,6 +181,7 @@ git commit -m "feat: paginate terminal playback history"
 ### Task 3: Expose a Public History API
 
 **Files:**
+
 - Create: `apps/web/server/services/history.service.ts`
 - Create: `apps/web/test/services/history.service.test.ts`
 - Modify: `apps/web/server/utils/public-api-dependencies.ts`
@@ -203,7 +211,13 @@ Expected: FAIL because `HistoryService` does not exist.
 Create `history.service.ts`:
 
 ```ts
-import { historyCursorSchema, historyPageSchema, type HistoryCursor, type HistoryPage, type QueueItem } from '@waves/shared'
+import {
+  historyCursorSchema,
+  historyPageSchema,
+  type HistoryCursor,
+  type HistoryPage,
+  type QueueItem,
+} from '@waves/shared'
 import type { QueueRepository } from '../repositories/queue.repository'
 
 const PAGE_SIZE = 20
@@ -214,7 +228,9 @@ export function decodeHistoryCursor(cursor: string | undefined): HistoryCursor |
 }
 
 function encodeHistoryCursor(item: QueueItem): string {
-  return Buffer.from(JSON.stringify({ updatedAt: item.updatedAt, id: item.id })).toString('base64url')
+  return Buffer.from(JSON.stringify({ updatedAt: item.updatedAt, id: item.id })).toString(
+    'base64url',
+  )
 }
 
 export class HistoryService {
@@ -246,9 +262,14 @@ Add `PublicHistoryService` with `list(cursor?: string): HistoryPage`, add requir
 import { historyPageSchema, historyQuerySchema } from '@waves/shared'
 import { getQuery } from 'h3'
 import { definePublicApiHandler } from '../../utils/api-error'
-import { type PublicApiDependencies, usePublicApiDependencies } from '../../utils/public-api-dependencies'
+import {
+  type PublicApiDependencies,
+  usePublicApiDependencies,
+} from '../../utils/public-api-dependencies'
 
-export function createHistoryListHandler(getDependencies: () => PublicApiDependencies = usePublicApiDependencies) {
+export function createHistoryListHandler(
+  getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
+) {
   return definePublicApiHandler((event) => {
     const { cursor } = historyQuerySchema.parse(getQuery(event))
     return historyPageSchema.parse(getDependencies().historyService.list(cursor))
@@ -276,6 +297,7 @@ git commit -m "feat: expose playback history API"
 ### Task 4: Enable Nuxt Page Routing and Preserve the Dashboard
 
 **Files:**
+
 - Modify: `apps/web/app/app.vue`
 - Create: `apps/web/app/pages/index.vue`
 - Modify: `apps/web/app/assets/css/main.css`
@@ -329,6 +351,7 @@ git commit -m "feat: enable dashboard page routing"
 ### Task 5: Build the Infinite History Feed
 
 **Files:**
+
 - Create: `apps/web/app/composables/useHistory.ts`
 - Create: `apps/web/app/components/HistoryItem.vue`
 - Create: `apps/web/app/components/HistoryPanel.vue`
@@ -401,6 +424,7 @@ git commit -m "feat: add infinite playback history page"
 ### Task 6: Run Quality Gates and Verify Responsive States
 
 **Files:**
+
 - Modify only if a quality gate exposes a defect in the preceding tasks.
 
 - [ ] **Step 1: Run focused history tests**

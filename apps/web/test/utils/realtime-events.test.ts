@@ -28,7 +28,11 @@ describe('realtime event bus', () => {
 
     expect(subscriber).toHaveBeenCalledTimes(2)
     expect(() =>
-      bus.publish({ type: 'queue.updated', queue: [], reason: 'invalid' } as unknown as RealtimeEvent),
+      bus.publish({
+        type: 'queue.updated',
+        queue: [],
+        reason: 'invalid',
+      } as unknown as RealtimeEvent),
     ).toThrow()
   })
 })

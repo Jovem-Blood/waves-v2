@@ -5,10 +5,7 @@ import {
   DiscordLinkInvalidError,
   DiscordLinkUsedError,
 } from '../../services/auth.service'
-import {
-  readSessionCookie,
-  writeSessionCookie,
-} from '../../utils/session-cookie'
+import { readSessionCookie, writeSessionCookie } from '../../utils/session-cookie'
 import {
   type PublicApiDependencies,
   usePublicApiDependencies,
