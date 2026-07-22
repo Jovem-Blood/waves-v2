@@ -187,8 +187,10 @@ export function useQueue(apiBase: string) {
           ? 'Faixa adicionada para tocar em seguida.'
           : 'Faixa adicionada à fila.',
       )
+      return true
     } catch (caught) {
       toasts.error(mutationError(caught, 'Não foi possível adicionar essa faixa.'))
+      return false
     } finally {
       addingTrackId.value = undefined
       addingPlacement.value = undefined

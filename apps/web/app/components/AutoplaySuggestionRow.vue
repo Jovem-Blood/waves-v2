@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { AutoplaySuggestion } from '@waves/shared'
-import { LoaderCircle, Sparkles, X } from '@lucide/vue'
+import { LoaderCircle, Plus, Sparkles, X } from '@lucide/vue'
 
-defineProps<{ suggestion: AutoplaySuggestion; rejecting?: boolean }>()
-defineEmits<{ reject: [] }>()
+defineProps<{ suggestion: AutoplaySuggestion; rejecting?: boolean; committing?: boolean }>()
+defineEmits<{ commit: []; reject: [] }>()
 
 function duration(durationMs: number) {
   const seconds = Math.round(durationMs / 1000)
@@ -24,8 +24,19 @@ function duration(durationMs: number) {
     <span class="suggestion-state">SUGESTÃO</span>
     <button
       type="button"
+      class="commit-button"
+      :disabled="committing || rejecting"
+      :aria-label="`Adicionar sugestão ${suggestion.track.title} à fila`"
+      @click="$emit('commit')"
+    >
+      <LoaderCircle v-if="committing" class="spinner" :size="17" aria-hidden="true" />
+      <Plus v-else :size="17" aria-hidden="true" />
+      <span>Manter</span>
+    </button>
+    <button
+      type="button"
       class="reject-button"
-      :disabled="rejecting"
+      :disabled="rejecting || committing"
       :aria-label="`Rejeitar sugestão ${suggestion.track.title}`"
       @click="$emit('reject')"
     >
@@ -39,7 +50,7 @@ function duration(durationMs: number) {
 .autoplay-suggestion {
   display: grid;
   min-height: 68px;
-  grid-template-columns: 34px minmax(0, 1fr) 48px;
+  grid-template-columns: 34px minmax(0, 1fr) 96px 48px;
   align-items: center;
   gap: 9px;
   border-top: 1px dashed var(--border-strong);
@@ -81,9 +92,9 @@ function duration(durationMs: number) {
 .suggestion-state {
   display: none;
 }
+.commit-button,
 .reject-button {
   display: inline-grid;
-  width: 48px;
   height: 48px;
   place-items: center;
   border: 1px solid transparent;
@@ -92,10 +103,36 @@ function duration(durationMs: number) {
   background: transparent;
   cursor: pointer;
 }
+
+.commit-button {
+  grid-template-columns: auto auto;
+  gap: 5px;
+  border-color: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+  color: var(--accent-primary);
+  font-family: 'Geist Mono Variable', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.reject-button {
+  width: 48px;
+}
+
+.commit-button:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.commit-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+}
+
 .reject-button:hover:not(:disabled) {
   border-color: var(--danger);
   color: var(--danger);
 }
+.commit-button:focus-visible,
 .reject-button:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
@@ -104,6 +141,7 @@ function duration(durationMs: number) {
 .reject-button:active:not(:disabled) {
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
+.commit-button:disabled,
 .reject-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -111,7 +149,7 @@ function duration(durationMs: number) {
 
 @media (min-width: 72rem) {
   .autoplay-suggestion {
-    grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px;
+    grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px 52px;
     gap: 0;
     padding: 0;
   }
@@ -134,6 +172,12 @@ function duration(durationMs: number) {
     justify-self: center;
     padding: 0;
     opacity: 0.65;
+  }
+  .commit-button {
+    width: 76px;
+    height: 34px;
+    justify-self: center;
+    padding: 0;
   }
 }
 </style>

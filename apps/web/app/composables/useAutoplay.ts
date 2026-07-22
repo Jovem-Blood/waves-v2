@@ -62,6 +62,16 @@ export function useAutoplay(apiBase: string) {
     }
   }
 
+  function removeSuggestion(providerTrackId: string) {
+    if (!state.value) return
+    state.value = autoplayStateSchema.parse({
+      ...state.value,
+      suggestions: state.value.suggestions.filter(
+        (suggestion) => suggestion.track.providerTrackId !== providerTrackId,
+      ),
+    })
+  }
+
   onMounted(() => {
     void load()
     pollingTimer = setInterval(() => void load(), POLLING_INTERVAL_MS)
@@ -70,5 +80,14 @@ export function useAutoplay(apiBase: string) {
     if (pollingTimer) clearInterval(pollingTimer)
   })
 
-  return { state, loading, updating, rejectingId, error, setEnabled, rejectSuggestion }
+  return {
+    state,
+    loading,
+    updating,
+    rejectingId,
+    error,
+    setEnabled,
+    rejectSuggestion,
+    removeSuggestion,
+  }
 }

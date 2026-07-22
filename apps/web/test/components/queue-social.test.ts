@@ -117,7 +117,7 @@ describe('Queue Social components', () => {
     expect(wrapper.emitted('autoplayChange')).toEqual([[false]])
   })
 
-  it('renders six autoplay ghosts after human tracks and rejects one target accessibly', async () => {
+  it('renders six autoplay ghosts after human tracks and commits or rejects one target accessibly', async () => {
     const suggestions = ['Fantasma', 'Neblina', 'Aurora', 'Horizonte', 'Prisma', 'Eclipse'].map(
       (title, index) => ({
         track: {
@@ -144,17 +144,23 @@ describe('Queue Social components', () => {
           updatedAt: '2026-06-18T12:00:00.000Z',
         },
         autoplayRejectingId: 'ghost-1',
+        autoplayCommittingTrackId: 'spotify:ghost-3',
       },
     })
 
     expect(wrapper.findAll('.autoplay-suggestion')).toHaveLength(6)
+    const commitButtons = wrapper.findAll('.commit-button')
     const rejectButtons = wrapper.findAll('.reject-button')
     expect(rejectButtons[0]?.attributes('disabled')).toBe('')
     expect(rejectButtons[0]?.find('.spinner').exists()).toBe(true)
     expect(rejectButtons[1]?.attributes('disabled')).toBeUndefined()
+    expect(commitButtons[2]?.attributes('disabled')).toBe('')
+    expect(commitButtons[2]?.find('.spinner').exists()).toBe(true)
     const rows = wrapper.findAll('.queue-items > *')
     expect(rows.at(-1)?.classes()).toContain('autoplay-suggestion')
+    await commitButtons[1]?.trigger('click')
     await rejectButtons[1]?.trigger('click')
+    expect(wrapper.emitted('autoplayCommit')).toEqual([[suggestions[1]]])
     expect(wrapper.emitted('autoplayReject')).toEqual([['ghost-2']])
   })
 

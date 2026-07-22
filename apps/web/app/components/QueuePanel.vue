@@ -18,6 +18,7 @@ defineProps<{
   autoplayUpdating?: boolean
   autoplayError?: string
   autoplayRejectingId?: string
+  autoplayCommittingTrackId?: string
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   dragStateChange: [dragging: boolean]
   autoplayChange: [enabled: boolean]
   autoplayReject: [providerTrackId: string]
+  autoplayCommit: [suggestion: AutoplayState['suggestions'][number]]
 }>()
 
 const queueItemsRef = ref<HTMLElement | null>(null)
@@ -161,7 +163,7 @@ onBeforeUnmount(() => {
     <div class="queue-table">
       <div class="queue-table-header" aria-hidden="true">
         <span>ORDEM</span><span>FAIXA</span><span>PEDIDO POR</span><span>DURAÇÃO</span
-        ><span>ESTADO</span><span>AÇÕES</span>
+        ><span>ESTADO</span><span>AÇÕES</span><span></span>
       </div>
 
       <div v-if="loading" class="state-message">
@@ -197,6 +199,8 @@ onBeforeUnmount(() => {
           :key="suggestion.track.providerTrackId"
           :suggestion="suggestion"
           :rejecting="autoplayRejectingId === suggestion.track.providerTrackId"
+          :committing="autoplayCommittingTrackId === suggestion.track.id"
+          @commit="$emit('autoplayCommit', suggestion)"
           @reject="$emit('autoplayReject', suggestion.track.providerTrackId)"
         />
       </div>
@@ -463,7 +467,7 @@ h1 {
     flex: none;
     display: grid;
     min-height: 38px;
-    grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px;
+    grid-template-columns: 62px minmax(240px, 1fr) 164px 88px 112px 88px 52px;
     align-items: center;
     border-bottom: 1px solid var(--border);
     color: var(--text-subtle);

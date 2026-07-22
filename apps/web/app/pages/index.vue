@@ -81,6 +81,13 @@ async function handleSkip() {
   if (result) queue.replace(result.queue, { notifyFailures: false })
 }
 
+async function handleAutoplayCommit(
+  suggestion: NonNullable<typeof autoplay.state.value>['suggestions'][number],
+) {
+  const added = await queue.add(suggestion.track, 'end')
+  if (added) autoplay.removeSuggestion(suggestion.track.providerTrackId)
+}
+
 const controlsDisabledReason = computed(() => {
   if (!operational.webAvailable.value) return 'A interface web está indisponível.'
   if (operational.status.value?.bot.status !== 'online') return 'O bot está offline.'
@@ -157,12 +164,14 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         :autoplay-updating="autoplay.updating.value"
         :autoplay-error="autoplay.error.value"
         :autoplay-rejecting-id="autoplay.rejectingId.value"
+        :autoplay-committing-track-id="queue.addingTrackId.value"
         @refresh="queue.refresh"
         @remove="queue.remove"
         @move="queue.move"
         @move-to-position="queue.moveToPosition"
         @drag-state-change="queue.setInteractionLocked"
         @autoplay-change="autoplay.setEnabled"
+        @autoplay-commit="handleAutoplayCommit"
         @autoplay-reject="autoplay.rejectSuggestion"
       />
 
