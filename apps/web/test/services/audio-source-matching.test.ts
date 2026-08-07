@@ -32,6 +32,8 @@ describe('YouTube Music matching', () => {
   it('normalizes accents, punctuation and featuring aliases', () => {
     expect(normalizeMusicText('Canção [FT. Alguém]')).toBe('cancao featuring alguem')
     expect(normalizeMusicText('Canção (featuring Alguém)')).toBe('cancao featuring alguem')
+    expect(normalizeMusicText('カワキヲアメク')).toBe('カワキヲアメク')
+    expect(normalizeMusicText('ガ')).toBe('ガ')
   })
 
   it('accepts duration at the tolerance and rejects beyond it', () => {
@@ -142,5 +144,150 @@ describe('YouTube Music matching', () => {
       }),
     ])
     expect(selected?.videoId).toBe('clean')
+  })
+
+  it.each([
+    {
+      title: 'アイドル',
+      artists: ['YOASOBI'],
+      durationMs: 213_233,
+      candidateTitle: 'アイドル',
+      candidateArtists: ['YOASOBI'],
+      candidateDurationMs: 214_000,
+    },
+    {
+      title: 'インフェルノ',
+      artists: ['Mrs. GREEN APPLE'],
+      durationMs: 212_546,
+      candidateTitle: 'インフェルノ - Inferno',
+      candidateArtists: ['Mrs. GREEN APPLE'],
+      candidateDurationMs: 213_000,
+    },
+    {
+      title: 'I I I',
+      artists: ['宝鐘マリン', 'Kobo Kanaeru'],
+      durationMs: 185_876,
+      candidateTitle: 'I I I',
+      candidateArtists: ['Kobo Kanaeru', 'Houshou Marine'],
+      candidateDurationMs: 186_000,
+    },
+    {
+      title: 'Mayonaka no Door~stay with me',
+      artists: ['Miki Matsubara'],
+      durationMs: 312_293,
+      candidateTitle: '真夜中のドア〜stay with me - Mayonaka no Door~stay with me',
+      candidateArtists: ['Miki Matsubara'],
+      candidateDurationMs: 312_000,
+    },
+    {
+      title: '光るなら',
+      artists: ['Goose house'],
+      durationMs: 252_133,
+      candidateTitle: '光るなら - Hikarunara',
+      candidateArtists: ['Goose house'],
+      candidateDurationMs: 255_000,
+    },
+    {
+      title: 'カワキヲアメク',
+      artists: ['美波'],
+      durationMs: 251_933,
+      candidateTitle: 'カワキヲアメク - Kawakiwoameku',
+      candidateArtists: ['minami'],
+      candidateDurationMs: 252_000,
+    },
+  ])('matches the observed YouTube Music result for $title', (example) => {
+    const observedTrack: TrackMetadata = {
+      id: `spotify:${example.title}`,
+      provider: 'spotify',
+      providerTrackId: example.title,
+      title: example.title,
+      artists: example.artists,
+      durationMs: example.durationMs,
+    }
+    const selected = selectYouTubeMusicCandidate(observedTrack, [
+      candidate({
+        videoId: `youtube:${example.title}`,
+        title: example.candidateTitle,
+        artists: example.candidateArtists,
+        durationMs: example.candidateDurationMs,
+        isOfficial: true,
+      }),
+    ])
+
+    expect(selected?.videoId).toBe(`youtube:${example.title}`)
+  })
+
+  it('does not treat an ordinary with phrase as a featured artist clause', () => {
+    const stayWithMe: TrackMetadata = {
+      id: 'spotify:stay-with-me',
+      provider: 'spotify',
+      providerTrackId: 'stay-with-me',
+      title: 'Stay with Me',
+      artists: ['Miki Matsubara'],
+      durationMs: 312_000,
+    }
+
+    expect(
+      selectYouTubeMusicCandidate(stayWithMe, [
+        candidate({
+          title: 'Stay with Me',
+          artists: ['Miki Matsubara'],
+          durationMs: 312_000,
+          isOfficial: true,
+        }),
+      ]),
+    ).toBeDefined()
+  })
+
+  it('keeps rejecting unrelated artists when only the primary artist needs transliteration', () => {
+    const multilingualTrack: TrackMetadata = {
+      id: 'spotify:iii',
+      provider: 'spotify',
+      providerTrackId: 'iii',
+      title: 'I I I',
+      artists: ['宝鐘マリン', 'Kobo Kanaeru'],
+      durationMs: 185_876,
+    }
+
+    expect(
+      selectYouTubeMusicCandidate(multilingualTrack, [
+        candidate({
+          title: 'I I I',
+          artists: ['Unrelated Artist'],
+          durationMs: 186_000,
+          isOfficial: true,
+        }),
+      ]),
+    ).toBeUndefined()
+  })
+
+  it('requires a trusted, near-duration result for a transliterated artist', () => {
+    const japaneseTrack: TrackMetadata = {
+      id: 'spotify:kawakiwoameku',
+      provider: 'spotify',
+      providerTrackId: 'kawakiwoameku',
+      title: 'カワキヲアメク',
+      artists: ['美波'],
+      durationMs: 251_933,
+    }
+    const translatedCandidate = {
+      title: 'カワキヲアメク - Kawakiwoameku',
+      artists: ['minami'],
+    }
+
+    expect(
+      selectYouTubeMusicCandidate(japaneseTrack, [
+        candidate({ ...translatedCandidate, durationMs: 252_000 }),
+      ]),
+    ).toBeUndefined()
+    expect(
+      selectYouTubeMusicCandidate(japaneseTrack, [
+        candidate({
+          ...translatedCandidate,
+          durationMs: 260_000,
+          isOfficial: true,
+        }),
+      ]),
+    ).toBeUndefined()
   })
 })

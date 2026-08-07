@@ -18,13 +18,16 @@ const CONFLICTING_QUALIFIERS = [
   'lyric video',
 ] as const
 
+const TRANSLITERATED_ARTIST_DURATION_TOLERANCE_MS = 3_000
+
 export function normalizeMusicText(value: string): string {
   return value
     .normalize('NFKD')
-    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\p{Diacritic}/gu, (mark) => (/[\u3099\u309a]/u.test(mark) ? mark : ''))
+    .normalize('NFC')
     .toLowerCase()
     .replace(/\b(feat(?:uring)?|ft)\.?\b/g, ' featuring ')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -41,9 +44,10 @@ function tokenCoverage(expected: string, candidate: string): number {
 }
 
 function stripFeatClause(text: string): string {
-  return normalizeMusicText(text)
+  return normalizeMusicText(
+    text.replace(/\s*(?:\(\s*with\b.*?\)|\u005b\s*with\b.*?\u005d)/giu, ' '),
+  )
     .replace(/\bfeaturing\b.*/g, '')
-    .replace(/(?<!^)\bwith\b.*/g, '')
     .trim()
 }
 
@@ -61,12 +65,49 @@ function titleTokenCoverage(expected: string, candidate: string): number {
 function effectiveCandidateArtists(candidate: YouTubeMusicCandidate): string[] {
   const normalized = normalizeMusicText(candidate.title)
   const featMatch = normalized.match(/\bfeaturing\s+(.+)$/)
-  const withMatch = normalized.match(/(?<!^)\bwith\s+(.+)$/)
-  const featTokens = (featMatch?.[1] ?? withMatch?.[1])?.trim().split(/\s+/).filter(Boolean)
-  if (!featTokens || featTokens.length === 0) {
+  const withMatch = candidate.title.match(/(?:\(\s*with\s+(.+?)\)|\u005b\s*with\s+(.+?)\u005d)/iu)
+  const featuredArtist =
+    featMatch?.[1] ?? normalizeMusicText(withMatch?.[1] ?? withMatch?.[2] ?? '')
+  if (!featuredArtist) {
     return candidate.artists
   }
-  return [...candidate.artists, ...featTokens]
+  return [...candidate.artists, featuredArtist]
+}
+
+function maximumArtistCoverage(expected: string, candidates: string[]): number {
+  return Math.max(0, ...candidates.map((candidate) => tokenCoverage(expected, candidate)))
+}
+
+function hasSharedNonLatinTitleToken(expected: string, candidate: string): boolean {
+  const candidateTokens = new Set(stripFeatClause(candidate).split(' ').filter(Boolean))
+  return stripFeatClause(expected)
+    .split(' ')
+    .some((token) => /[^\p{ASCII}]/u.test(token) && candidateTokens.has(token))
+}
+
+function canTrustTransliteratedPrimaryArtist(
+  track: TrackMetadata,
+  candidate: YouTubeMusicCandidate,
+  candidateArtists: string[],
+): boolean {
+  const primaryArtist = track.artists[0]
+  if (
+    !primaryArtist ||
+    /[a-z0-9]/u.test(normalizeMusicText(primaryArtist)) ||
+    (!candidate.isOfficial && !candidate.isTopic) ||
+    Math.abs(track.durationMs - candidate.durationMs) >
+      TRANSLITERATED_ARTIST_DURATION_TOLERANCE_MS ||
+    titleTokenCoverage(track.title, candidate.title) < 1
+  ) {
+    return false
+  }
+
+  return (
+    track.artists
+      .slice(1)
+      .some((artist) => maximumArtistCoverage(artist, candidateArtists) >= 0.8) ||
+    hasSharedNonLatinTitleToken(track.title, candidate.title)
+  )
 }
 
 function hasConflictingQualifier(trackTitle: string, candidateTitle: string): boolean {
@@ -98,10 +139,16 @@ function scoreCandidate(
   }
 
   const primaryArtist = track.artists[0]
-  if (
-    !primaryArtist ||
-    !candidate.artists.some((artist) => tokenCoverage(primaryArtist, artist) >= 0.8)
-  ) {
+  const effectiveArtists = effectiveCandidateArtists(candidate)
+  const primaryArtistCoverage = primaryArtist
+    ? maximumArtistCoverage(primaryArtist, effectiveArtists)
+    : 0
+  const inferredTransliteratedArtist = canTrustTransliteratedPrimaryArtist(
+    track,
+    candidate,
+    effectiveArtists,
+  )
+  if (primaryArtistCoverage < 0.8 && !inferredTransliteratedArtist) {
     return { rejection: 'artist' }
   }
 
@@ -111,14 +158,13 @@ function scoreCandidate(
   }
 
   const title = titleTokenCoverage(track.title, candidate.title)
-  const effectiveArtists = effectiveCandidateArtists(candidate)
   const artists =
     track.artists.reduce(
-      (total, artist) =>
+      (total, artist, index) =>
         total +
-        Math.max(
-          ...effectiveArtists.map((candidateArtist) => tokenCoverage(artist, candidateArtist)),
-        ),
+        (inferredTransliteratedArtist && index === 0
+          ? 1
+          : maximumArtistCoverage(artist, effectiveArtists)),
       0,
     ) / track.artists.length
   const official = candidate.isOfficial || candidate.isTopic ? 1 : 0
@@ -141,16 +187,11 @@ function relaxedScoreCandidate(
   const effectiveArtists = effectiveCandidateArtists(candidate)
   const primaryArtist = track.artists[0]
   const primaryArtistCoverage = primaryArtist
-    ? Math.max(...effectiveArtists.map((artist) => tokenCoverage(primaryArtist, artist)))
+    ? maximumArtistCoverage(primaryArtist, effectiveArtists)
     : 0
   const artists =
     track.artists.reduce(
-      (total, artist) =>
-        total +
-        Math.max(
-          0,
-          ...effectiveArtists.map((candidateArtist) => tokenCoverage(artist, candidateArtist)),
-        ),
+      (total, artist) => total + maximumArtistCoverage(artist, effectiveArtists),
       0,
     ) / track.artists.length
   const trustedSurface = candidate.isOfficial || candidate.isTopic
