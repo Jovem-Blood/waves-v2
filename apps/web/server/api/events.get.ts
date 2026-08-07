@@ -1,5 +1,5 @@
 import { realtimeEventSchema, type RealtimeEvent } from '@waves/shared'
-import { createEventStream } from 'h3'
+import { createEventStream, getRequestHeader } from 'h3'
 
 import {
   type PublicApiDependencies,
@@ -19,10 +19,29 @@ export function createRealtimeEventsHandler(
 ) {
   return async function realtimeEventsHandler(event: Parameters<typeof createEventStream>[0]) {
     const eventStream = createEventStream(event)
+    const bus = getBus()
+    const lastEventId = getRequestHeader(event, 'last-event-id')
+
+    const unsubscribe = bus.subscribe((publication) =>
+      eventStream.push({
+        id: publication.id,
+        event: publication.event.type,
+        data: serializeEvent(publication.event),
+      }),
+    )
+
+    for (const publication of bus.replayAfter(lastEventId)) {
+      void eventStream.push({
+        id: publication.id,
+        event: publication.event.type,
+        data: serializeEvent(publication.event),
+      })
+    }
+
     const dependencies = getDependencies()
 
     void eventStream.push({
-      id: '0',
+      id: bus.lastId(),
       event: 'sync.snapshot',
       data: serializeEvent({
         type: 'sync.snapshot',
@@ -32,13 +51,6 @@ export function createRealtimeEventsHandler(
       }),
     })
 
-    const unsubscribe = getBus().subscribe((publication) =>
-      eventStream.push({
-        id: publication.id,
-        event: publication.event.type,
-        data: serializeEvent(publication.event),
-      }),
-    )
     const pingTimer = setInterval(() => {
       void eventStream.push({ event: 'realtime.ping', data: '{}' })
     }, PING_INTERVAL_MS)

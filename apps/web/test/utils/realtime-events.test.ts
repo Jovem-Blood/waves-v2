@@ -35,4 +35,16 @@ describe('realtime event bus', () => {
       } as unknown as RealtimeEvent),
     ).toThrow()
   })
+
+  it('keeps a bounded replay buffer for reconnecting clients', () => {
+    const bus = createRealtimeEventBus()
+
+    bus.publish(event)
+    const second = bus.publish({ ...event, reason: 'moved' })
+
+    expect(bus.lastId()).toBe('2')
+    expect(bus.replayAfter('1')).toEqual([second])
+    expect(bus.replayAfter(undefined)).toEqual([])
+    expect(bus.replayAfter('invalid')).toEqual([])
+  })
 })

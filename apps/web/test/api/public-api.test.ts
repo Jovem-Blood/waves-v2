@@ -446,6 +446,32 @@ describe('public API', () => {
     expect(text).toContain('"queue"')
   })
 
+  it('replays missed realtime events before the reconnect snapshot', async () => {
+    context?.realtimeBus.publish({ type: 'queue.updated', queue: [], reason: 'added' })
+    context?.realtimeBus.publish({ type: 'queue.updated', queue: [], reason: 'moved' })
+
+    const controller = new AbortController()
+    const response = await fetch(`${context?.baseUrl}/api/events`, {
+      headers: { 'Last-Event-ID': '1' },
+      signal: controller.signal,
+    })
+    expect(response.status).toBe(200)
+
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('SSE response did not expose a body')
+    const chunk = await reader.read()
+    controller.abort()
+    await reader.cancel().catch(() => undefined)
+    const text = new TextDecoder().decode(chunk.value)
+
+    expect(text.indexOf('event: queue.updated')).toBeLessThan(
+      text.indexOf('event: sync.snapshot'),
+    )
+    expect(text).toContain('id: 2')
+    expect(text).toContain('"reason":"moved"')
+    expect(text).toContain('event: sync.snapshot')
+  })
+
   it('returns terminal history and rejects malformed cursors', async () => {
     const repository = new QueueRepository(context?.connection.db)
     repository.insert({
