@@ -27,8 +27,9 @@ export class SafePlaybackError extends Error {
   constructor(
     readonly code: PlaybackErrorCode,
     readonly httpStatus?: number,
+    cause?: unknown,
   ) {
-    super(code)
+    super(code, cause === undefined ? undefined : { cause })
     this.name = 'SafePlaybackError'
   }
 }

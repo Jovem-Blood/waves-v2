@@ -1,6 +1,7 @@
 import type { BotCommand } from './types.js'
+import { runBestEffort } from './best-effort.js'
 import { sendControlLinkFollowUp } from './control-link.js'
-import { friendlyApiError } from './errors.js'
+import { friendlyApiError, respondToCommandFailure } from './errors.js'
 
 export const playCommand: BotCommand = {
   name: 'play',
@@ -13,12 +14,13 @@ export const playCommand: BotCommand = {
       !context.voiceAdapterCreator
     ) {
       await context.responder.ephemeral('Entre em um canal de voz antes de usar este comando.')
-      return
+      return { outcome: 'rejected' }
     }
 
     await context.responder.deferEphemeral()
 
     try {
+      let degradedFailure: unknown
       let joinedVoice = false
       if (!voiceManager.isConnected(context.guildId)) {
         const connectionResult = await voiceManager.join({
@@ -26,15 +28,26 @@ export const playCommand: BotCommand = {
           channelId: context.voiceChannelId,
           adapterCreator: context.voiceAdapterCreator,
         })
-        await api.sendEvent({
-          type: 'voice.connected',
-          occurredAt: new Date().toISOString(),
-          guildId: context.guildId,
-          guildName: context.guildName,
-          voiceChannelId: context.voiceChannelId,
-          voiceChannelName: context.voiceChannelName,
-          payload: { result: connectionResult },
-        })
+        const eventResult = await runBestEffort(
+          'command.play.voice_event',
+          context.logger,
+          {
+            guildId: context.guildId,
+            voiceChannelId: context.voiceChannelId,
+            eventType: 'voice.connected',
+          },
+          () =>
+            api.sendEvent({
+              type: 'voice.connected',
+              occurredAt: new Date().toISOString(),
+              guildId: context.guildId!,
+              guildName: context.guildName!,
+              voiceChannelId: context.voiceChannelId!,
+              voiceChannelName: context.voiceChannelName!,
+              payload: { result: connectionResult },
+            }),
+        )
+        degradedFailure = eventResult.failure
         joinedVoice = true
       }
 
@@ -66,10 +79,19 @@ export const playCommand: BotCommand = {
         `Adicionada à fila: **${result.track.title}** — ${result.track.artists.join(', ')}.${suffix}`,
       )
       if (joinedVoice) {
-        await sendControlLinkFollowUp(context)
+        const controlLinkResult = await sendControlLinkFollowUp(context)
+        degradedFailure ??= controlLinkResult.failure
       }
+      if (playbackResult === 'not-connected' || playbackResult === 'empty') {
+        degradedFailure ??= new Error(`Playback start returned ${playbackResult}`)
+      }
+      return degradedFailure === undefined
+        ? { outcome: 'success' }
+        : { outcome: 'degraded', failure: degradedFailure }
     } catch (error) {
-      await context.responder.ephemeral(friendlyApiError(error))
+      return respondToCommandFailure(error, () =>
+        context.responder.ephemeral(friendlyApiError(error)),
+      )
     }
   },
 }

@@ -44,8 +44,8 @@ const defaultRuntime: VoiceRuntime = {
 }
 
 export class VoiceConnectionError extends Error {
-  constructor() {
-    super('Voice connection did not become ready')
+  constructor(cause?: unknown) {
+    super('Voice connection did not become ready', cause === undefined ? undefined : { cause })
     this.name = 'VoiceConnectionError'
   }
 }
@@ -124,7 +124,7 @@ export class DiscordVoiceManager implements VoiceManager {
         'Voice join completed',
       )
       return 'connected'
-    } catch {
+    } catch (error) {
       this.destroySession(input.guildId, session)
       this.logger.error(
         {
@@ -134,10 +134,11 @@ export class DiscordVoiceManager implements VoiceManager {
           outcome: 'failed',
           errorCode: 'VOICE_CONNECTION_FAILED',
           durationMs: Date.now() - startedAt,
+          err: error,
         },
         'Voice join failed',
       )
-      throw new VoiceConnectionError()
+      throw new VoiceConnectionError(error)
     }
   }
 
@@ -234,7 +235,7 @@ export class DiscordVoiceManager implements VoiceManager {
           session.recovering = false
           void this.notifyConnectionState('reconnected', guildId, session.channelId)
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (session.intentionalDestroy || this.sessions.get(guildId) !== session) {
             return
           }
@@ -246,6 +247,7 @@ export class DiscordVoiceManager implements VoiceManager {
               voiceChannelId: session.channelId,
               outcome: 'unexpected',
               errorCode: 'VOICE_CONNECTION_FAILED',
+              err: error,
             },
             'Voice connection disconnected unexpectedly',
           )
@@ -267,8 +269,11 @@ export class DiscordVoiceManager implements VoiceManager {
   }
 
   private async notifyUnexpectedDisconnect(guildId: string, channelId: string): Promise<void> {
-    await this.onUnexpectedDisconnect(guildId, channelId).catch(() => {
-      this.logger.error({ guildId, voiceChannelId: channelId }, 'Voice event sync failed')
+    await this.onUnexpectedDisconnect(guildId, channelId).catch((error: unknown) => {
+      this.logger.error(
+        { guildId, voiceChannelId: channelId, err: error },
+        'Voice event sync failed',
+      )
     })
   }
 
@@ -277,9 +282,9 @@ export class DiscordVoiceManager implements VoiceManager {
     guildId: string,
     channelId: string,
   ): Promise<void> {
-    await this.onConnectionStateChange?.(type, guildId, channelId).catch(() => {
+    await this.onConnectionStateChange?.(type, guildId, channelId).catch((error: unknown) => {
       this.logger.error(
-        { guildId, voiceChannelId: channelId, eventType: `voice.${type}` },
+        { guildId, voiceChannelId: channelId, eventType: `voice.${type}`, err: error },
         'Voice event sync failed',
       )
     })

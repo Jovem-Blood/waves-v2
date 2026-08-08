@@ -2,45 +2,71 @@ services:
   web:
     build:
       context: .
-    image: waves:local
-    command: sh -c "node apps/web/docker-migrate.mjs && node apps/web/.output/server/index.mjs"
-    env_file:
-      - .env
+    image: waves:${APP_RELEASE:-local}
+    command: sh -c "node apps/web/docker-migrate.mjs && exec node apps/web/.output/server/index.mjs"
     environment:
+      APP_HOSTNAME: ${APP_HOSTNAME:-http://localhost:3000}
+      BOT_INTERNAL_SECRET: ${BOT_INTERNAL_SECRET:-${INTERNAL_API_TOKEN:-}}
+      EXTERNAL_HTTP_TIMEOUT_MS: ${EXTERNAL_HTTP_TIMEOUT_MS:-10000}
+      LASTFM_API_KEY: ${LASTFM_API_KEY:-}
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      NUXT_PUBLIC_APP_NAME: ${NUXT_PUBLIC_APP_NAME:-Waves}
+      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-/api}
+      NITRO_SHUTDOWN_TIMEOUT: 15000
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-${APP_HOSTNAME:-http://localhost:3000}}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: file:/data/waves.db
     ports:
-      - '3000:3000'
+      - '${WAVES_BIND_ADDRESS:-127.0.0.1}:3000:3000'
     volumes:
       - waves-data:/data
+      - waves-backups:/backups
     healthcheck:
       test:
         - CMD-SHELL
-        - node -e "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - node -e "fetch('http://127.0.0.1:3000/api/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 20s
     restart: unless-stopped
+    stop_grace_period: 30s
 
   bot:
-    image: waves:local
+    image: waves:${APP_RELEASE:-local}
     command: node apps/bot/dist/index.js
-    env_file:
-      - .env
     environment:
+      BOT_API_BASE_URL: http://web:3000/api
+      BOT_API_TIMEOUT_MS: ${BOT_API_TIMEOUT_MS:-10000}
+      BOT_HEARTBEAT_MAX_AGE_MS: ${BOT_HEARTBEAT_MAX_AGE_MS:-15000}
+      BOT_HEALTH_PORT: 3001
+      BOT_INTERNAL_SECRET: ${BOT_INTERNAL_SECRET:-${INTERNAL_API_TOKEN:-}}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      INTERNAL_WEB_URL: http://web:3000
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      BOT_API_BASE_URL: http://web:3000/api
-      INTERNAL_WEB_URL: http://web:3000
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-${APP_HOSTNAME:-http://localhost:3000}}
     depends_on:
       web:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:3001/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     restart: unless-stopped
+    stop_grace_period: 30s
 
 volumes:
   waves-data:
+  waves-backups:

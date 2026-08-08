@@ -1,8 +1,8 @@
 export class AudiusUnavailableError extends Error {
   readonly code = 'AUDIUS_UNAVAILABLE'
 
-  constructor() {
-    super('Audius is unavailable')
+  constructor(options?: ErrorOptions) {
+    super('Audius is unavailable', options)
     this.name = 'AudiusUnavailableError'
   }
 }
@@ -10,8 +10,8 @@ export class AudiusUnavailableError extends Error {
 export class AudiusInvalidResponseError extends Error {
   readonly code = 'AUDIUS_INVALID_RESPONSE'
 
-  constructor() {
-    super('Audius returned an invalid response')
+  constructor(options?: ErrorOptions) {
+    super('Audius returned an invalid response', options)
     this.name = 'AudiusInvalidResponseError'
   }
 }

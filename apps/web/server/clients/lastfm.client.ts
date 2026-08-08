@@ -1,6 +1,7 @@
 import type { TrackMetadata } from '@waves/shared'
 
 import type { LastFmConfig } from '../utils/lastfm-config'
+import { parseExternalHttpTimeout } from '../utils/external-http-config'
 import { LastFmInvalidResponseError, LastFmUnavailableError } from './lastfm.errors'
 import {
   lastFmErrorResponseSchema,
@@ -16,7 +17,6 @@ import {
 } from './lastfm.schemas'
 
 const LASTFM_API_URL = 'https://ws.audioscrobbler.com/2.0/'
-const DEFAULT_TIMEOUT_MS = 10_000
 const CACHE_TTL_MS = 15 * 60 * 1000
 
 export type LastFmFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -34,13 +34,20 @@ interface CacheEntry {
   value: unknown
 }
 
+type LastFmMethod =
+  | 'track.getSimilar'
+  | 'artist.getInfo'
+  | 'artist.getTopTracks'
+  | 'tag.getSimilar'
+  | 'tag.getTopTracks'
+
 export class LastFmClient implements LastFmClientPort {
   private readonly cache = new Map<string, CacheEntry>()
 
   constructor(
     private readonly config: LastFmConfig,
     private readonly request: LastFmFetch = fetch,
-    private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
+    private readonly timeoutMs = parseExternalHttpTimeout(),
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -90,7 +97,10 @@ export class LastFmClient implements LastFmClientPort {
     return parsed.data.tracks.track
   }
 
-  private async get(method: string, params: Readonly<Record<string, string>>): Promise<unknown> {
+  private async get(
+    method: LastFmMethod,
+    params: Readonly<Record<string, string>>,
+  ): Promise<unknown> {
     const cacheKey = `${method}:${JSON.stringify(params)}`
     const cached = this.cache.get(cacheKey)
     if (cached && cached.expiresAt > this.now()) return cached.value

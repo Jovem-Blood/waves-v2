@@ -40,14 +40,15 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV DATABASE_URL=file:/data/waves.db
+ENV NITRO_SHUTDOWN_TIMEOUT=15000
 
 WORKDIR /app
 
 RUN apt-get -o Acquire::Retries=5 update \
   && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates ffmpeg \
   && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /data \
-  && chown -R node:node /app /data
+  && mkdir -p /backups /data \
+  && chown -R node:node /app /backups /data
 
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=prod-deps --chown=node:node /app/apps/web/node_modules ./apps/web/node_modules
@@ -55,6 +56,7 @@ COPY --from=prod-deps --chown=node:node /app/apps/bot/node_modules ./apps/bot/no
 COPY --from=prod-deps --chown=node:node /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY --from=build --chown=node:node /app/apps/web/.output ./apps/web/.output
 COPY --from=build --chown=node:node /app/apps/web/drizzle ./apps/web/drizzle
+COPY --from=build --chown=node:node /app/apps/web/backup-database.mjs ./apps/web/backup-database.mjs
 COPY --from=build --chown=node:node /app/apps/web/docker-migrate.mjs ./apps/web/docker-migrate.mjs
 COPY --from=build --chown=node:node /app/apps/bot/dist ./apps/bot/dist
 COPY --from=build --chown=node:node /app/exports ./exports

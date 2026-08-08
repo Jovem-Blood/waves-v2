@@ -39,6 +39,7 @@ export class DualProviderRecommendationService {
 
   async getCandidates(seeds: readonly TrackMetadata[]): Promise<RecommendationCandidate[]> {
     let unavailableProviders = 0
+    let lastProviderError: unknown
     const aggregated: RecommendationCandidate[] = []
     for (const provider of this.providers) {
       const startedAt = this.now()
@@ -63,12 +64,14 @@ export class DualProviderRecommendationService {
       } catch (error) {
         if (error instanceof RecommendationMetadataUnavailableError) throw error
         unavailableProviders += 1
+        lastProviderError = error
         this.logger.warn(
           {
             operation: 'recommendation.provider',
             provider: provider.name,
             outcome: 'unavailable',
             durationMs: this.now() - startedAt,
+            err: error,
             errorCode:
               error instanceof RecommendationProviderUnavailableError
                 ? error.code
@@ -80,7 +83,9 @@ export class DualProviderRecommendationService {
     }
 
     if (unavailableProviders === this.providers.length) {
-      throw new RecommendationUnavailableError()
+      throw new RecommendationUnavailableError({
+        ...(lastProviderError === undefined ? {} : { cause: lastProviderError }),
+      })
     }
     return aggregated.slice(0, 30)
   }

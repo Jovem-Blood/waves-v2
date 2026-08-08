@@ -67,9 +67,9 @@ export class WavesApiClient implements WavesApi {
   private readonly baseUrl: string
 
   constructor(
-    config: Pick<BotConfig, 'apiBaseUrl' | 'internalApiToken'>,
+    config: Pick<BotConfig, 'apiBaseUrl' | 'internalApiToken' | 'apiTimeoutMs'>,
     private readonly request: WavesFetch = fetch,
-    private readonly timeoutMs = 10_000,
+    private readonly timeoutMs = config.apiTimeoutMs ?? 10_000,
   ) {
     this.baseUrl = config.apiBaseUrl.replace(/\/+$/, '')
     this.token = config.internalApiToken
@@ -155,7 +155,6 @@ export class WavesApiClient implements WavesApi {
     init: RequestInit = {},
   ): Promise<T> {
     let response: Response
-
     try {
       response = await this.request(`${this.baseUrl}${path}`, {
         ...init,
@@ -168,9 +167,9 @@ export class WavesApiClient implements WavesApi {
       })
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
-        throw new WavesApiTimeoutError()
+        throw new WavesApiTimeoutError(error)
       }
-      throw new WavesApiUnavailableError()
+      throw new WavesApiUnavailableError(error)
     }
 
     const body = await this.readJson(response)
@@ -184,7 +183,7 @@ export class WavesApiClient implements WavesApi {
 
     const result = schema.safeParse(body)
     if (!result.success) {
-      throw new WavesApiInvalidResponseError()
+      throw new WavesApiInvalidResponseError(result.error)
     }
     return result.data
   }
@@ -192,8 +191,8 @@ export class WavesApiClient implements WavesApi {
   private async readJson(response: Response): Promise<unknown> {
     try {
       return await response.json()
-    } catch {
-      throw new WavesApiInvalidResponseError()
+    } catch (error) {
+      throw new WavesApiInvalidResponseError(error)
     }
   }
 }

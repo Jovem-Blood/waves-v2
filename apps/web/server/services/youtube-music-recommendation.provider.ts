@@ -34,7 +34,10 @@ export class YouTubeMusicRecommendationProvider implements RecommendationProvide
       }))
     } catch (error) {
       throw new RecommendationProviderUnavailableError(this.name, {
-        cause: error instanceof YouTubeMusicUnavailableError ? error : undefined,
+        cause:
+          error instanceof Error
+            ? error
+            : new YouTubeMusicUnavailableError({ cause: new Error('Non-Error provider failure') }),
       })
     }
   }

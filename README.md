@@ -30,9 +30,9 @@ Copie `.env.example` para `.env` na raiz e preencha:
 
 - Spotify: `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET`;
 - Discord: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID` e `DISCORD_GUILD_ID`;
-- API interna: o mesmo `INTERNAL_API_TOKEN` para web e bot;
-- `BOT_API_BASE_URL`, normalmente `http://localhost:3000/api`.
-- `APP_HOSTNAME`, a URL HTTP(S) pública do painel incluída no link e QR code
+- API interna: o mesmo `BOT_INTERNAL_SECRET` para web e bot;
+- `INTERNAL_WEB_URL`, normalmente `http://localhost:3000`;
+- `PUBLIC_APP_URL`, a URL HTTP(S) pública do painel incluída no link e QR code
   enviados pelo bot.
 - `LOG_LEVEL`, com `debug`, `info`, `warn` ou `error`. O default é `debug` em
   desenvolvimento e `info` nos demais ambientes.
@@ -41,6 +41,8 @@ Copie `.env.example` para `.env` na raiz e preencha:
 
 O bot carrega o `.env` da raiz durante o desenvolvimento.
 O script `dev:web` também aponta explicitamente para esse arquivo no monorepo.
+`INTERNAL_API_TOKEN`, `BOT_API_BASE_URL` e `APP_HOSTNAME` continuam aceitos como
+aliases legados, mas não devem ser usados em novas instalações.
 
 ## Scripts
 
@@ -93,17 +95,16 @@ O Compose cria dois serviços a partir da mesma imagem local `waves:local`:
 - `web`: executa as migrações SQLite e inicia o Nuxt em `http://localhost:3000`.
 - `bot`: espera o healthcheck do web e comunica-se com `http://web:3000/api`.
 
+Os dois processos expõem liveness e readiness separados. O web usa
+`/api/health/live` e `/api/health/ready`; o healthcheck do bot fica disponível
+somente dentro do container em `/health/live` e `/health/ready`.
+
 O banco fica no volume nomeado `waves-data`, montado em `/data`. Use
 `docker compose down` para parar sem apagar dados. Use
 `docker compose down -v` apenas quando quiser remover também o volume SQLite.
 
-Para adicionar serviços operacionais depois, como coleta de logs ou Cloudflared,
-use arquivos Compose extras:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.logs.yml up -d
-docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d
-```
+Backups online podem ser criados no volume `waves-backups` com
+`apps/web/backup-database.mjs`; o script mantém 14 cópias diárias e 4 semanais.
 
 ## Smoke test local
 
@@ -149,11 +150,11 @@ compartilhar logs, procure por `streamUrl`, `Authorization`, `signature`, `token
 - `SPOTIFY_UNAVAILABLE`: revise as credenciais e a conectividade com os endpoints
   oficiais do Spotify.
 - `401 UNAUTHORIZED` na API interna: confirme que web e bot usam exatamente o
-  mesmo `INTERNAL_API_TOKEN`.
+  mesmo `BOT_INTERNAL_SECRET`.
 - Comandos não aparecem: registre novamente no guild correto e confirme
   `DISCORD_CLIENT_ID` e `DISCORD_GUILD_ID`.
-- Bot conecta, mas não opera a fila: confirme que `BOT_API_BASE_URL` termina em
-  `/api` e que o web está ativo.
+- Bot conecta, mas não opera a fila: confirme `INTERNAL_WEB_URL` e que o web está
+  ativo.
 - Playback termina imediatamente: filtre pelo mesmo `playbackAttemptId` e localize
   o primeiro `errorCode`, especialmente `SOURCE_HTTP_STATUS`,
   `DEMUX_PROBE_FAILED`, `PLAYER_ERROR` ou `PREMATURE_IDLE`.

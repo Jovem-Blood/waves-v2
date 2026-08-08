@@ -1,7 +1,7 @@
 import type { Queue } from '@waves/shared'
 
 import type { BotCommand } from './types.js'
-import { friendlyApiError } from './errors.js'
+import { friendlyApiError, respondToCommandFailure } from './errors.js'
 
 const MAX_MESSAGE_LENGTH = 1_900
 
@@ -25,8 +25,11 @@ export const queueCommand: BotCommand = {
   async execute(context, api) {
     try {
       await context.responder.public(formatQueue(await api.getQueue()))
+      return { outcome: 'success' }
     } catch (error) {
-      await context.responder.ephemeral(friendlyApiError(error))
+      return respondToCommandFailure(error, () =>
+        context.responder.ephemeral(friendlyApiError(error)),
+      )
     }
   },
 }

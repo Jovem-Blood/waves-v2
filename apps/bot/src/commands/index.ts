@@ -10,7 +10,7 @@ import { pauseCommand } from './pause.command.js'
 import { resumeCommand } from './resume.command.js'
 import { volumeCommand } from './volume.command.js'
 import type { BotCommand } from './types.js'
-import type { CommandContext } from './types.js'
+import type { CommandContext, CommandExecutionResult } from './types.js'
 import type { WavesApi } from '../api/waves-api.client.js'
 import type { PlaybackManager } from '../playback/audio-player-manager.js'
 import type { VoiceManager } from '../voice/voice-manager.js'
@@ -67,12 +67,11 @@ export async function executeCommand(
   api: WavesApi,
   voiceManager: VoiceManager,
   playbackManager: PlaybackManager,
-): Promise<boolean> {
+): Promise<CommandExecutionResult> {
   const command = commands.get(context.name)
   if (!command) {
-    return false
+    return { outcome: 'unknown_command' }
   }
 
-  await command.execute(context, api, voiceManager, playbackManager)
-  return true
+  return command.execute(context, api, voiceManager, playbackManager)
 }

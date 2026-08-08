@@ -41,6 +41,20 @@ export interface CommandContext {
   responder: CommandResponder
 }
 
+export type CommandExecutionOutcome =
+  | 'success'
+  | 'degraded'
+  | 'rejected'
+  | 'user_error'
+  | 'dependency_error'
+  | 'internal_error'
+  | 'unknown_command'
+
+export interface CommandExecutionResult {
+  outcome: CommandExecutionOutcome
+  failure?: unknown
+}
+
 export interface BotCommand {
   name: string
   execute(
@@ -48,5 +62,5 @@ export interface BotCommand {
     api: WavesApi,
     voiceManager: VoiceManager,
     playbackManager: PlaybackManager,
-  ): Promise<void>
+  ): Promise<CommandExecutionResult>
 }

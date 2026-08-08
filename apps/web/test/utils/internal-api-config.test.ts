@@ -12,6 +12,17 @@ describe('parseInternalApiConfig', () => {
     })
   })
 
+  it('uses the legacy token when the preferred variable is empty', () => {
+    expect(
+      parseInternalApiConfig({
+        BOT_INTERNAL_SECRET: '   ',
+        INTERNAL_API_TOKEN: 'legacy-token',
+      }),
+    ).toEqual({
+      token: 'legacy-token',
+    })
+  })
+
   it('rejects missing tokens without exposing values', () => {
     expect(() => parseInternalApiConfig({})).toThrow(InternalApiConfigurationError)
 

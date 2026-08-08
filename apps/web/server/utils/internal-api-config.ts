@@ -21,7 +21,7 @@ export function parseInternalApiConfig(
   environment: Record<string, string | undefined> = process.env,
 ): InternalApiConfig {
   const result = internalApiConfigSchema.safeParse({
-    token: environment.BOT_INTERNAL_SECRET ?? environment.INTERNAL_API_TOKEN,
+    token: environment.BOT_INTERNAL_SECRET?.trim() || environment.INTERNAL_API_TOKEN,
   })
 
   if (!result.success) {

@@ -13,6 +13,10 @@ const botConfigSchema = z.strictObject({
   apiBaseUrl: httpUrlSchema,
   appHostname: httpUrlSchema,
   logLevel: logLevelSchema,
+  apiTimeoutMs: z.coerce.number().int().min(1).max(60_000).default(10_000),
+  healthHost: z.string().trim().min(1).default('127.0.0.1'),
+  healthPort: z.coerce.number().int().min(1).max(65_535).default(3_002),
+  heartbeatMaxAgeMs: z.coerce.number().int().min(1_000).max(300_000).default(120_000),
 })
 
 export interface BotConfig {
@@ -23,6 +27,10 @@ export interface BotConfig {
   apiBaseUrl: string
   appHostname: string
   logLevel: z.infer<typeof logLevelSchema>
+  apiTimeoutMs?: number
+  healthHost?: string
+  healthPort?: number
+  heartbeatMaxAgeMs?: number
 }
 
 export class BotConfigurationError extends Error {
@@ -40,6 +48,10 @@ const variableNames = {
   apiBaseUrl: 'INTERNAL_WEB_URL/BOT_API_BASE_URL',
   appHostname: 'PUBLIC_APP_URL/APP_HOSTNAME',
   logLevel: 'LOG_LEVEL',
+  apiTimeoutMs: 'BOT_API_TIMEOUT_MS',
+  healthHost: 'BOT_HEALTH_HOST',
+  healthPort: 'BOT_HEALTH_PORT',
+  heartbeatMaxAgeMs: 'BOT_HEARTBEAT_MAX_AGE_MS',
 } as const
 
 export function parseBotConfig(environment?: Record<string, string | undefined>): BotConfig {
@@ -64,10 +76,14 @@ export function parseBotConfig(environment?: Record<string, string | undefined>)
     discordToken: source.DISCORD_TOKEN,
     discordClientId: source.DISCORD_CLIENT_ID,
     discordGuildId: source.DISCORD_GUILD_ID,
-    internalApiToken: source.BOT_INTERNAL_SECRET ?? source.INTERNAL_API_TOKEN,
+    internalApiToken: source.BOT_INTERNAL_SECRET?.trim() || source.INTERNAL_API_TOKEN,
     apiBaseUrl,
     appHostname: source.PUBLIC_APP_URL ?? source.APP_HOSTNAME,
     logLevel: source.LOG_LEVEL ?? (source.NODE_ENV === 'development' ? 'debug' : 'info'),
+    apiTimeoutMs: source.BOT_API_TIMEOUT_MS,
+    healthHost: source.BOT_HEALTH_HOST,
+    healthPort: source.BOT_HEALTH_PORT,
+    heartbeatMaxAgeMs: source.BOT_HEARTBEAT_MAX_AGE_MS,
   })
 
   if (!result.success) {

@@ -122,7 +122,11 @@ export function createDiscordLinkConfirmHandler(
       writeSessionCookie(event, session.token, { expiresAt: session.expiresAt })
       return sendRedirect(event, '/', 302)
     } catch (error) {
-      setResponseStatus(event, 400)
+      const expected =
+        error instanceof DiscordLinkExpiredError ||
+        error instanceof DiscordLinkUsedError ||
+        error instanceof DiscordLinkInvalidError
+      setResponseStatus(event, expected ? 400 : 500)
       setHeader(event, 'content-type', 'text/html; charset=utf-8')
       return renderErrorPage(errorMessage(error))
     }

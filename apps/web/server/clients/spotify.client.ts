@@ -1,4 +1,5 @@
 import type { SpotifyConfig } from '../utils/spotify-config'
+import { parseExternalHttpTimeout } from '../utils/external-http-config'
 import {
   SpotifyAuthenticationError,
   SpotifyInvalidResponseError,
@@ -31,8 +32,8 @@ async function readJson(
 ): Promise<unknown> {
   try {
     return await response.json()
-  } catch {
-    throw new SpotifyInvalidResponseError(operation)
+  } catch (error) {
+    throw new SpotifyInvalidResponseError(operation, { cause: error })
   }
 }
 
@@ -40,6 +41,7 @@ export class SpotifyClient implements SpotifyClientPort {
   constructor(
     private readonly config: SpotifyConfig,
     private readonly request: SpotifyFetch = fetch,
+    private readonly timeoutMs: number = parseExternalHttpTimeout(),
   ) {}
 
   async requestAccessToken(): Promise<SpotifyAccessToken> {
@@ -57,9 +59,10 @@ export class SpotifyClient implements SpotifyClientPort {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({ grant_type: 'client_credentials' }),
+        signal: AbortSignal.timeout(this.timeoutMs),
       })
-    } catch {
-      throw new SpotifyUnavailableError('authenticate')
+    } catch (error) {
+      throw new SpotifyUnavailableError('authenticate', { cause: error })
     }
 
     if (!response.ok) {
@@ -72,7 +75,7 @@ export class SpotifyClient implements SpotifyClientPort {
 
     const result = spotifyTokenResponseSchema.safeParse(await readJson(response, 'authenticate'))
     if (!result.success) {
-      throw new SpotifyInvalidResponseError('authenticate')
+      throw new SpotifyInvalidResponseError('authenticate', { cause: result.error })
     }
 
     return {
@@ -94,9 +97,10 @@ export class SpotifyClient implements SpotifyClientPort {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
+        signal: AbortSignal.timeout(this.timeoutMs),
       })
-    } catch {
-      throw new SpotifyUnavailableError('search')
+    } catch (error) {
+      throw new SpotifyUnavailableError('search', { cause: error })
     }
 
     if (!response.ok) {
@@ -105,7 +109,7 @@ export class SpotifyClient implements SpotifyClientPort {
 
     const result = spotifySearchResponseSchema.safeParse(await readJson(response, 'search'))
     if (!result.success) {
-      throw new SpotifyInvalidResponseError('search')
+      throw new SpotifyInvalidResponseError('search', { cause: result.error })
     }
 
     return result.data.tracks.items

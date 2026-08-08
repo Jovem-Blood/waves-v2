@@ -10,8 +10,8 @@ export class SpotifyConfigurationError extends Error {
 export class SpotifyAuthenticationError extends Error {
   readonly code = 'SPOTIFY_AUTHENTICATION_ERROR'
 
-  constructor() {
-    super('Spotify authentication failed')
+  constructor(options?: ErrorOptions) {
+    super('Spotify authentication failed', options)
     this.name = 'SpotifyAuthenticationError'
   }
 }
@@ -19,8 +19,11 @@ export class SpotifyAuthenticationError extends Error {
 export class SpotifyUnavailableError extends Error {
   readonly code = 'SPOTIFY_UNAVAILABLE'
 
-  constructor(readonly operation: 'authenticate' | 'search') {
-    super(`Spotify is unavailable during ${operation}`)
+  constructor(
+    readonly operation: 'authenticate' | 'search',
+    options?: ErrorOptions,
+  ) {
+    super(`Spotify is unavailable during ${operation}`, options)
     this.name = 'SpotifyUnavailableError'
   }
 }
@@ -28,8 +31,11 @@ export class SpotifyUnavailableError extends Error {
 export class SpotifyInvalidResponseError extends Error {
   readonly code = 'SPOTIFY_INVALID_RESPONSE'
 
-  constructor(readonly operation: 'authenticate' | 'search') {
-    super(`Spotify returned an invalid ${operation} response`)
+  constructor(
+    readonly operation: 'authenticate' | 'search',
+    options?: ErrorOptions,
+  ) {
+    super(`Spotify returned an invalid ${operation} response`, options)
     this.name = 'SpotifyInvalidResponseError'
   }
 }

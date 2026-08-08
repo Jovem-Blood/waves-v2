@@ -28,8 +28,8 @@ const isEntrypoint =
     process.argv[1].replaceAll('\\', '/')
 
 if (isEntrypoint) {
-  void registerCommands().catch(() => {
-    createBotLogger().fatal('Discord command registration failed')
+  void registerCommands().catch((error: unknown) => {
+    createBotLogger().fatal({ err: error }, 'Discord command registration failed')
     process.exitCode = 1
   })
 }

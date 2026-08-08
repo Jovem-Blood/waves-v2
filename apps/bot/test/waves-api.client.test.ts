@@ -1,5 +1,5 @@
 ﻿import type { BotEvent, BotPlayInput } from '@waves/shared'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WavesApiClient, type WavesFetch } from '../src/api/waves-api.client.js'
 import {
@@ -38,6 +38,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('WavesApiClient', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('applies base URL and bearer centrally and validates queue', async () => {
     const request = vi.fn<WavesFetch>().mockResolvedValue(jsonResponse([item]))
     const client = new WavesApiClient(config, request)
@@ -46,7 +50,8 @@ describe('WavesApiClient', () => {
 
     const [url, init] = request.mock.calls[0] ?? []
     expect(url).toBe('http://localhost:3000/api/internal/bot/queue')
-    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer internal-token')
+    const headers = new Headers(init?.headers)
+    expect(headers.get('authorization')).toBe('Bearer internal-token')
     expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 
@@ -196,14 +201,12 @@ describe('WavesApiClient', () => {
   })
 
   it('translates timeout without exposing the token', async () => {
-    const client = new WavesApiClient(
-      config,
-      vi.fn<WavesFetch>().mockRejectedValue(new DOMException('internal-token', 'TimeoutError')),
-      1,
-    )
+    const cause = new DOMException('internal-token', 'TimeoutError')
+    const client = new WavesApiClient(config, vi.fn<WavesFetch>().mockRejectedValue(cause), 1)
 
     const error = await client.getQueue().catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(WavesApiTimeoutError)
+    expect((error as Error).cause).toBe(cause)
     expect(String(error)).not.toContain(config.internalApiToken)
   })
 })

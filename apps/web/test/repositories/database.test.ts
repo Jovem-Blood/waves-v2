@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
+import {
+  checkRuntimeDatabaseReadiness,
+  createDatabaseConnection,
+  type DatabaseConnection,
+} from '../../server/db/client'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []
@@ -149,4 +153,20 @@ describe('database migrations', () => {
       expect(readFileSync(devDatabase)).toEqual(contentsBefore)
     }
   }, 10_000)
+
+  it('reports readiness only after the required schema is migrated', () => {
+    const connection = createDatabaseConnection({ url: ':memory:' })
+    connections.push(connection)
+
+    expect(() => checkRuntimeDatabaseReadiness(connection)).toThrow(/schema is not ready/)
+    migrate(connection.db, { migrationsFolder })
+    expect(() => checkRuntimeDatabaseReadiness(connection)).not.toThrow()
+  })
+
+  it('closes a database connection idempotently', () => {
+    const connection = createDatabaseConnection({ url: ':memory:' })
+    connection.close()
+
+    expect(() => connection.close()).not.toThrow()
+  })
 })

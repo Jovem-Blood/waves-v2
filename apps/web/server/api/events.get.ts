@@ -19,6 +19,7 @@ export function createRealtimeEventsHandler(
 ) {
   return async function realtimeEventsHandler(event: Parameters<typeof createEventStream>[0]) {
     const eventStream = createEventStream(event)
+    eventStream.pause()
     const bus = getBus()
     const lastEventId = getRequestHeader(event, 'last-event-id')
 
@@ -30,17 +31,15 @@ export function createRealtimeEventsHandler(
       }),
     )
 
-    for (const publication of bus.replayAfter(lastEventId)) {
-      void eventStream.push({
-        id: publication.id,
-        event: publication.event.type,
-        data: serializeEvent(publication.event),
-      })
-    }
+    const initialMessages = bus.replayAfter(lastEventId).map((publication) => ({
+      id: publication.id,
+      event: publication.event.type,
+      data: serializeEvent(publication.event),
+    }))
 
     const dependencies = getDependencies()
 
-    void eventStream.push({
+    initialMessages.push({
       id: bus.lastId(),
       event: 'sync.snapshot',
       data: serializeEvent({
@@ -50,6 +49,7 @@ export function createRealtimeEventsHandler(
         status: dependencies.operationalStatusService.get(),
       }),
     })
+    await eventStream.push(initialMessages)
 
     const pingTimer = setInterval(() => {
       void eventStream.push({ event: 'realtime.ping', data: '{}' })
@@ -61,7 +61,9 @@ export function createRealtimeEventsHandler(
       await eventStream.close()
     })
 
-    return eventStream.send()
+    const sendPromise = eventStream.send()
+    await eventStream.resume()
+    return sendPromise
   }
 }
 

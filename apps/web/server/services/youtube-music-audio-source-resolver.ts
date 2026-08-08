@@ -69,6 +69,7 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
             provider: 'youtube_music',
             sourceIdentifier: preferredVideoId,
             outcome: 'search_required',
+            err: error,
             ...classifyExternalError(error),
           },
           'YouTube Music source refresh requires new matching',
@@ -113,10 +114,7 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
         operation: 'youtube_music.match',
         provider: 'youtube_music',
         searchSurface,
-        trackTitle: track.title,
-        trackArtists: track.artists,
-        trackDurationMs: track.durationMs,
-        trackIsrc: track.isrc,
+        hasIsrc: track.isrc !== undefined,
         outcome: selected ? 'selected' : match.diagnostics.ambiguous ? 'ambiguous' : 'not_found',
         candidateCount: match.diagnostics.candidateCount,
         rejectedByQualifier: match.diagnostics.rejectedByQualifier,
@@ -126,7 +124,6 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
         ambiguous: match.diagnostics.ambiguous,
         sourceIdentifier: match.diagnostics.selected?.videoId,
         selectedScore: match.diagnostics.selected?.score,
-        candidateDetails: match.diagnostics.candidateDetails,
       },
       'YouTube Music candidate matching completed',
     )
@@ -152,6 +149,7 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
             provider: 'youtube_music',
             sourceIdentifier: candidate.videoId,
             outcome: 'unavailable',
+            err: error,
             ...classifyExternalError(error),
           },
           'YouTube Music candidate unavailable, trying next',
@@ -177,14 +175,16 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
 
   private translateError(error: unknown): Error {
     if (error instanceof YouTubeMusicCandidateUnavailableError) {
-      return new AudioSourceNotFoundError()
+      return new AudioSourceNotFoundError({ cause: error })
     }
     if (
       error instanceof YouTubeMusicUnavailableError ||
       error instanceof YouTubeMusicInvalidResponseError
     ) {
-      return new AudioSourceUnavailableError()
+      return new AudioSourceUnavailableError({ cause: error })
     }
-    return error instanceof Error ? error : new AudioSourceUnavailableError()
+    return error instanceof Error
+      ? error
+      : new AudioSourceUnavailableError({ cause: new Error('Non-Error provider failure') })
   }
 }

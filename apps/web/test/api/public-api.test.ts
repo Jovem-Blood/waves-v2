@@ -13,6 +13,8 @@ import { createApp, createRouter, toNodeListener } from 'h3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { healthHandler } from '../../server/api/health.get'
+import { liveHealthHandler } from '../../server/api/health/live.get'
+import { createReadyHealthHandler } from '../../server/api/health/ready.get'
 import { createGuestAuthHandler } from '../../server/api/auth/guest.post'
 import { createLogoutHandler } from '../../server/api/auth/logout.post'
 import { createDiscordLinkCreateHandler } from '../../server/api/auth/discord-link/create.post'
@@ -87,6 +89,20 @@ interface TestContext {
 
 let context: TestContext | undefined
 
+async function readSseUntil(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  marker: string,
+): Promise<string> {
+  const decoder = new TextDecoder()
+  let text = ''
+  while (!text.includes(marker)) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    text += decoder.decode(chunk.value, { stream: true })
+  }
+  return text + decoder.decode()
+}
+
 async function startTestApi(): Promise<TestContext> {
   const connection = createDatabaseConnection({ url: ':memory:' })
   migrate(connection.db, { migrationsFolder })
@@ -141,6 +157,13 @@ async function startTestApi(): Promise<TestContext> {
   const router = createRouter()
 
   router.get('/api/health', healthHandler)
+  router.get('/api/health/live', liveHealthHandler)
+  router.get(
+    '/api/health/ready',
+    createReadyHealthHandler(() => {
+      connection.sqlite.prepare('select 1 from queue_items limit 1').get()
+    }),
+  )
   router.get('/api/me', createMeHandler(getDependencies))
   router.post('/api/auth/guest', createGuestAuthHandler(getDependencies))
   router.post('/api/auth/logout', createLogoutHandler(getDependencies))
@@ -270,6 +293,22 @@ describe('public API', () => {
 
     expect(response.status).toBe(200)
     expect(body).toMatchObject({ ok: true })
+    expect(context?.spotifySearch).not.toHaveBeenCalled()
+  })
+
+  it('separates liveness and database readiness checks', async () => {
+    const live = await request('/api/health/live')
+    const ready = await request('/api/health/ready')
+
+    expect(live.response.status).toBe(200)
+    expect(live.body).toEqual({ ok: true })
+    expect(ready.response.status).toBe(200)
+    expect(ready.body).toEqual({
+      ok: true,
+      checks: {
+        database: 'ready',
+      },
+    })
     expect(context?.spotifySearch).not.toHaveBeenCalled()
   })
 
@@ -436,10 +475,9 @@ describe('public API', () => {
 
     const reader = response.body?.getReader()
     if (!reader) throw new Error('SSE response did not expose a body')
-    const chunk = await reader.read()
+    const text = await readSseUntil(reader, 'event: sync.snapshot')
     controller.abort()
     await reader.cancel().catch(() => undefined)
-    const text = new TextDecoder().decode(chunk.value)
 
     expect(text).toContain('event: sync.snapshot')
     expect(text).toContain('"type":"sync.snapshot"')
@@ -459,14 +497,11 @@ describe('public API', () => {
 
     const reader = response.body?.getReader()
     if (!reader) throw new Error('SSE response did not expose a body')
-    const chunk = await reader.read()
+    const text = await readSseUntil(reader, 'event: sync.snapshot')
     controller.abort()
     await reader.cancel().catch(() => undefined)
-    const text = new TextDecoder().decode(chunk.value)
 
-    expect(text.indexOf('event: queue.updated')).toBeLessThan(
-      text.indexOf('event: sync.snapshot'),
-    )
+    expect(text.indexOf('event: queue.updated')).toBeLessThan(text.indexOf('event: sync.snapshot'))
     expect(text).toContain('id: 2')
     expect(text).toContain('"reason":"moved"')
     expect(text).toContain('event: sync.snapshot')

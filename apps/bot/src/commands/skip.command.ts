@@ -1,5 +1,5 @@
 import type { BotCommand } from './types.js'
-import { friendlyApiError } from './errors.js'
+import { friendlyApiError, respondToCommandFailure } from './errors.js'
 
 export const skipCommand: BotCommand = {
   name: 'skip',
@@ -7,7 +7,7 @@ export const skipCommand: BotCommand = {
     try {
       if (!context.guildId) {
         await context.responder.ephemeral('Este comando só pode ser usado em um servidor.')
-        return
+        return { outcome: 'rejected' }
       }
       const result = await playbackManager.skip(context.guildId)
       context.logger?.info(
@@ -25,8 +25,11 @@ export const skipCommand: BotCommand = {
             ? 'Faixa pulada. A fila agora está vazia.'
             : 'O Waves precisa estar conectado a um canal de voz.',
       )
+      return result === 'not-connected' ? { outcome: 'rejected' } : { outcome: 'success' }
     } catch (error) {
-      await context.responder.ephemeral(friendlyApiError(error))
+      return respondToCommandFailure(error, () =>
+        context.responder.ephemeral(friendlyApiError(error)),
+      )
     }
   },
 }

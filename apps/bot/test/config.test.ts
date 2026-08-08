@@ -21,6 +21,10 @@ describe('parseBotConfig', () => {
       apiBaseUrl: 'http://localhost:3000/api',
       appHostname: 'http://localhost:3000',
       logLevel: 'info',
+      apiTimeoutMs: 10_000,
+      healthHost: '127.0.0.1',
+      healthPort: 3_002,
+      heartbeatMaxAgeMs: 120_000,
     })
   })
 
@@ -38,6 +42,18 @@ describe('parseBotConfig', () => {
       internalApiToken: 'legacy-token',
       apiBaseUrl: 'http://localhost:3000/api',
       appHostname: 'http://localhost:3000',
+    })
+  })
+
+  it('uses the legacy token when the preferred variable is empty', () => {
+    expect(
+      parseBotConfig({
+        ...validEnvironment,
+        BOT_INTERNAL_SECRET: '   ',
+        INTERNAL_API_TOKEN: 'legacy-token',
+      }),
+    ).toMatchObject({
+      internalApiToken: 'legacy-token',
     })
   })
 

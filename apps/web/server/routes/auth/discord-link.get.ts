@@ -176,7 +176,11 @@ export function createDiscordLinkConsumeHandler(
       setHtmlResponse(event)
       return renderConfirmPage(token)
     } catch (error) {
-      setHtmlResponse(event, 400)
+      const expected =
+        error instanceof DiscordLinkExpiredError ||
+        error instanceof DiscordLinkUsedError ||
+        error instanceof DiscordLinkInvalidError
+      setHtmlResponse(event, expected ? 400 : 500)
       return renderErrorPage(errorMessage(error))
     }
   })

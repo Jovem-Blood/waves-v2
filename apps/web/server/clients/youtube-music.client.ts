@@ -2,6 +2,7 @@ import { runInNewContext } from 'node:vm'
 
 import { Innertube, Platform, UniversalCache } from 'youtubei.js'
 
+import { parseExternalHttpTimeout } from '../utils/external-http-config'
 import {
   YouTubeMusicCandidateUnavailableError,
   YouTubeMusicInvalidResponseError,
@@ -17,7 +18,6 @@ import {
 } from './youtube-music.schemas'
 import { YouTubePoTokenProvider } from './youtube-po-token'
 
-const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_STREAM_TTL_MS = 5 * 60_000
 const TARGET_BITRATE = 128_000
 
@@ -134,7 +134,7 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
   private readonly now: () => number
 
   constructor(options: YouTubeMusicClientOptions = {}) {
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    this.timeoutMs = options.timeoutMs ?? parseExternalHttpTimeout()
     this.streamTtlMs = options.streamTtlMs ?? DEFAULT_STREAM_TTL_MS
     this.now = options.now ?? Date.now
     this.poTokenProvider = new YouTubePoTokenProvider(this.now)
@@ -142,7 +142,14 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
 
   private readonly poTokenProvider: YouTubePoTokenProvider
 
-  async searchSongs(query: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+  searchSongs(query: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+    return this.searchSongsUnobserved(query, limit)
+  }
+
+  private async searchSongsUnobserved(
+    query: string,
+    limit: number,
+  ): Promise<YouTubeMusicCandidate[]> {
     try {
       const innertube = await this.getSession()
       const search = await withTimeout(
@@ -178,7 +185,14 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
     }
   }
 
-  async searchVideos(query: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+  searchVideos(query: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+    return this.searchVideosUnobserved(query, limit)
+  }
+
+  private async searchVideosUnobserved(
+    query: string,
+    limit: number,
+  ): Promise<YouTubeMusicCandidate[]> {
     try {
       const innertube = await this.getSession()
       const search = await withTimeout(
@@ -211,7 +225,14 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
     }
   }
 
-  async getUpNextSongs(videoId: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+  getUpNextSongs(videoId: string, limit = 10): Promise<YouTubeMusicCandidate[]> {
+    return this.getUpNextSongsUnobserved(videoId, limit)
+  }
+
+  private async getUpNextSongsUnobserved(
+    videoId: string,
+    limit: number,
+  ): Promise<YouTubeMusicCandidate[]> {
     try {
       const innertube = await this.getSession()
       const playlist = await withTimeout(innertube.music.getUpNext(videoId, true), this.timeoutMs)
@@ -245,7 +266,11 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
     }
   }
 
-  async resolveAudioFormat(videoId: string): Promise<YouTubeAudioFormat> {
+  resolveAudioFormat(videoId: string): Promise<YouTubeAudioFormat> {
+    return this.resolveAudioFormatUnobserved(videoId)
+  }
+
+  private async resolveAudioFormatUnobserved(videoId: string): Promise<YouTubeAudioFormat> {
     try {
       const tokens = await withTimeout(this.poTokenProvider.getTokens(videoId), this.timeoutMs)
       const innertube = await this.getSession(tokens)
@@ -314,16 +339,25 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
       this.session = undefined
       this.sessionGeneration = tokens.generation
     }
-    this.session ??= withTimeout(
-      Innertube.create({
-        cache: new UniversalCache(true),
-        enable_session_cache: true,
-        generate_session_locally: true,
-        retrieve_player: true,
-        ...(tokens ? { visitor_data: tokens.visitorData, po_token: tokens.sessionToken } : {}),
-      }),
-      this.timeoutMs,
-    )
+    if (!this.session) {
+      const pending = withTimeout(
+        Innertube.create({
+          cache: new UniversalCache(true),
+          enable_session_cache: true,
+          generate_session_locally: true,
+          retrieve_player: true,
+          ...(tokens ? { visitor_data: tokens.visitorData, po_token: tokens.sessionToken } : {}),
+        }),
+        this.timeoutMs,
+      )
+      const recoverable = pending.catch((error: unknown) => {
+        if (this.session === recoverable) {
+          this.session = undefined
+        }
+        throw error
+      })
+      this.session = recoverable
+    }
     return this.session
   }
 }

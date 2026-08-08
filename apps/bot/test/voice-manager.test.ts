@@ -114,15 +114,18 @@ describe('DiscordVoiceManager', () => {
 
   it('destroys a partial connection when ready times out', async () => {
     const test = setup()
-    test.waitUntilReady.mockRejectedValueOnce(new Error('timeout'))
+    const cause = new Error('timeout')
+    test.waitUntilReady.mockRejectedValueOnce(cause)
 
-    await expect(
-      test.manager.join({
+    const error = await test.manager
+      .join({
         guildId: 'guild-1',
         channelId: 'voice-1',
         adapterCreator: test.adapterCreator,
-      }),
-    ).rejects.toBeInstanceOf(VoiceConnectionError)
+      })
+      .catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(VoiceConnectionError)
+    expect((error as Error).cause).toBe(cause)
     expect(test.connections[0]?.destroy).toHaveBeenCalledOnce()
     expect(test.manager.leave('guild-1')).toBe(false)
   })

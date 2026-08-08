@@ -1,3 +1,4 @@
+import { runBestEffort } from './best-effort.js'
 import type { BotCommand } from './types.js'
 
 export const leaveCommand: BotCommand = {
@@ -5,7 +6,7 @@ export const leaveCommand: BotCommand = {
   async execute(context, api, voiceManager, playbackManager) {
     if (!context.guildId) {
       await context.responder.ephemeral('Este comando só pode ser usado em um servidor.')
-      return
+      return { outcome: 'rejected' }
     }
 
     await context.responder.deferEphemeral()
@@ -23,24 +24,24 @@ export const leaveCommand: BotCommand = {
       },
       'Leave command completed',
     )
-    await api
-      .sendEvent({
-        type: 'voice.disconnected',
-        occurredAt: new Date().toISOString(),
+    const eventResult = await runBestEffort(
+      'command.leave.event',
+      context.logger,
+      {
         guildId: context.guildId,
-        payload: { reason: 'command' },
-      })
-      .catch(() => {
-        context.logger?.error(
-          {
-            operation: 'command.leave.event',
-            guildId: context.guildId,
-            eventType: 'voice.disconnected',
-            outcome: 'sync_failed',
-            errorCode: 'PLAYBACK_SYNC_FAILED',
-          },
-          'Leave event sync failed',
-        )
-      })
+        eventType: 'voice.disconnected',
+        errorCode: 'PLAYBACK_SYNC_FAILED',
+      },
+      () =>
+        api.sendEvent({
+          type: 'voice.disconnected',
+          occurredAt: new Date().toISOString(),
+          guildId: context.guildId!,
+          payload: { reason: 'command' },
+        }),
+    )
+    return eventResult.ok
+      ? { outcome: 'success' }
+      : { outcome: 'degraded', failure: eventResult.failure }
   },
 }

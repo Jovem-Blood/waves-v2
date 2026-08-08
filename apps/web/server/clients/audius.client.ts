@@ -1,3 +1,4 @@
+import { parseExternalHttpTimeout } from '../utils/external-http-config'
 import { AudiusInvalidResponseError, AudiusUnavailableError } from './audius.errors'
 import { audiusSearchResponseSchema, type AudiusTrack } from './audius.schemas'
 
@@ -26,7 +27,7 @@ export class AudiusClient implements AudiusClientPort {
   ) {
     this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/+$/, '')
     this.appName = options.appName ?? 'Waves'
-    this.timeoutMs = options.timeoutMs ?? 10_000
+    this.timeoutMs = options.timeoutMs ?? parseExternalHttpTimeout()
   }
 
   async searchTracks(query: string, limit = 10): Promise<AudiusTrack[]> {
@@ -41,8 +42,8 @@ export class AudiusClient implements AudiusClientPort {
         method: 'GET',
         signal: AbortSignal.timeout(this.timeoutMs),
       })
-    } catch {
-      throw new AudiusUnavailableError()
+    } catch (error) {
+      throw new AudiusUnavailableError({ cause: error })
     }
 
     if (!response.ok) {
@@ -52,13 +53,13 @@ export class AudiusClient implements AudiusClientPort {
     let body: unknown
     try {
       body = await response.json()
-    } catch {
-      throw new AudiusInvalidResponseError()
+    } catch (error) {
+      throw new AudiusInvalidResponseError({ cause: error })
     }
 
     const result = audiusSearchResponseSchema.safeParse(body)
     if (!result.success) {
-      throw new AudiusInvalidResponseError()
+      throw new AudiusInvalidResponseError({ cause: result.error })
     }
 
     return result.data.data

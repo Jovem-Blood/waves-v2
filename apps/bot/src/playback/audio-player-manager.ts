@@ -111,7 +111,19 @@ export function createRangedAudioStream(
       const controller = new AbortController()
       const abortFromContext = () => controller.abort()
       if (context?.signal?.aborted) {
-        throw new SafePlaybackError('SOURCE_FETCH_CANCELLED')
+        const error = new SafePlaybackError('SOURCE_FETCH_CANCELLED')
+        context.logger.info(
+          {
+            operation: 'source.range',
+            outcome: 'cancelled',
+            errorCode: error.code,
+            attempt: context.attempt,
+            playbackAttemptId: context.playbackAttemptId,
+            err: error,
+          },
+          'Source range cancelled',
+        )
+        throw error
       }
       context?.signal?.addEventListener('abort', abortFromContext, { once: true })
       const timeout = setTimeout(
@@ -119,6 +131,7 @@ export function createRangedAudioStream(
         context?.fetchTimeoutMs ?? RESOURCE_FETCH_TIMEOUT_MS,
       )
       timeout.unref?.()
+      let deliveringChunk = false
 
       try {
         context?.logger.debug(
@@ -184,14 +197,17 @@ export function createRangedAudioStream(
         )
         offset += chunk.byteLength
         totalBytes += chunk.byteLength
+        deliveringChunk = true
         yield chunk
+        deliveringChunk = false
       } catch (error) {
-        const externallyCancelled = context?.signal?.aborted === true
-        const classified = externallyCancelled
-          ? { errorCode: 'SOURCE_FETCH_CANCELLED' as const }
+        const externallyCancelled = context?.signal?.aborted === true || deliveringChunk
+        const failure = externallyCancelled
+          ? new SafePlaybackError('SOURCE_FETCH_CANCELLED', undefined, error)
           : error instanceof DOMException && error.name === 'AbortError'
-            ? { errorCode: 'SOURCE_FETCH_TIMEOUT' as const }
-            : classifyPlaybackError(error)
+            ? new SafePlaybackError('SOURCE_FETCH_TIMEOUT', undefined, error)
+            : error
+        const classified = classifyPlaybackError(failure)
         const logPayload = {
           operation: 'source.range',
           outcome: externallyCancelled ? 'cancelled' : 'failed',
@@ -200,17 +216,14 @@ export function createRangedAudioStream(
           rangeEnd: end,
           attempt: context?.attempt,
           playbackAttemptId: context?.playbackAttemptId,
+          err: failure,
         }
         if (externallyCancelled) {
           context?.logger.info(logPayload, 'Source range cancelled')
         } else {
           context?.logger.warn(logPayload, 'Source range failed')
         }
-        throw externallyCancelled
-          ? new SafePlaybackError('SOURCE_FETCH_CANCELLED')
-          : error instanceof DOMException && error.name === 'AbortError'
-            ? new SafePlaybackError('SOURCE_FETCH_TIMEOUT')
-            : error
+        throw failure
       } finally {
         clearTimeout(timeout)
         context?.signal?.removeEventListener('abort', abortFromContext)
@@ -248,8 +261,8 @@ const defaultRuntime: PlaybackRuntime = {
     let probe
     try {
       probe = await demuxProbe(input)
-    } catch {
-      throw new SafePlaybackError('DEMUX_PROBE_FAILED')
+    } catch (error) {
+      throw new SafePlaybackError('DEMUX_PROBE_FAILED', undefined, error)
     }
     context?.logger.debug(
       {
@@ -279,8 +292,8 @@ const defaultRuntime: PlaybackRuntime = {
         'Audio resource created',
       )
       return resource
-    } catch {
-      throw new SafePlaybackError('AUDIO_RESOURCE_FAILED')
+    } catch (error) {
+      throw new SafePlaybackError('AUDIO_RESOURCE_FAILED', undefined, error)
     }
   },
 }
@@ -330,7 +343,12 @@ export class AudioPlayerManager implements PlaybackManager {
         claim = await this.api.claimPlayback()
       } catch (error) {
         logger.error(
-          { operation: 'playback.claim', outcome: 'failed', ...classifyPlaybackError(error) },
+          {
+            operation: 'playback.claim',
+            outcome: 'failed',
+            ...classifyPlaybackError(error),
+            err: error,
+          },
           'Playback claim failed',
         )
         throw error
@@ -522,7 +540,19 @@ export class AudioPlayerManager implements PlaybackManager {
       this.handleStateChange(guildId, session, previousState, nextState)
     })
     player.on('error', (error) => {
-      void this.handlePlayerError(guildId, session, error)
+      void this.handlePlayerError(guildId, session, error).catch((recoveryError: unknown) => {
+        this.logger.error(
+          {
+            operation: 'audio_player.recovery',
+            guildId,
+            outcome: 'failed',
+            err: new AggregateError([error, recoveryError], 'Audio player recovery failed', {
+              cause: recoveryError,
+            }),
+          },
+          'Audio player recovery failed',
+        )
+      })
     })
 
     if (!this.voiceManager.subscribe(guildId, player)) {
@@ -578,11 +608,13 @@ export class AudioPlayerManager implements PlaybackManager {
         this.sessions.get(guildId) !== session ||
         session.current !== current
       ) {
+        const error = new SafePlaybackError('SOURCE_FETCH_CANCELLED')
         logger.info(
           {
             operation: 'playback.attempt',
             outcome: 'cancelled',
             errorCode: 'SOURCE_FETCH_CANCELLED',
+            err: error,
           },
           'Playback attempt cancelled',
         )
@@ -615,6 +647,16 @@ export class AudioPlayerManager implements PlaybackManager {
         },
       )
       if (abortController.signal.aborted || session.current !== current) {
+        const error = new SafePlaybackError('SOURCE_FETCH_CANCELLED')
+        logger.info(
+          {
+            operation: 'playback.attempt',
+            outcome: 'cancelled',
+            errorCode: error.code,
+            err: error,
+          },
+          'Playback attempt cancelled',
+        )
         return
       }
       logger.info(
@@ -639,6 +681,7 @@ export class AudioPlayerManager implements PlaybackManager {
             operation: 'playback.attempt',
             outcome: 'cancelled',
             errorCode: 'SOURCE_FETCH_CANCELLED',
+            err: error,
           },
           'Playback attempt cancelled',
         )
@@ -651,6 +694,7 @@ export class AudioPlayerManager implements PlaybackManager {
           outcome: retries < 1 ? 'retrying' : 'failed',
           forceRefresh: retries < 1,
           ...classifyPlaybackError(error),
+          err: error,
         },
         'Playback attempt failed',
       )
@@ -731,6 +775,7 @@ export class AudioPlayerManager implements PlaybackManager {
         previousState.status === AudioPlayerStatus.Playing &&
         previousState.resource.playbackDuration < MIN_SUCCESSFUL_PLAYBACK_MS
       ) {
+        const error = new SafePlaybackError('PREMATURE_IDLE')
         this.logger.warn(
           {
             operation: 'playback.idle',
@@ -743,6 +788,7 @@ export class AudioPlayerManager implements PlaybackManager {
             playbackDurationMs: previousState.resource.playbackDuration,
             outcome: 'premature',
             errorCode: 'PREMATURE_IDLE',
+            err: error,
           },
           'Premature player idle detected',
         )
@@ -788,6 +834,7 @@ export class AudioPlayerManager implements PlaybackManager {
         outcome: current.retries < 1 ? 'refreshing' : 'failing',
         ...classifyPlaybackError(error),
         errorCode: 'PLAYER_ERROR',
+        err: error,
       },
       'Audio player error',
     )
@@ -856,6 +903,7 @@ export class AudioPlayerManager implements PlaybackManager {
           outcome: 'sync_failed',
           errorCode: 'PLAYBACK_SYNC_FAILED',
           ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
+          err: error,
         },
         'Playback completion sync failed',
       )
@@ -905,6 +953,7 @@ export class AudioPlayerManager implements PlaybackManager {
           outcome: 'sync_failed',
           errorCode: 'PLAYBACK_SYNC_FAILED',
           ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
+          err: error,
         },
         'Playback failure sync failed',
       )
@@ -923,7 +972,7 @@ export class AudioPlayerManager implements PlaybackManager {
         guildId,
         payload: { queueItemId },
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         this.logger.error(
           {
             operation: 'playback.event',
@@ -932,6 +981,7 @@ export class AudioPlayerManager implements PlaybackManager {
             eventType: type,
             outcome: 'sync_failed',
             errorCode: 'PLAYBACK_SYNC_FAILED',
+            err: error,
           },
           'Playback event sync failed',
         )

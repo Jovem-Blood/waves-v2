@@ -7,7 +7,7 @@ import {
 
 import type { WavesApi } from './api/waves-api.client.js'
 import { executeCommand } from './commands/index.js'
-import type { CommandResponder } from './commands/types.js'
+import type { CommandExecutionResult, CommandResponder } from './commands/types.js'
 import type { BotLogger } from './logger.js'
 import type { PlaybackManager } from './playback/audio-player-manager.js'
 import type { VoiceManager } from './voice/voice-manager.js'
@@ -49,7 +49,7 @@ export async function handleInteraction(
   playbackManager: PlaybackManager,
   appHostname: string,
   logger?: BotLogger,
-): Promise<void> {
+): Promise<CommandExecutionResult> {
   const startedAt = Date.now()
   const member = interaction.member
   const displayName =
@@ -73,7 +73,7 @@ export async function handleInteraction(
     },
     'Discord command received',
   )
-  await executeCommand(
+  const result = await executeCommand(
     {
       name: interaction.commandName,
       appHostname,
@@ -104,18 +104,30 @@ export async function handleInteraction(
     voiceManager,
     playbackManager,
   )
-  logger?.info(
-    {
-      operation: 'command.execute',
-      commandName: interaction.commandName,
-      guildId: interaction.guildId,
-      voiceChannelId,
-      discordUserId: interaction.user.id,
-      outcome: 'completed',
-      durationMs: Date.now() - startedAt,
-    },
-    'Discord command completed',
-  )
+  const durationMs = Date.now() - startedAt
+  const terminalLog = {
+    operation: 'command.execute',
+    commandName: interaction.commandName,
+    guildId: interaction.guildId,
+    voiceChannelId,
+    discordUserId: interaction.user.id,
+    outcome: result.outcome,
+    durationMs,
+    ...(result.failure === undefined ? {} : { err: result.failure }),
+  }
+  if (result.outcome === 'dependency_error' || result.outcome === 'internal_error') {
+    logger?.error(terminalLog, 'Discord command failed')
+  } else if (
+    result.outcome === 'degraded' ||
+    result.outcome === 'rejected' ||
+    result.outcome === 'user_error' ||
+    result.outcome === 'unknown_command'
+  ) {
+    logger?.warn(terminalLog, 'Discord command did not complete normally')
+  } else {
+    logger?.info(terminalLog, 'Discord command completed')
+  }
+  return result
 }
 
 export function registerInteractionHandler(
@@ -144,8 +156,8 @@ export function registerInteractionHandler(
           operation: 'command.execute',
           commandName: interaction.commandName,
           discordUserId: interaction.user.id,
-          errorName: error instanceof Error ? error.name : 'UnknownError',
-          outcome: 'failed',
+          outcome: 'internal_error',
+          err: error,
         },
         'Command handler failed',
       )

@@ -1,4 +1,6 @@
+import { runBestEffort } from './best-effort.js'
 import { sendControlLinkFollowUp } from './control-link.js'
+import { respondToCommandFailure } from './errors.js'
 import type { BotCommand } from './types.js'
 
 export const joinCommand: BotCommand = {
@@ -12,7 +14,7 @@ export const joinCommand: BotCommand = {
       !context.voiceAdapterCreator
     ) {
       await context.responder.ephemeral('Entre em um canal de voz antes de usar este comando.')
-      return
+      return { outcome: 'rejected' }
     }
 
     await context.responder.deferEphemeral()
@@ -24,34 +26,52 @@ export const joinCommand: BotCommand = {
         channelId: context.voiceChannelId,
         adapterCreator: context.voiceAdapterCreator,
       })
-    } catch {
+    } catch (error) {
       voiceManager.leave(context.guildId)
-      await api
-        .sendEvent({
-          type: 'voice.connection_failed',
-          occurredAt: new Date().toISOString(),
+      await runBestEffort(
+        'command.join.failure_event',
+        context.logger,
+        {
           guildId: context.guildId,
           voiceChannelId: context.voiceChannelId,
-          payload: { code: 'VOICE_CONNECTION_FAILED' },
-        })
-        .catch(() => undefined)
-      await context.responder.ephemeral(
-        'Não consegui conectar ao canal de voz. Verifique minhas permissões e tente novamente.',
+          eventType: 'voice.connection_failed',
+        },
+        () =>
+          api.sendEvent({
+            type: 'voice.connection_failed',
+            occurredAt: new Date().toISOString(),
+            guildId: context.guildId!,
+            voiceChannelId: context.voiceChannelId!,
+            payload: { code: 'VOICE_CONNECTION_FAILED' },
+          }),
       )
-      return
+      return respondToCommandFailure(error, () =>
+        context.responder.ephemeral(
+          'Não consegui conectar ao canal de voz. Verifique minhas permissões e tente novamente.',
+        ),
+      )
     }
 
-    await api
-      .sendEvent({
-        type: 'voice.connected',
-        occurredAt: new Date().toISOString(),
+    const eventResult = await runBestEffort(
+      'command.join.connected_event',
+      context.logger,
+      {
         guildId: context.guildId,
-        guildName: context.guildName,
         voiceChannelId: context.voiceChannelId,
-        voiceChannelName: context.voiceChannelName,
-        payload: { result },
-      })
-      .catch(() => undefined)
+        eventType: 'voice.connected',
+      },
+      () =>
+        api.sendEvent({
+          type: 'voice.connected',
+          occurredAt: new Date().toISOString(),
+          guildId: context.guildId!,
+          guildName: context.guildName!,
+          voiceChannelId: context.voiceChannelId!,
+          voiceChannelName: context.voiceChannelName!,
+          payload: { result },
+        }),
+    )
+    let degradedFailure = eventResult.failure
     const playbackResult = await playbackManager.start(context.guildId)
     const connectionMessage =
       result === 'already-connected'
@@ -62,7 +82,11 @@ export const joinCommand: BotCommand = {
         ? `${connectionMessage} A reprodução da fila começou.`
         : connectionMessage,
     )
-    await sendControlLinkFollowUp(context)
+    const controlLinkResult = await sendControlLinkFollowUp(context)
+    degradedFailure ??= controlLinkResult.failure
+    if (playbackResult === 'not-connected') {
+      degradedFailure ??= new Error('Playback was not connected after voice join')
+    }
     context.logger?.info(
       {
         operation: 'command.join',
@@ -73,5 +97,8 @@ export const joinCommand: BotCommand = {
       },
       'Join command completed',
     )
+    return degradedFailure === undefined
+      ? { outcome: 'success' }
+      : { outcome: 'degraded', failure: degradedFailure }
   },
 }

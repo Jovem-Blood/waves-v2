@@ -45,6 +45,7 @@ describe('SpotifyClient', () => {
     })
     expect(init?.body).toBeInstanceOf(URLSearchParams)
     expect((init?.body as URLSearchParams).toString()).toBe('grant_type=client_credentials')
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('sends track-only search parameters and bearer authorization', async () => {
@@ -69,6 +70,7 @@ describe('SpotifyClient', () => {
       limit: '10',
     })
     expect(init?.headers).toEqual({ Authorization: 'Bearer access-token' })
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('translates rejected credentials without exposing them', async () => {
@@ -88,16 +90,18 @@ describe('SpotifyClient', () => {
       config,
       vi.fn<SpotifyFetch>().mockRejectedValue(new Error('access-token secret detail')),
     )
-    await expect(unavailableClient.requestAccessToken()).rejects.toEqual(
-      new SpotifyUnavailableError('authenticate'),
-    )
+    const unavailableError = await unavailableClient
+      .requestAccessToken()
+      .catch((error: unknown) => error)
+    expect(unavailableError).toBeInstanceOf(SpotifyUnavailableError)
+    expect((unavailableError as Error).cause).toBeInstanceOf(Error)
 
     const invalidClient = new SpotifyClient(
       config,
       vi.fn<SpotifyFetch>().mockResolvedValue(jsonResponse({ expires_in: 3600 })),
     )
-    await expect(invalidClient.requestAccessToken()).rejects.toEqual(
-      new SpotifyInvalidResponseError('authenticate'),
+    await expect(invalidClient.requestAccessToken()).rejects.toBeInstanceOf(
+      SpotifyInvalidResponseError,
     )
   })
 
@@ -107,8 +111,8 @@ describe('SpotifyClient', () => {
       vi.fn<SpotifyFetch>().mockResolvedValue(jsonResponse({ tracks: { items: [{}] } })),
     )
 
-    await expect(client.searchTracks('query', 'access-token')).rejects.toEqual(
-      new SpotifyInvalidResponseError('search'),
+    await expect(client.searchTracks('query', 'access-token')).rejects.toBeInstanceOf(
+      SpotifyInvalidResponseError,
     )
   })
 })

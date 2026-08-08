@@ -192,8 +192,8 @@ h2 {
 
 @media (min-width: 72rem) {
   .search-panel {
-    overflow: auto;
-    min-height: 0;
+    height: fit-content;
+    align-self: start;
     padding: 16px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);

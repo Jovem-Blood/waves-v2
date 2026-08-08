@@ -41,16 +41,52 @@ export function createDatabaseConnection(
     sqlite.pragma('journal_mode = WAL')
   }
 
+  let closed = false
   return {
     db: drizzle({ client: sqlite, schema }),
     sqlite,
-    close: () => sqlite.close(),
+    close: () => {
+      if (!closed) {
+        sqlite.close()
+        closed = true
+      }
+    },
   }
 }
 
 let runtimeConnection: DatabaseConnection | undefined
 
-export function useDatabase(): WavesDatabase {
+export function useDatabaseConnection(): DatabaseConnection {
   runtimeConnection ??= createDatabaseConnection()
-  return runtimeConnection.db
+  return runtimeConnection
+}
+
+export function useDatabase(): WavesDatabase {
+  return useDatabaseConnection().db
+}
+
+export function checkRuntimeDatabaseReadiness(
+  connection: DatabaseConnection = useDatabaseConnection(),
+): void {
+  const requiredTables = ['operational_state', 'player_state', 'queue_items'] as const
+  const rows = connection.sqlite
+    .prepare(
+      `select name
+       from sqlite_master
+       where type = 'table'
+         and name in ('operational_state', 'player_state', 'queue_items')`,
+    )
+    .all() as Array<{ name: string }>
+  const available = new Set(rows.map(({ name }) => name))
+  const missing = requiredTables.filter((name) => !available.has(name))
+  if (missing.length > 0) {
+    throw new Error(`Database schema is not ready: ${missing.join(', ')}`)
+  }
+  connection.sqlite.prepare('select 1').get()
+}
+
+export function closeRuntimeDatabase(): void {
+  const connection = runtimeConnection
+  runtimeConnection = undefined
+  connection?.close()
 }

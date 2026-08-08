@@ -9,7 +9,7 @@ import {
   type AudioResource,
   type VoiceConnection,
 } from '@discordjs/voice'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { WavesApi } from '../src/api/waves-api.client.js'
 import type { BotLogger } from '../src/logger.js'
@@ -20,6 +20,10 @@ import {
   type PlaybackRuntime,
 } from '../src/playback/audio-player-manager.js'
 import type { VoiceManager } from '../src/voice/voice-manager.js'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 const item: QueueItem = {
   id: 'queue-1',
@@ -577,7 +581,8 @@ describe('createRangedAudioStream', () => {
       )
     })
 
-    for await (const _chunk of createRangedAudioStream('https://media.example/audio', request)) {
+    for await (const chunk of createRangedAudioStream('https://media.example/audio', request)) {
+      void chunk
       // drain stream
     }
 

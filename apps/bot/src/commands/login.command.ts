@@ -1,5 +1,5 @@
 import type { BotCommand } from './types.js'
-import { friendlyApiError } from './errors.js'
+import { friendlyApiError, respondToCommandFailure } from './errors.js'
 
 export const loginCommand: BotCommand = {
   name: 'login',
@@ -26,8 +26,11 @@ export const loginCommand: BotCommand = {
           'Ele expira em 10 minutos e só funciona uma vez.',
         ].join('\n'),
       )
+      return { outcome: 'success' }
     } catch (error) {
-      await context.responder.ephemeral(friendlyApiError(error))
+      return respondToCommandFailure(error, () =>
+        context.responder.ephemeral(friendlyApiError(error)),
+      )
     }
   },
 }

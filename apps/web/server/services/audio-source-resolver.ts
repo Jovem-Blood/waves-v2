@@ -115,7 +115,7 @@ export class AudiusAudioSourceResolver implements AudioSourceResolver {
       )
     } catch (error) {
       if (error instanceof AudiusUnavailableError || error instanceof AudiusInvalidResponseError) {
-        throw new AudioSourceUnavailableError()
+        throw new AudioSourceUnavailableError({ cause: error })
       }
       throw error
     }

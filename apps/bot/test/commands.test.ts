@@ -59,14 +59,15 @@ function setup(overrides: Partial<CommandContext> = {}) {
   const joinVoice = vi.fn().mockResolvedValue('connected' as const)
   const leaveVoice = vi.fn().mockReturnValue(true)
   const isConnected = vi.fn().mockReturnValue(true)
-  const loggerError = vi.fn()
+  const loggerError = vi.fn<(bindings: Record<string, unknown>, message: string) => void>()
+  const loggerWarn = vi.fn<(bindings: Record<string, unknown>, message: string) => void>()
   const logger = {
     child: vi.fn(),
     debug: vi.fn(),
     error: loggerError,
     fatal: vi.fn(),
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: loggerWarn,
   }
   const voiceManager: VoiceManager = {
     join: joinVoice,
@@ -134,6 +135,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
       leaveVoice,
       isConnected,
       loggerError,
+      loggerWarn,
     },
   }
 }
@@ -221,11 +223,13 @@ describe('bot commands', () => {
     })
     mocks.play.mockRejectedValue(new WavesApiError('TRACK_NOT_FOUND', 404))
 
-    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+    const result = await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
 
     expect(mocks.ephemeralReply).toHaveBeenCalledWith(
       'Não encontrei nenhuma faixa para essa busca.',
     )
+    expect(result.outcome).toBe('user_error')
+    expect(result.failure).toBeInstanceOf(WavesApiError)
   })
 
   it('play explains duplicate tracks without exposing API details', async () => {
@@ -240,9 +244,11 @@ describe('bot commands', () => {
     })
     mocks.play.mockRejectedValue(new WavesApiError('DUPLICATE_TRACK', 409))
 
-    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+    const result = await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
 
     expect(mocks.ephemeralReply).toHaveBeenCalledWith('Esta faixa já está na fila.')
+    expect(result.outcome).toBe('user_error')
+    expect(result.failure).toBeInstanceOf(WavesApiError)
   })
 
   it('play connects to the member voice channel before adding and starting playback', async () => {
@@ -258,7 +264,7 @@ describe('bot commands', () => {
     mocks.isConnected.mockReturnValue(false)
     mocks.startPlayback.mockResolvedValue('started')
 
-    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+    const result = await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
 
     expect(mocks.joinVoice).toHaveBeenCalledWith({
       guildId: 'guild-1',
@@ -277,6 +283,7 @@ describe('bot commands', () => {
     expect(mocks.sendEvent.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.play.mock.invocationCallOrder[0]!,
     )
+    expect(result).toEqual({ outcome: 'success' })
   })
 
   it('play requires the member to be in a voice channel', async () => {
@@ -286,12 +293,15 @@ describe('bot commands', () => {
       guildId: 'guild-1',
     })
 
-    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+    const rejectedResult = await commands
+      .get('play')!
+      .execute(context, api, voiceManager, playbackManager)
 
     expect(mocks.ephemeralReply).toHaveBeenCalledWith(
       'Entre em um canal de voz antes de usar este comando.',
     )
     expect(mocks.play).not.toHaveBeenCalled()
+    expect(rejectedResult).toEqual({ outcome: 'rejected' })
   })
 
   it('play handles API unavailability without technical details', async () => {
@@ -306,12 +316,16 @@ describe('bot commands', () => {
     })
     mocks.play.mockRejectedValue(new Error('http://internal/token-secret'))
 
-    await commands.get('play')!.execute(context, api, voiceManager, playbackManager)
+    const failureResult = await commands
+      .get('play')!
+      .execute(context, api, voiceManager, playbackManager)
 
     expect(mocks.ephemeralReply).toHaveBeenCalledWith(
       'Não consegui acessar o Waves agora. Tente novamente em instantes.',
     )
     expect(JSON.stringify(mocks.ephemeralReply.mock.calls)).not.toContain('token-secret')
+    expect(failureResult.outcome).toBe('internal_error')
+    expect(failureResult.failure).toBeInstanceOf(Error)
   })
 
   it('formats an empty queue and limits output to ten items', () => {
@@ -423,7 +437,7 @@ describe('bot commands', () => {
       commands
         .get('join')!
         .execute(join.context, join.api, join.voiceManager, join.playbackManager),
-    ).resolves.toBeUndefined()
+    ).resolves.toMatchObject({ outcome: 'degraded' })
     expect(join.mocks.ephemeralReply).toHaveBeenCalledWith('Waves conectado ao seu canal de voz.')
     expect(join.mocks.leaveVoice).not.toHaveBeenCalled()
 
@@ -434,21 +448,24 @@ describe('bot commands', () => {
       commands
         .get('leave')!
         .execute(leave.context, leave.api, leave.voiceManager, leave.playbackManager),
-    ).resolves.toBeUndefined()
+    ).resolves.toMatchObject({ outcome: 'degraded' })
     expect(leave.mocks.ephemeralReply).toHaveBeenCalledWith('Waves desconectado do canal de voz.')
-    expect(leave.mocks.loggerError).toHaveBeenCalledWith(
+    expect(leave.mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
         operation: 'command.leave.event',
-        outcome: 'sync_failed',
+        outcome: 'failed',
       }),
-      'Leave event sync failed',
+      'Best-effort operation failed',
     )
+    expect(leave.mocks.loggerWarn.mock.calls.at(-1)?.[0].err).toBeInstanceOf(Error)
   })
 
   it('ignores unknown commands without executing the API', async () => {
     const { api, context, mocks, playbackManager, voiceManager } = setup({ name: 'unknown' })
 
-    await expect(executeCommand(context, api, voiceManager, playbackManager)).resolves.toBe(false)
+    await expect(executeCommand(context, api, voiceManager, playbackManager)).resolves.toEqual({
+      outcome: 'unknown_command',
+    })
     expect(mocks.getQueue).not.toHaveBeenCalled()
     expect(mocks.play).not.toHaveBeenCalled()
     expect(mocks.skip).not.toHaveBeenCalled()
