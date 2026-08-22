@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from '#imports'
-import { AudioWaveform, Headphones, History } from '@lucide/vue'
+import { Activity, AudioWaveform, Headphones, History } from '@lucide/vue'
 import { computed, watch } from 'vue'
 
 import CurrentUserMenu from '../components/CurrentUserMenu.vue'
@@ -123,6 +123,10 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         <NuxtLink class="history-link" to="/hist">
           <History :size="17" aria-hidden="true" />
           Histórico
+        </NuxtLink>
+        <NuxtLink class="history-link" to="/playback-health">
+          <Activity :size="17" aria-hidden="true" />
+          Playback Health
         </NuxtLink>
         <CurrentUserMenu
           :user="auth.user.value"

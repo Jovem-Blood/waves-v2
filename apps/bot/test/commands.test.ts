@@ -52,6 +52,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
   const claimPlayback = vi.fn()
   const completePlayback = vi.fn()
   const sendEvent = vi.fn().mockResolvedValue(undefined)
+  const reportPlaybackAttempt = vi.fn().mockResolvedValue(undefined)
   const createDiscordLink = vi.fn().mockResolvedValue({
     url: 'https://waves.example.com/auth/discord-link?token=secret',
     expiresAt: '2026-06-18T18:10:00.000Z',
@@ -94,6 +95,7 @@ function setup(overrides: Partial<CommandContext> = {}) {
   const api: WavesApi = {
     claimPlayback,
     completePlayback,
+    reportPlaybackAttempt,
     getQueue,
     play,
     resolveSource,

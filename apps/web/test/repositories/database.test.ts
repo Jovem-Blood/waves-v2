@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('database migrations', () => {
-  it('creates all eleven tables', () => {
+  it('creates all twelve tables', () => {
     const { sqlite } = createMigratedDatabase()
     const tables = sqlite
       .prepare(
@@ -43,6 +43,7 @@ describe('database migrations', () => {
       'autoplay_suggestions',
       'discord_login_tokens',
       'operational_state',
+      'playback_attempts',
       'player_state',
       'queue_items',
       'resolved_sources',
@@ -61,6 +62,12 @@ describe('database migrations', () => {
       name: string
     }>
     expect(queueColumns.map((column) => column.name)).toContain('origin')
+
+    const attemptColumns = sqlite.prepare("pragma table_info('playback_attempts')").all() as Array<{
+      name: string
+    }>
+    expect(attemptColumns.map((column) => column.name)).toContain('playback_attempt_id')
+    expect(attemptColumns.map((column) => column.name)).toContain('failure_stage')
   })
 
   it('deduplicates active tracks and compacts positions before creating the unique index', () => {

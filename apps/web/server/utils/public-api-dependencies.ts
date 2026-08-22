@@ -13,6 +13,7 @@ import type {
   UpdateAutoplayInput,
   PlaybackTransitionResult,
   CompletePlaybackInput,
+  PlaybackAttemptReport,
 } from '@waves/shared'
 
 import { SpotifyClient } from '../clients/spotify.client'
@@ -21,6 +22,7 @@ import { YouTubeMusicClient } from '../clients/youtube-music.client'
 import { AutoplayRepository } from '../repositories/autoplay.repository'
 import { AutoplaySuggestionRepository } from '../repositories/autoplay-suggestion.repository'
 import { AutoplayCandidateRepository } from '../repositories/autoplay-candidate.repository'
+import { PlaybackAttemptRepository } from '../repositories/playback-attempt.repository'
 import { useDatabase } from '../db/client'
 import { PlayerStateRepository } from '../repositories/player-state.repository'
 import { OperationalStatusRepository } from '../repositories/operational-status.repository'
@@ -43,6 +45,7 @@ import { LastFmRecommendationProvider } from '../services/lastfm-recommendation.
 import { YouTubeMusicRecommendationProvider } from '../services/youtube-music-recommendation.provider'
 import { SpotifyCandidateResolver } from '../services/spotify-candidate-resolver.service'
 import { DualProviderRecommendationService } from '../services/dual-provider-recommendation.service'
+import { PlaybackHealthService } from '../services/playback-health.service'
 import { parseLastFmConfig } from './lastfm-config'
 import { parseSpotifyConfig } from './spotify-config'
 import { getRealtimeEventBus } from './realtime-events'
@@ -57,6 +60,15 @@ export interface PublicQueueService {
 
 export interface PublicHistoryService {
   list(cursor?: string): HistoryPage
+}
+
+export interface PublicPlaybackHealthService {
+  get(query?: {
+    from?: string
+    to?: string
+    sourceProvider?: string
+    errorCode?: string
+  }): ReturnType<PlaybackHealthService['get']>
 }
 
 export interface PublicOperationalStatusService {
@@ -79,10 +91,13 @@ export interface PublicPlayerStateService {
     voiceChannelName: string,
   ): PlayerState
   voiceDisconnected(guildId: string): PlayerState
-  claimPlayback(): ReturnType<PlayerStateService['claimPlayback']>
+  claimPlayback(
+    input?: Parameters<PlayerStateService['claimPlayback']>[0],
+  ): ReturnType<PlayerStateService['claimPlayback']>
   completePlayback(
     input: Parameters<PlayerStateService['completePlayback']>[0],
   ): ReturnType<PlayerStateService['completePlayback']>
+  reportPlaybackAttempt(input: PlaybackAttemptReport): void
 }
 
 export interface PublicSpotifyService {
@@ -107,6 +122,7 @@ export interface PublicApiDependencies {
   playerStateService: PublicPlayerStateService
   queueService: PublicQueueService
   historyService: PublicHistoryService
+  playbackHealthService?: PublicPlaybackHealthService
   spotifyService: PublicSpotifyService
   operationalStatusService: PublicOperationalStatusService
   authService: AuthService
@@ -131,6 +147,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   const autoplayRepository = new AutoplayRepository(db)
   const autoplaySuggestionRepository = new AutoplaySuggestionRepository(db)
   const autoplayCandidateRepository = new AutoplayCandidateRepository(db)
+  const playbackAttemptRepository = new PlaybackAttemptRepository(db)
   const unitOfWork = new DatabaseUnitOfWork(db)
   const publishRealtime = getRealtimeEventBus().publish
   let spotifyService: SpotifyService | undefined
@@ -183,6 +200,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   runtimeDependencies = {
     queueService: runtimeQueueService,
     historyService: new HistoryService(queueRepository),
+    playbackHealthService: new PlaybackHealthService(playbackAttemptRepository),
     playerStateService: runtimePlayerStateService,
     autoplayService: runtimeAutoplayService,
     autoplayOrchestrator: new AutoplayOrchestrator(

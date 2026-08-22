@@ -63,6 +63,29 @@ export function classifyPlaybackError(error: unknown): {
   return { errorCode: 'UNKNOWN' }
 }
 
+export function playbackFailureStage(
+  errorCode: PlaybackErrorCode,
+  fallback: 'claim' | 'resolve' | 'transport' | 'demux' | 'resource' | 'player' | 'sync' = 'player',
+): 'claim' | 'resolve' | 'transport' | 'demux' | 'resource' | 'player' | 'sync' {
+  if (errorCode.startsWith('SOURCE_FETCH_') || errorCode.startsWith('SOURCE_HTTP_'))
+    return 'transport'
+  if (errorCode === 'SOURCE_INVALID_RANGE' || errorCode === 'SOURCE_EMPTY_RANGE') return 'transport'
+  if (errorCode === 'DEMUX_PROBE_FAILED') return 'demux'
+  if (errorCode === 'AUDIO_RESOURCE_FAILED') return 'resource'
+  if (errorCode === 'PLAYBACK_SYNC_FAILED' || errorCode.startsWith('API_')) return 'sync'
+  if (errorCode === 'PLAYER_ERROR' || errorCode === 'PREMATURE_IDLE') return 'player'
+  return fallback
+}
+
+export function playbackFailureClass(
+  errorCode: PlaybackErrorCode,
+): 'operational' | 'intentional' | 'sync' | 'internal' {
+  if (errorCode === 'SOURCE_FETCH_CANCELLED') return 'intentional'
+  if (errorCode === 'PLAYBACK_SYNC_FAILED' || errorCode.startsWith('API_')) return 'sync'
+  if (errorCode === 'UNKNOWN') return 'internal'
+  return 'operational'
+}
+
 export function playbackLogger(logger: BotLogger, bindings: Record<string, unknown>): BotLogger {
-  return logger.child({ service: 'bot', ...bindings })
+  return logger.child({ service: 'bot', event: 'playback', ...bindings })
 }

@@ -36,6 +36,7 @@ export class FallbackAudioSourceResolver implements AudioSourceResolver {
       this.logger.info(
         {
           operation: 'audio_source.fallback',
+          event: 'playback',
           provider: entry.provider,
           attempt: index + 1,
           outcome: 'started',
@@ -65,9 +66,12 @@ export class FallbackAudioSourceResolver implements AudioSourceResolver {
           this.logger.warn(
             {
               operation: 'audio_source.fallback',
+              event: 'playback',
               provider: entry.provider,
               attempt: index + 1,
               outcome: index < resolvers.length - 1 ? 'fallback' : 'failed',
+              failureStage: 'resolve',
+              failureClass: 'operational',
               durationMs: Date.now() - startedAt,
               ...classifyExternalError(error),
             },
@@ -82,7 +86,10 @@ export class FallbackAudioSourceResolver implements AudioSourceResolver {
     this.logger.error(
       {
         operation: 'audio_source.fallback',
+        event: 'playback',
         outcome: 'all_providers_failed',
+        failureStage: 'resolve',
+        failureClass: 'operational',
         ...classifyExternalError(lastSafeError),
       },
       'All audio source providers failed',

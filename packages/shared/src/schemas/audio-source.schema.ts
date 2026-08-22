@@ -21,5 +21,7 @@ export const queueItemAudioSourceSchema = z
 export const resolveAudioSourceInputSchema = z
   .object({
     forceRefresh: z.boolean().optional().default(false),
+    playbackAttemptId: z.string().trim().min(1).optional(),
+    attempt: z.number().int().positive().optional(),
   })
   .strict()

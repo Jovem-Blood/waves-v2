@@ -242,6 +242,60 @@ export const resolvedSources = sqliteTable(
   (table) => [index('resolved_sources_queue_item_id_idx').on(table.queueItemId)],
 )
 
+export const playbackAttempts = sqliteTable(
+  'playback_attempts',
+  {
+    id: text('id').primaryKey(),
+    playbackAttemptId: text('playback_attempt_id').notNull(),
+    attemptNumber: integer('attempt_number').notNull(),
+    queueItemId: text('queue_item_id')
+      .notNull()
+      .references(() => queueItems.id),
+    outcome: text('outcome', {
+      enum: ['pending', 'played', 'failed', 'cancelled', 'skipped'],
+    }).notNull(),
+    terminal: integer('terminal', { mode: 'boolean' }).notNull(),
+    failureStage: text('failure_stage'),
+    failureClass: text('failure_class'),
+    errorCode: text('error_code'),
+    httpStatus: integer('http_status'),
+    trackId: text('track_id').notNull(),
+    trackProvider: text('track_provider').notNull(),
+    providerTrackId: text('provider_track_id').notNull(),
+    trackTitle: text('track_title').notNull(),
+    trackArtistsJson: text('track_artists_json').notNull(),
+    sourceProvider: text('source_provider'),
+    sourceIdentifier: text('source_identifier'),
+    startedAt: text('started_at').notNull(),
+    finishedAt: text('finished_at'),
+    durationMs: integer('duration_ms'),
+    playbackDurationMs: integer('playback_duration_ms'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('playback_attempts_identity_unique').on(
+      table.playbackAttemptId,
+      table.attemptNumber,
+    ),
+    index('playback_attempts_queue_item_id_idx').on(table.queueItemId),
+    index('playback_attempts_started_at_idx').on(table.startedAt),
+    index('playback_attempts_outcome_idx').on(table.outcome),
+    index('playback_attempts_error_code_idx').on(table.errorCode),
+    index('playback_attempts_source_provider_idx').on(table.sourceProvider),
+    index('playback_attempts_track_idx').on(table.trackProvider, table.providerTrackId),
+    check('playback_attempts_attempt_number_positive', sql`${table.attemptNumber} >= 1`),
+    check(
+      'playback_attempts_duration_nonnegative',
+      sql`${table.durationMs} is null or ${table.durationMs} >= 0`,
+    ),
+    check(
+      'playback_attempts_playback_duration_nonnegative',
+      sql`${table.playbackDurationMs} is null or ${table.playbackDurationMs} >= 0`,
+    ),
+  ],
+)
+
 export const allowedUsers = sqliteTable(
   'allowed_users',
   {

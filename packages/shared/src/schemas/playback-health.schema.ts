@@ -1,0 +1,79 @@
+import { z } from 'zod'
+
+const playbackHealthTrackSchema = z
+  .object({
+    trackId: z.string(),
+    trackTitle: z.string(),
+    trackArtists: z.string(),
+    trackProvider: z.string(),
+    executions: z.number().int().nonnegative(),
+    failures: z.number().int().nonnegative(),
+    failureRate: z.number().min(0).max(1),
+    retries: z.number().int().nonnegative(),
+    primaryErrorCode: z.string().nullable(),
+    lastOccurrence: z.string(),
+    playbackAttemptId: z.string().nullable(),
+  })
+  .strict()
+
+export const playbackHealthQuerySchema = z
+  .object({
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+    sourceProvider: z.string().trim().min(1).optional(),
+    errorCode: z.string().trim().min(1).optional(),
+  })
+  .strict()
+
+export const playbackHealthResponseSchema = z
+  .object({
+    period: z
+      .object({
+        from: z.iso.datetime({ offset: true }),
+        to: z.iso.datetime({ offset: true }),
+      })
+      .strict(),
+    summary: z
+      .object({
+        plays: z.number().int().nonnegative(),
+        successes: z.number().int().nonnegative(),
+        failures: z.number().int().nonnegative(),
+        cancelled: z.number().int().nonnegative(),
+        retries: z.number().int().nonnegative(),
+        successRate: z.number().min(0).max(1),
+      })
+      .strict(),
+    topErrors: z.array(
+      z
+        .object({
+          errorCode: z.string(),
+          failures: z.number().int().nonnegative(),
+          lastOccurrence: z.string(),
+        })
+        .strict(),
+    ),
+    providers: z.array(
+      z
+        .object({
+          sourceProvider: z.string(),
+          failures: z.number().int().nonnegative(),
+          lastOccurrence: z.string(),
+        })
+        .strict(),
+    ),
+    problematicTracks: z.array(playbackHealthTrackSchema),
+    recentFailures: z.array(
+      z
+        .object({
+          playbackAttemptId: z.string(),
+          queueItemId: z.string(),
+          trackTitle: z.string(),
+          trackArtists: z.string(),
+          sourceProvider: z.string().nullable(),
+          errorCode: z.string().nullable(),
+          occurredAt: z.string(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()

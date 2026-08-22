@@ -1,13 +1,14 @@
 import {
   completePlaybackInputSchema,
+  playbackAttemptReportSchema,
   setPlayerVolumeInputSchema,
   updatePlayerProgressInputSchema,
   type CompletePlaybackInput,
+  type PlaybackAttemptReport,
   type PlaybackClaimResult,
   type PlaybackTransitionResult,
   type PlayerState,
   type QueueItem,
-  type QueueItemStatus,
 } from '@waves/shared'
 
 import type { PlayerStateRepository } from '../repositories/player-state.repository'
@@ -237,8 +238,8 @@ export class PlayerStateService {
     return result
   }
 
-  claimPlayback(): PlaybackClaimResult {
-    const result = this.unitOfWork.run(({ playerState, queue }) => {
+  claimPlayback(input: { playbackAttemptId?: string } = {}): PlaybackClaimResult {
+    const result = this.unitOfWork.run(({ playerState, queue, playbackAttempt }) => {
       const player = playerState.get()
       const activeItems = queue.listActive()
       const current = activeItems.find(
@@ -246,7 +247,14 @@ export class PlayerStateService {
       )
 
       if (current) {
-        return { player, item: current }
+        const existing = playbackAttempt.findLatestForQueueItem(current.id)
+        return {
+          player,
+          item: current,
+          ...(existing
+            ? { playbackAttemptId: existing.playbackAttemptId, attempt: existing.attemptNumber }
+            : {}),
+        }
       }
 
       const nextItem = activeItems[0]
@@ -271,6 +279,28 @@ export class PlayerStateService {
         throw new Error('Claimed queue item was not persisted')
       }
 
+      const playbackAttemptId = input.playbackAttemptId ?? this.generateId()
+      try {
+        playbackAttempt.start({
+          playbackAttemptId,
+          attemptNumber: 1,
+          queueItem: claimed,
+          startedAt: timestamp,
+        })
+      } catch {
+        this.logger.error(
+          {
+            event: 'playback',
+            operation: 'telemetry.attempt',
+            outcome: 'failed',
+            failureClass: 'internal',
+            errorCode: 'PLAYBACK_TELEMETRY_FAILED',
+            queueItemId: claimed.id,
+          },
+          'Playback telemetry start failed',
+        )
+      }
+
       return {
         player: playerState.update({
           status: 'playing',
@@ -279,8 +309,10 @@ export class PlayerStateService {
           updatedAt: timestamp,
         }),
         item: claimed,
+        playbackAttemptId,
+        attempt: 1,
       }
-    })
+    }) as PlaybackClaimResult
     this.logger.info(
       {
         operation: 'player.claim',
@@ -299,7 +331,7 @@ export class PlayerStateService {
 
   completePlayback(input: CompletePlaybackInput): PlaybackTransitionResult {
     const parsed = completePlaybackInputSchema.parse(input)
-    return this.transitionCurrent(parsed.queueItemId, parsed.outcome)
+    return this.transitionCurrent(parsed)
   }
 
   promoteAutoplaySuggestion(expectedSeedFingerprint: string): PlaybackClaimResult {
@@ -357,11 +389,11 @@ export class PlayerStateService {
     return result
   }
 
-  private transitionCurrent(
-    queueItemId: string,
-    outcome: Extract<QueueItemStatus, 'played' | 'failed'>,
-  ): PlaybackTransitionResult {
-    const result = this.unitOfWork.run(({ playerState, queue }) => {
+  private transitionCurrent(input: CompletePlaybackInput): PlaybackTransitionResult {
+    const queueItemId = input.queueItemId
+    const outcome = input.outcome
+    const parsed = input
+    const result = this.unitOfWork.run(({ playerState, queue, playbackAttempt }) => {
       const timestamp = this.now().toISOString()
       const player = playerState.get()
       const current = queue.findById(queueItemId)
@@ -379,6 +411,57 @@ export class PlayerStateService {
       }
 
       if (current?.status === 'playing') {
+        if (parsed.playbackAttemptId && parsed.attempt) {
+          try {
+            const attemptReport = {
+              queueItemId,
+              playbackAttemptId: parsed.playbackAttemptId,
+              attempt: parsed.attempt,
+              outcome: parsed.outcome,
+              terminal: true,
+              ...(parsed.retryCount === undefined ? {} : { retryCount: parsed.retryCount }),
+              ...(parsed.trackId === undefined ? {} : { trackId: parsed.trackId }),
+              ...(parsed.trackTitle === undefined ? {} : { trackTitle: parsed.trackTitle }),
+              ...(parsed.trackArtists === undefined ? {} : { trackArtists: parsed.trackArtists }),
+              ...(parsed.trackProvider === undefined
+                ? {}
+                : { trackProvider: parsed.trackProvider }),
+              ...(parsed.sourceProvider === undefined
+                ? {}
+                : { sourceProvider: parsed.sourceProvider }),
+              ...(parsed.sourceIdentifier === undefined
+                ? {}
+                : { sourceIdentifier: parsed.sourceIdentifier }),
+              ...(parsed.failureStage === undefined ? {} : { failureStage: parsed.failureStage }),
+              ...(parsed.failureClass === undefined ? {} : { failureClass: parsed.failureClass }),
+              ...(parsed.errorCode === undefined ? {} : { errorCode: parsed.errorCode }),
+              ...(parsed.httpStatus === undefined ? {} : { httpStatus: parsed.httpStatus }),
+              ...(parsed.durationMs === undefined ? {} : { durationMs: parsed.durationMs }),
+              ...(parsed.playbackDurationMs === undefined
+                ? {}
+                : { playbackDurationMs: parsed.playbackDurationMs }),
+            }
+            playbackAttempt.report(
+              playbackAttemptReportSchema.parse(attemptReport),
+              current,
+              timestamp,
+            )
+          } catch {
+            this.logger.error(
+              {
+                event: 'playback',
+                operation: 'telemetry.attempt',
+                outcome: 'failed',
+                failureClass: 'internal',
+                errorCode: 'PLAYBACK_TELEMETRY_FAILED',
+                queueItemId,
+                playbackAttemptId: parsed.playbackAttemptId,
+                attempt: parsed.attempt,
+              },
+              'Playback telemetry result failed',
+            )
+          }
+        }
         queue.updateStatusAndPosition(current.id, {
           status: outcome,
           position: current.position,
@@ -410,16 +493,46 @@ export class PlayerStateService {
         updatedAt: timestamp,
       })
 
+      const nextPlaybackAttemptId = nextItem
+        ? (parsed.nextPlaybackAttemptId ?? this.generateId())
+        : undefined
+      if (nextItem && nextPlaybackAttemptId) {
+        try {
+          playbackAttempt.start({
+            playbackAttemptId: nextPlaybackAttemptId,
+            attemptNumber: 1,
+            queueItem: nextItem,
+            startedAt: timestamp,
+          })
+        } catch {
+          this.logger.error(
+            {
+              event: 'playback',
+              operation: 'telemetry.attempt',
+              outcome: 'failed',
+              failureClass: 'internal',
+              errorCode: 'PLAYBACK_TELEMETRY_FAILED',
+              queueItemId: nextItem.id,
+              playbackAttemptId: nextPlaybackAttemptId,
+              attempt: 1,
+            },
+            'Next playback telemetry start failed',
+          )
+        }
+      }
+
       return {
         completedQueueItemId: queueItemId,
         player: nextPlayer,
         queue: queue.listActive(),
         ...(nextItem === undefined ? {} : { nextItem }),
+        ...(nextPlaybackAttemptId === undefined ? {} : { nextPlaybackAttemptId }),
       }
     })
     this.logger.info(
       {
-        operation: 'player.complete',
+        event: 'playback',
+        operation: 'player.transition',
         queueItemId,
         outcome,
         completedQueueItemId: result.completedQueueItemId,
@@ -427,6 +540,42 @@ export class PlayerStateService {
         playerStatusTo: result.player.status,
       },
       'Playback queue transition completed',
+    )
+    const completedItem = this.unitOfWork.run(({ queue }) => queue.findById(queueItemId))
+    this.logger[outcome === 'failed' ? 'error' : 'info'](
+      {
+        event: 'playback',
+        operation: 'playback.result',
+        outcome,
+        terminal: true,
+        queueItemId,
+        ...(parsed.playbackAttemptId === undefined
+          ? {}
+          : { playbackAttemptId: parsed.playbackAttemptId }),
+        ...(parsed.attempt === undefined ? {} : { attempt: parsed.attempt }),
+        ...(parsed.retryCount === undefined ? {} : { retryCount: parsed.retryCount }),
+        ...(completedItem
+          ? {
+              trackId: completedItem.track.id,
+              trackTitle: completedItem.track.title,
+              trackArtists: completedItem.track.artists.join(', '),
+              trackProvider: completedItem.track.provider,
+            }
+          : {}),
+        ...(parsed.sourceProvider === undefined ? {} : { sourceProvider: parsed.sourceProvider }),
+        ...(parsed.sourceIdentifier === undefined
+          ? {}
+          : { sourceIdentifier: parsed.sourceIdentifier }),
+        ...(parsed.failureStage === undefined ? {} : { failureStage: parsed.failureStage }),
+        ...(parsed.failureClass === undefined ? {} : { failureClass: parsed.failureClass }),
+        ...(parsed.errorCode === undefined ? {} : { errorCode: parsed.errorCode }),
+        ...(parsed.httpStatus === undefined ? {} : { httpStatus: parsed.httpStatus }),
+        ...(parsed.durationMs === undefined ? {} : { durationMs: parsed.durationMs }),
+        ...(parsed.playbackDurationMs === undefined
+          ? {}
+          : { playbackDurationMs: parsed.playbackDurationMs }),
+      },
+      outcome === 'failed' ? 'Playback failed' : 'Playback completed',
     )
     if (outcome === 'failed') {
       const failedItem = this.unitOfWork.run(({ queue }) => queue.findById(queueItemId))
@@ -441,6 +590,70 @@ export class PlayerStateService {
     this.publishPlayerUpdated(result.player)
     this.publishQueueUpdated(result.queue, 'player_transition')
     return result
+  }
+
+  reportPlaybackAttempt(input: PlaybackAttemptReport): void {
+    const parsed = playbackAttemptReportSchema.parse(input)
+    try {
+      const result = this.unitOfWork.run(({ queue, playbackAttempt }) => {
+        const item = queue.findById(parsed.queueItemId)
+        if (!item) throw new QueueItemNotFoundError(parsed.queueItemId)
+        const existing = playbackAttempt.find(parsed.playbackAttemptId, parsed.attempt)
+        const record = playbackAttempt.report(parsed, item, this.now().toISOString())
+        return { item, record, shouldLog: parsed.terminal && !existing?.terminal }
+      })
+      if (result.shouldLog) {
+        this.logger[parsed.outcome === 'failed' ? 'error' : 'info'](
+          {
+            event: 'playback',
+            operation: 'playback.result',
+            outcome: parsed.outcome,
+            terminal: true,
+            queueItemId: parsed.queueItemId,
+            playbackAttemptId: parsed.playbackAttemptId,
+            attempt: parsed.attempt,
+            trackId: result.item.track.id,
+            trackTitle: result.item.track.title,
+            trackArtists: result.item.track.artists.join(', '),
+            trackProvider: result.item.track.provider,
+            ...(result.record.sourceProvider === null
+              ? {}
+              : { sourceProvider: result.record.sourceProvider }),
+            ...(result.record.sourceIdentifier === null
+              ? {}
+              : { sourceIdentifier: result.record.sourceIdentifier }),
+            ...(result.record.failureStage === null
+              ? {}
+              : { failureStage: result.record.failureStage }),
+            ...(result.record.failureClass === null
+              ? {}
+              : { failureClass: result.record.failureClass }),
+            ...(result.record.errorCode === null ? {} : { errorCode: result.record.errorCode }),
+            ...(result.record.httpStatus === null ? {} : { httpStatus: result.record.httpStatus }),
+            ...(result.record.durationMs === null ? {} : { durationMs: result.record.durationMs }),
+            ...(result.record.playbackDurationMs === null
+              ? {}
+              : { playbackDurationMs: result.record.playbackDurationMs }),
+          },
+          'Playback result',
+        )
+      }
+    } catch (error) {
+      this.logger.error(
+        {
+          event: 'playback',
+          operation: 'telemetry.attempt',
+          outcome: 'failed',
+          failureClass: 'internal',
+          errorCode: 'PLAYBACK_TELEMETRY_FAILED',
+          queueItemId: parsed.queueItemId,
+          playbackAttemptId: parsed.playbackAttemptId,
+          attempt: parsed.attempt,
+        },
+        'Playback attempt telemetry failed',
+      )
+      void error
+    }
   }
 
   private publishPlayerUpdated(player: PlayerState): void {

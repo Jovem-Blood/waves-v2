@@ -85,6 +85,11 @@ export function createWebLogger(
   const options: LoggerOptions = {
     name: 'waves-web',
     level,
+    formatters: {
+      level(label) {
+        return { level: label }
+      },
+    },
     base: { service: 'web' },
     redact: {
       paths: [...sensitiveLogPaths],

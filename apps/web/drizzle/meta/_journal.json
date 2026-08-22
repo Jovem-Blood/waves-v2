@@ -71,6 +71,13 @@
       "when": 1784073600000,
       "tag": "0009_autoplay_session_learning",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787424000000,
+      "tag": "0010_playback_attempts",
+      "breakpoints": true
     }
   ]
 }

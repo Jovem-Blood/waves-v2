@@ -6,6 +6,8 @@ import {
   createDiscordLinkInputSchema,
   createDiscordLinkResponseSchema,
   playbackClaimResultSchema,
+  playbackAttemptReportSchema,
+  playbackClaimInputSchema,
   playbackTransitionResultSchema,
   operationalStatusSchema,
   queueItemAudioSourceSchema,
@@ -16,6 +18,7 @@ import {
   type BotEvent,
   type BotPlayInput,
   type CompletePlaybackInput,
+  type PlaybackAttemptReport,
   type CreateDiscordLinkInput,
   type CreateDiscordLinkResponse,
   type PlaybackClaimResult,
@@ -53,8 +56,13 @@ export interface WavesApi {
   getQueue(): Promise<Queue>
   play(input: BotPlayInput): Promise<PlayResult>
   skip(): Promise<SkipResult>
-  resolveSource(queueItemId: string, forceRefresh?: boolean): Promise<QueueItemAudioSource>
-  claimPlayback(): Promise<PlaybackClaimResult>
+  resolveSource(
+    queueItemId: string,
+    forceRefresh?: boolean,
+    context?: { playbackAttemptId?: string; attempt?: number },
+  ): Promise<QueueItemAudioSource>
+  claimPlayback(playbackAttemptId?: string): Promise<PlaybackClaimResult>
+  reportPlaybackAttempt(input: PlaybackAttemptReport): Promise<void>
   completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult>
   sendEvent(event: BotEvent): Promise<void>
   getPlayer(): Promise<PlayerState>
@@ -113,19 +121,37 @@ export class WavesApiClient implements WavesApi {
     })
   }
 
-  resolveSource(queueItemId: string, forceRefresh = false): Promise<QueueItemAudioSource> {
+  resolveSource(
+    queueItemId: string,
+    forceRefresh = false,
+    context: { playbackAttemptId?: string; attempt?: number } = {},
+  ): Promise<QueueItemAudioSource> {
     return this.requestJson(
       `/internal/bot/sources/${encodeURIComponent(queueItemId)}/resolve`,
       queueItemAudioSourceSchema,
-      { method: 'POST', body: JSON.stringify({ forceRefresh }) },
+      {
+        method: 'POST',
+        body: JSON.stringify({ forceRefresh, ...context }),
+      },
     )
   }
 
-  claimPlayback(): Promise<PlaybackClaimResult> {
+  claimPlayback(playbackAttemptId?: string): Promise<PlaybackClaimResult> {
     return this.requestJson('/internal/bot/playback/claim', playbackClaimResultSchema, {
       method: 'POST',
-      body: '{}',
+      body: JSON.stringify(playbackClaimInputSchema.parse({ playbackAttemptId })),
     })
+  }
+
+  async reportPlaybackAttempt(input: PlaybackAttemptReport): Promise<void> {
+    await this.requestJson(
+      '/internal/bot/playback/attempt',
+      z.strictObject({ accepted: z.literal(true) }),
+      {
+        method: 'PUT',
+        body: JSON.stringify(playbackAttemptReportSchema.parse(input)),
+      },
+    )
   }
 
   completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult> {

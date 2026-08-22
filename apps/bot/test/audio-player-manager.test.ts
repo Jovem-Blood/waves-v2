@@ -150,9 +150,11 @@ function setup(connected = true) {
     queue: [],
   })
   const sendEvent = vi.fn().mockResolvedValue(undefined)
+  const reportPlaybackAttempt = vi.fn().mockResolvedValue(undefined)
   const api: WavesApi = {
     claimPlayback,
     completePlayback,
+    reportPlaybackAttempt,
     getQueue: vi.fn(),
     play: vi.fn(),
     resolveSource,
@@ -239,7 +241,11 @@ describe('AudioPlayerManager', () => {
 
     await expect(manager.start('guild-1')).resolves.toBe('started')
     expect(mocks.subscribe).toHaveBeenCalledOnce()
-    expect(mocks.resolveSource).toHaveBeenCalledWith('queue-1', false)
+    expect(mocks.resolveSource).toHaveBeenCalledWith(
+      'queue-1',
+      false,
+      expect.objectContaining({ attempt: 1 }),
+    )
     expect(mocks.createResource.mock.calls[0]?.[0]).toBe('https://stream.example/signed')
     expect(mocks.createResource.mock.calls[0]?.[1]).toBe('queue-1')
     expect(mocks.createResource.mock.calls[0]?.[2]?.signal).toBeInstanceOf(AbortSignal)
@@ -314,10 +320,16 @@ describe('AudioPlayerManager', () => {
     player.finish()
 
     await vi.waitFor(() => {
-      expect(mocks.completePlayback).toHaveBeenCalledWith({
-        queueItemId: item.id,
-        outcome: 'played',
-      })
+      expect(mocks.completePlayback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queueItemId: item.id,
+          outcome: 'played',
+          attempt: 1,
+          retryCount: 0,
+          sourceProvider: 'audius',
+          sourceIdentifier: 'audius-1',
+        }),
+      )
       expect(player.played).toHaveLength(2)
     })
   })
@@ -329,7 +341,12 @@ describe('AudioPlayerManager', () => {
     player.fail()
 
     await vi.waitFor(() => {
-      expect(mocks.resolveSource).toHaveBeenNthCalledWith(2, item.id, true)
+      expect(mocks.resolveSource).toHaveBeenNthCalledWith(
+        2,
+        item.id,
+        true,
+        expect.objectContaining({ attempt: 2 }),
+      )
       expect(player.played).toHaveLength(2)
     })
     expect(mocks.completePlayback).not.toHaveBeenCalled()
@@ -351,7 +368,12 @@ describe('AudioPlayerManager', () => {
     player.finishPrematurely()
 
     await vi.waitFor(() => {
-      expect(mocks.resolveSource).toHaveBeenNthCalledWith(2, item.id, true)
+      expect(mocks.resolveSource).toHaveBeenNthCalledWith(
+        2,
+        item.id,
+        true,
+        expect.objectContaining({ attempt: 2 }),
+      )
       expect(player.played).toHaveLength(2)
     })
     expect(mocks.completePlayback).not.toHaveBeenCalled()
@@ -389,10 +411,19 @@ describe('AudioPlayerManager', () => {
     player.fail()
 
     await vi.waitFor(() => {
-      expect(mocks.completePlayback).toHaveBeenCalledWith({
-        queueItemId: item.id,
-        outcome: 'failed',
-      })
+      expect(mocks.completePlayback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queueItemId: item.id,
+          outcome: 'failed',
+          attempt: 2,
+          retryCount: 1,
+          failureStage: 'player',
+          failureClass: 'operational',
+          errorCode: 'PLAYER_ERROR',
+          sourceProvider: 'audius',
+          sourceIdentifier: 'audius-1',
+        }),
+      )
     })
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -436,7 +467,11 @@ describe('AudioPlayerManager', () => {
     expect(firstSignal?.aborted).toBe(true)
     expect(player.stop).toHaveBeenCalledWith(true)
     expect(mocks.completePlayback).not.toHaveBeenCalled()
-    expect(mocks.resolveSource).toHaveBeenLastCalledWith(nextItem.id, false)
+    expect(mocks.resolveSource).toHaveBeenLastCalledWith(
+      nextItem.id,
+      false,
+      expect.objectContaining({ attempt: 1 }),
+    )
     expect(mocks.loggerInfo).not.toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'natural_completion' }),
       expect.any(String),

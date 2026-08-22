@@ -17,7 +17,13 @@ import {
 
 import type { WavesApi } from '../api/waves-api.client.js'
 import type { BotLogger } from '../logger.js'
-import { classifyPlaybackError, playbackLogger, SafePlaybackError } from '../observability.js'
+import {
+  classifyPlaybackError,
+  playbackFailureClass,
+  playbackFailureStage,
+  playbackLogger,
+  SafePlaybackError,
+} from '../observability.js'
 import type { VoiceManager } from '../voice/voice-manager.js'
 
 export type StartPlaybackResult = 'started' | 'already-playing' | 'not-connected' | 'empty'
@@ -60,6 +66,10 @@ interface CurrentPlayback {
   abortController: AbortController
   provider?: string
   sourceIdentifier?: string
+  failureStage?: 'claim' | 'resolve' | 'transport' | 'demux' | 'resource' | 'player' | 'sync'
+  failureClass?: 'operational' | 'intentional' | 'sync' | 'internal'
+  errorCode?: string
+  httpStatus?: number
 }
 
 interface PlaybackSession {
@@ -340,7 +350,7 @@ export class AudioPlayerManager implements PlaybackManager {
       logger.info({ operation: 'playback.claim', outcome: 'requested' }, 'Playback claim requested')
       let claim
       try {
-        claim = await this.api.claimPlayback()
+        claim = await this.api.claimPlayback(playbackAttemptId)
       } catch (error) {
         logger.error(
           {
@@ -362,7 +372,13 @@ export class AudioPlayerManager implements PlaybackManager {
         'Playback claim completed',
       )
 
-      await this.playItem(guildId, session, claim.item, 0, playbackAttemptId)
+      await this.playItem(
+        guildId,
+        session,
+        claim.item,
+        0,
+        claim.playbackAttemptId ?? playbackAttemptId,
+      )
       logger.info({ outcome: 'started', queueItemId: claim.item.id }, 'Playback start finished')
       return 'started'
     } finally {
@@ -392,6 +408,22 @@ export class AudioPlayerManager implements PlaybackManager {
 
     const result = await this.api.skip()
     const session = this.getOrCreateSession(guildId)
+    if (current) {
+      void this.api
+        .reportPlaybackAttempt({
+          queueItemId: current.item.id,
+          playbackAttemptId: current.playbackAttemptId,
+          attempt: current.retries + 1,
+          outcome: 'skipped',
+          terminal: true,
+          failureStage: 'player',
+          failureClass: 'intentional',
+          errorCode: 'PLAYBACK_SKIPPED',
+          sourceProvider: current.provider,
+          sourceIdentifier: current.sourceIdentifier,
+        })
+        .catch(() => undefined)
+    }
     session.settling = true
     session.current?.abortController.abort()
     session.current = undefined
@@ -456,6 +488,20 @@ export class AudioPlayerManager implements PlaybackManager {
           'Web UI skip detected, forcing playback transition',
         )
       }
+      void this.api
+        .reportPlaybackAttempt({
+          queueItemId: currentItem.item.id,
+          playbackAttemptId: currentItem.playbackAttemptId,
+          attempt: currentItem.retries + 1,
+          outcome: 'skipped',
+          terminal: true,
+          failureStage: 'player',
+          failureClass: 'intentional',
+          errorCode: 'PLAYBACK_SKIPPED',
+          sourceProvider: currentItem.provider,
+          sourceIdentifier: currentItem.sourceIdentifier,
+        })
+        .catch(() => undefined)
       session.settling = true
       currentItem.abortController.abort()
       session.current = undefined
@@ -463,9 +509,16 @@ export class AudioPlayerManager implements PlaybackManager {
       session.settling = false
       this.updateActivity(guildId)
       if (desired.currentQueueItemId) {
-        const claim = await this.api.claimPlayback()
+        const nextPlaybackAttemptId = randomUUID()
+        const claim = await this.api.claimPlayback(nextPlaybackAttemptId)
         if (claim.item) {
-          await this.playItem(guildId, session, claim.item, 0, randomUUID())
+          await this.playItem(
+            guildId,
+            session,
+            claim.item,
+            0,
+            claim.playbackAttemptId ?? nextPlaybackAttemptId,
+          )
         }
       }
       return
@@ -492,6 +545,22 @@ export class AudioPlayerManager implements PlaybackManager {
     const current = session.current
     session.settling = true
     current?.abortController.abort()
+    if (current) {
+      void this.api
+        .reportPlaybackAttempt({
+          queueItemId: current.item.id,
+          playbackAttemptId: current.playbackAttemptId,
+          attempt: current.retries + 1,
+          outcome: 'cancelled',
+          terminal: true,
+          failureStage: 'player',
+          failureClass: 'intentional',
+          errorCode: 'PLAYBACK_CANCELLED',
+          sourceProvider: current.provider,
+          sourceIdentifier: current.sourceIdentifier,
+        })
+        .catch(() => undefined)
+    }
     session.current = undefined
     session.player.stop(true)
     this.updateActivity(guildId)
@@ -590,19 +659,39 @@ export class AudioPlayerManager implements PlaybackManager {
     }
     session.current = current
     const logger = playbackLogger(this.logger, {
+      event: 'playback',
       guildId,
       voiceChannelId: this.voiceManager.getChannelId(guildId),
       queueItemId: item.id,
       playbackAttemptId,
       attempt,
+      retryCount: retries,
+      trackId: item.track.id,
+      trackTitle: item.track.title,
+      trackArtists: item.track.artists.join(', '),
+      trackProvider: item.track.provider,
     })
+    if (attempt > 1) {
+      void this.api
+        .reportPlaybackAttempt({
+          queueItemId: item.id,
+          playbackAttemptId,
+          attempt,
+          outcome: 'pending',
+          terminal: false,
+        })
+        .catch(() => undefined)
+    }
     try {
       logger.info(
         { operation: 'source.resolve', outcome: 'started', forceRefresh: retries > 0 },
         'Audio source resolution started',
       )
       const resolveStartedAt = Date.now()
-      const resolved = await this.api.resolveSource(item.id, retries > 0)
+      const resolved = await this.api.resolveSource(item.id, retries > 0, {
+        playbackAttemptId,
+        attempt,
+      })
       if (
         abortController.signal.aborted ||
         this.sessions.get(guildId) !== session ||
@@ -694,15 +783,50 @@ export class AudioPlayerManager implements PlaybackManager {
           outcome: retries < 1 ? 'retrying' : 'failed',
           forceRefresh: retries < 1,
           ...classifyPlaybackError(error),
+          failureStage: playbackFailureStage(classifyPlaybackError(error).errorCode, 'resolve'),
+          failureClass: playbackFailureClass(classifyPlaybackError(error).errorCode),
           err: error,
         },
         'Playback attempt failed',
       )
+      const classified = classifyPlaybackError(error)
+      current.failureStage = playbackFailureStage(classified.errorCode, 'resolve')
+      current.failureClass = playbackFailureClass(classified.errorCode)
+      current.errorCode = classified.errorCode
+      if (classified.httpStatus === undefined) delete current.httpStatus
+      else current.httpStatus = classified.httpStatus
+      void this.api
+        .reportPlaybackAttempt({
+          queueItemId: item.id,
+          playbackAttemptId,
+          attempt,
+          outcome: 'failed',
+          terminal: retries >= 1,
+          failureStage: playbackFailureStage(classified.errorCode, 'resolve'),
+          failureClass: playbackFailureClass(classified.errorCode),
+          errorCode: classified.errorCode,
+          ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
+          sourceProvider: current.provider,
+          sourceIdentifier: current.sourceIdentifier,
+        })
+        .catch(() => undefined)
       if (retries < 1) {
         await this.playItem(guildId, session, item, retries + 1, playbackAttemptId)
         return
       }
-      await this.failAndAdvance(guildId, session, item, playbackAttemptId)
+      await this.failAndAdvance(
+        guildId,
+        session,
+        item,
+        playbackAttemptId,
+        attempt,
+        current.provider,
+        current.sourceIdentifier,
+        current.failureStage,
+        current.failureClass,
+        current.errorCode,
+        current.httpStatus,
+      )
     }
   }
 
@@ -776,6 +900,9 @@ export class AudioPlayerManager implements PlaybackManager {
         previousState.resource.playbackDuration < MIN_SUCCESSFUL_PLAYBACK_MS
       ) {
         const error = new SafePlaybackError('PREMATURE_IDLE')
+        current.failureStage = 'player'
+        current.failureClass = 'operational'
+        current.errorCode = error.code
         this.logger.warn(
           {
             operation: 'playback.idle',
@@ -834,10 +961,15 @@ export class AudioPlayerManager implements PlaybackManager {
         outcome: current.retries < 1 ? 'refreshing' : 'failing',
         ...classifyPlaybackError(error),
         errorCode: 'PLAYER_ERROR',
+        failureStage: 'player',
+        failureClass: 'operational',
         err: error,
       },
       'Audio player error',
     )
+    current.failureStage = 'player'
+    current.failureClass = 'operational'
+    current.errorCode = 'PLAYER_ERROR'
     await this.retryOrFail(guildId, session, current)
   }
 
@@ -860,7 +992,19 @@ export class AudioPlayerManager implements PlaybackManager {
       )
       return
     }
-    await this.failAndAdvance(guildId, session, current.item, current.playbackAttemptId)
+    await this.failAndAdvance(
+      guildId,
+      session,
+      current.item,
+      current.playbackAttemptId,
+      current.retries + 1,
+      current.provider,
+      current.sourceIdentifier,
+      current.failureStage,
+      current.failureClass,
+      current.errorCode,
+      current.httpStatus,
+    )
   }
 
   private async completeAndAdvance(
@@ -868,10 +1012,17 @@ export class AudioPlayerManager implements PlaybackManager {
     session: PlaybackSession,
     current: CurrentPlayback,
   ): Promise<void> {
+    const nextPlaybackAttemptId = randomUUID()
     try {
       const result = await this.api.completePlayback({
         queueItemId: current.item.id,
         outcome: 'played',
+        playbackAttemptId: current.playbackAttemptId,
+        attempt: current.retries + 1,
+        retryCount: current.retries,
+        sourceProvider: current.provider,
+        sourceIdentifier: current.sourceIdentifier,
+        nextPlaybackAttemptId,
       })
       this.logger.info(
         {
@@ -887,7 +1038,13 @@ export class AudioPlayerManager implements PlaybackManager {
       void this.sendPlaybackEvent('playback.finished', guildId, current.item.id)
       session.settling = false
       if (result.nextItem) {
-        await this.playItem(guildId, session, result.nextItem, 0, randomUUID())
+        await this.playItem(
+          guildId,
+          session,
+          result.nextItem,
+          0,
+          result.nextPlaybackAttemptId ?? nextPlaybackAttemptId,
+        )
       } else {
         this.updateActivity(guildId)
       }
@@ -915,13 +1072,31 @@ export class AudioPlayerManager implements PlaybackManager {
     session: PlaybackSession,
     item: QueueItem,
     playbackAttemptId: string,
+    attempt: number,
+    sourceProvider?: string,
+    sourceIdentifier?: string,
+    failureStage?: CurrentPlayback['failureStage'],
+    failureClass?: CurrentPlayback['failureClass'],
+    errorCode?: string,
+    httpStatus?: number,
   ): Promise<void> {
+    const nextPlaybackAttemptId = randomUUID()
     session.settling = true
     session.current = undefined
     try {
       const result = await this.api.completePlayback({
         queueItemId: item.id,
         outcome: 'failed',
+        playbackAttemptId,
+        attempt,
+        retryCount: Math.max(0, attempt - 1),
+        ...(sourceProvider === undefined ? {} : { sourceProvider }),
+        ...(sourceIdentifier === undefined ? {} : { sourceIdentifier }),
+        ...(failureStage === undefined ? {} : { failureStage }),
+        ...(failureClass === undefined ? {} : { failureClass }),
+        ...(errorCode === undefined ? {} : { errorCode }),
+        ...(httpStatus === undefined ? {} : { httpStatus }),
+        nextPlaybackAttemptId,
       })
       this.logger.info(
         {
@@ -937,7 +1112,13 @@ export class AudioPlayerManager implements PlaybackManager {
       void this.sendPlaybackEvent('playback.failed', guildId, item.id)
       session.settling = false
       if (result.nextItem) {
-        await this.playItem(guildId, session, result.nextItem, 0, randomUUID())
+        await this.playItem(
+          guildId,
+          session,
+          result.nextItem,
+          0,
+          result.nextPlaybackAttemptId ?? nextPlaybackAttemptId,
+        )
       } else {
         this.updateActivity(guildId)
       }

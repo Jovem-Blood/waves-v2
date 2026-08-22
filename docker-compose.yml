@@ -1,3 +1,10 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+    compress: 'true'
+
 services:
   web:
     build:
@@ -36,6 +43,7 @@ services:
       start_period: 20s
     restart: unless-stopped
     stop_grace_period: 30s
+    logging: *default-logging
 
   bot:
     image: waves:${APP_RELEASE:-local}
@@ -66,6 +74,7 @@ services:
       start_period: 30s
     restart: unless-stopped
     stop_grace_period: 30s
+    logging: *default-logging
 
 volumes:
   waves-data:

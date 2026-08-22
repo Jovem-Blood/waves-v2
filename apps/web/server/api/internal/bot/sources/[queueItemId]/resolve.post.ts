@@ -20,7 +20,7 @@ export function createInternalResolveSourceHandler(
     const queueItemId = queueItemIdSchema.parse(getRouterParam(event, 'queueItemId'))
     return loggedOperation(
       useLogger(),
-      { operation: 'route.internal.source.resolve', queueItemId },
+      { operation: 'route.internal.source.resolve', queueItemId, event: 'playback' },
       async () => {
         const input = resolveAudioSourceInputSchema.parse(await readBody(event))
         const result = await getDependencies().audioSourceService.resolve(queueItemId, input)
@@ -32,6 +32,10 @@ export function createInternalResolveSourceHandler(
             provider: parsed.source.provider,
             sourceIdentifier: parsed.source.sourceIdentifier,
             forceRefresh: input.forceRefresh ?? false,
+            ...(input.playbackAttemptId === undefined
+              ? {}
+              : { playbackAttemptId: input.playbackAttemptId }),
+            ...(input.attempt === undefined ? {} : { attempt: input.attempt }),
             outcome: 'resolved',
           },
           'Internal source resolve completed',

@@ -25,14 +25,19 @@ export class AudioSourceService {
 
   async resolve(
     queueItemId: string,
-    options: { forceRefresh?: boolean } = {},
+    options: { forceRefresh?: boolean; playbackAttemptId?: string; attempt?: number } = {},
   ): Promise<QueueItemAudioSource> {
     const startedAt = Date.now()
     const log = this.logger.child({
       service: 'web',
+      event: 'playback',
       operation: 'audio_source.resolve',
       queueItemId,
       forceRefresh: options.forceRefresh ?? false,
+      ...(options.playbackAttemptId === undefined
+        ? {}
+        : { playbackAttemptId: options.playbackAttemptId }),
+      ...(options.attempt === undefined ? {} : { attempt: options.attempt }),
     })
     const queueItem = this.queueRepository.findById(queueItemId)
     if (!queueItem) {
@@ -99,6 +104,8 @@ export class AudioSourceService {
         log.error(
           {
             outcome: 'failed',
+            failureStage: 'resolve',
+            failureClass: 'operational',
             durationMs: Date.now() - startedAt,
             ...classifyExternalError(error),
           },

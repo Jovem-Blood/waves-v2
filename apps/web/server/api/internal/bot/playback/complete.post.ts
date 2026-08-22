@@ -28,7 +28,10 @@ export function createInternalPlaybackCompleteHandler(
         useLogger().info(
           {
             operation: 'route.internal.playback.complete',
+            event: 'playback',
             queueItemId: input.queueItemId,
+            playbackAttemptId: input.playbackAttemptId,
+            attempt: input.attempt,
             outcome: input.outcome,
             promotedQueueItemId: result.nextItem?.id,
           },

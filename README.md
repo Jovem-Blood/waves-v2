@@ -99,6 +99,11 @@ Os dois processos expõem liveness e readiness separados. O web usa
 `/api/health/live` e `/api/health/ready`; o healthcheck do bot fica disponível
 somente dentro do container em `/health/live` e `/health/ready`.
 
+Web e bot usam o driver Docker `json-file` com rotação de 10 MiB por arquivo e
+até cinco arquivos por container. Dozzle continua lendo esses logs pelo Docker;
+não há transport externo. Após alterar essa configuração, recrie os containers
+com `docker compose up -d --force-recreate`.
+
 O banco fica no volume nomeado `waves-data`, montado em `/data`. Use
 `docker compose down` para parar sem apagar dados. Use
 `docker compose down -v` apenas quando quiser remover também o volume SQLite.

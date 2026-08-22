@@ -57,6 +57,11 @@ export function createBotLogger(
   const options: LoggerOptions = {
     name: 'waves-bot',
     level,
+    formatters: {
+      level(label) {
+        return { level: label }
+      },
+    },
     base: { service: 'bot' },
     redact: {
       paths: [...sensitiveLogPaths],

@@ -11,7 +11,7 @@ import { YouTubeMusicAudioSourceResolver } from '../services/youtube-music-audio
 export interface InternalAudioSourceService {
   resolve(
     queueItemId: string,
-    options?: { forceRefresh?: boolean },
+    options?: { forceRefresh?: boolean; playbackAttemptId?: string; attempt?: number },
   ): ReturnType<AudioSourceService['resolve']>
 }
 

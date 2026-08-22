@@ -48,6 +48,7 @@ describe('web logger', () => {
     )
 
     const output = lines.join('')
+    expect(JSON.parse(output)).toMatchObject({ level: 'debug', service: 'web' })
     expect(output).toContain('safe web log')
     expect(output).not.toContain('media.example')
     expect(output).not.toContain('private-token')

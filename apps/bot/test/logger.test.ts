@@ -42,6 +42,7 @@ describe('bot logger', () => {
     )
 
     const output = lines.join('')
+    expect(JSON.parse(output)).toMatchObject({ level: 'info', service: 'bot' })
     expect(output).toContain('safe log')
     expect(output).not.toContain('media.example')
     expect(output).not.toContain('internal-token')

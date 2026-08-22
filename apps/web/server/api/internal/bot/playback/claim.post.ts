@@ -1,4 +1,5 @@
-import { playbackClaimResultSchema } from '@waves/shared'
+import { playbackClaimInputSchema, playbackClaimResultSchema } from '@waves/shared'
+import { readBody } from 'h3'
 
 import { defineInternalApiHandler } from '../../../../utils/internal-auth'
 import {
@@ -13,11 +14,12 @@ export function createInternalPlaybackClaimHandler(
   getExpectedToken?: () => string,
 ) {
   return defineInternalApiHandler(
-    () =>
+    (event) =>
       loggedOperation(useLogger(), { operation: 'route.internal.playback.claim' }, async () => {
         const dependencies = getDependencies()
+        const input = playbackClaimInputSchema.parse(await readBody(event))
         await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
-        return playbackClaimResultSchema.parse(dependencies.playerStateService.claimPlayback())
+        return playbackClaimResultSchema.parse(dependencies.playerStateService.claimPlayback(input))
       }),
     getExpectedToken,
   )
