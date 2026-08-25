@@ -9,7 +9,7 @@ const ICON_SIZE = 68
 const ICON_BADGE_SIZE = 88
 const BRAND_BACKGROUND = '#06111f'
 const BRAND_MINT = '#54f287'
-const iconPath = fileURLToPath(new URL('../../../exports/ojohg.png', import.meta.url))
+const iconPath = fileURLToPath(new URL('../assets/qr-code-icon.png', import.meta.url))
 
 async function createIconBadge(): Promise<Buffer> {
   let iconInput: Buffer
