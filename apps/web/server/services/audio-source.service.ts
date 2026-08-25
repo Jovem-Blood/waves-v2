@@ -96,7 +96,6 @@ export class AudioSourceService {
           ...(previous
             ? {
                 preferredSource: {
-                  provider: previous.provider,
                   sourceIdentifier: previous.sourceIdentifier,
                 },
               }

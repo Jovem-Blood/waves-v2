@@ -18,7 +18,7 @@ packages/
 - Node.js 25.5.0 ou superior
 - pnpm 10 ou superior
 - FFmpeg no `PATH`, compilado com suporte a `libopus`
-- acesso de rede ao YouTube Music e Audius
+- acesso de rede ao YouTube Music
 
 ## Preparação
 
@@ -171,7 +171,7 @@ compartilhar logs, procure por `streamUrl`, `Authorization`, `signature`, `token
 - O Nuxt é o único proprietário do SQLite e das regras da fila/player.
 - O bot usa apenas a API interna protegida por bearer.
 - Spotify e tokens permanecem no servidor.
-- YouTube Music é a fonte primária de áudio e Audius é o fallback.
+- YouTube Music é a única fonte de áudio.
 - Conexões, players e streams existem apenas no runtime do bot.
 
 ## Estado atual

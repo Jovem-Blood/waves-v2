@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const audioSourceProviderSchema = z.enum(['youtube_music', 'audius'])
+export const audioSourceProviderSchema = z.literal('youtube_music')
 
 export const resolvedAudioSourceSchema = z
   .object({

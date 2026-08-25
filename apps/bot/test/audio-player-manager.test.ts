@@ -124,8 +124,8 @@ function setup(connected = true) {
   const resolveSource = vi.fn().mockResolvedValue({
     queueItemId: item.id,
     source: {
-      provider: 'audius',
-      sourceIdentifier: 'audius-1',
+      provider: 'youtube_music',
+      sourceIdentifier: 'youtube-1',
       streamUrl: 'https://stream.example/signed',
       expiresAt: '2026-06-20T12:05:00.000Z',
     },
@@ -300,8 +300,8 @@ describe('AudioPlayerManager', () => {
       .mockResolvedValueOnce({
         queueItemId: item.id,
         source: {
-          provider: 'audius',
-          sourceIdentifier: 'audius-1',
+          provider: 'youtube_music',
+          sourceIdentifier: 'youtube-1',
           streamUrl: 'https://stream.example/one',
           expiresAt: '2026-06-20T12:05:00.000Z',
         },
@@ -309,8 +309,8 @@ describe('AudioPlayerManager', () => {
       .mockResolvedValueOnce({
         queueItemId: nextItem.id,
         source: {
-          provider: 'audius',
-          sourceIdentifier: 'audius-2',
+          provider: 'youtube_music',
+          sourceIdentifier: 'youtube-2',
           streamUrl: 'https://stream.example/two',
           expiresAt: '2026-06-20T12:05:00.000Z',
         },
@@ -326,8 +326,8 @@ describe('AudioPlayerManager', () => {
           outcome: 'played',
           attempt: 1,
           retryCount: 0,
-          sourceProvider: 'audius',
-          sourceIdentifier: 'audius-1',
+          sourceProvider: 'youtube_music',
+          sourceIdentifier: 'youtube-1',
         }),
       )
       expect(player.played).toHaveLength(2)
@@ -420,8 +420,8 @@ describe('AudioPlayerManager', () => {
           failureStage: 'player',
           failureClass: 'operational',
           errorCode: 'PLAYER_ERROR',
-          sourceProvider: 'audius',
-          sourceIdentifier: 'audius-1',
+          sourceProvider: 'youtube_music',
+          sourceIdentifier: 'youtube-1',
         }),
       )
     })
@@ -452,8 +452,8 @@ describe('AudioPlayerManager', () => {
       Promise.resolve({
         queueItemId,
         source: {
-          provider: 'audius',
-          sourceIdentifier: `audius-${queueItemId}`,
+          provider: 'youtube_music',
+          sourceIdentifier: `youtube-${queueItemId}`,
           streamUrl: `https://stream.example/${queueItemId}`,
           expiresAt: '2026-06-20T12:05:00.000Z',
         },
@@ -511,8 +511,8 @@ describe('AudioPlayerManager', () => {
     finishResolution({
       queueItemId: item.id,
       source: {
-        provider: 'audius',
-        sourceIdentifier: 'audius-1',
+        provider: 'youtube_music',
+        sourceIdentifier: 'youtube-1',
         streamUrl: 'https://stream.example/signed',
         expiresAt: '2026-06-20T12:05:00.000Z',
       },

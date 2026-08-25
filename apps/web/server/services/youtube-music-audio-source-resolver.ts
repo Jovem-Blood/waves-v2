@@ -29,10 +29,7 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
     track: TrackMetadata,
     options: AudioSourceResolveOptions = {},
   ): Promise<ResolvedAudioSource> {
-    const preferredVideoId =
-      options.preferredSource?.provider === 'youtube_music'
-        ? options.preferredSource.sourceIdentifier
-        : undefined
+    const preferredVideoId = options.preferredSource?.sourceIdentifier
 
     if (preferredVideoId) {
       this.logger.info(

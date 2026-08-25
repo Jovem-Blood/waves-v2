@@ -1,14 +1,7 @@
 import type { TrackMetadata } from '@waves/shared'
 
-import { AudiusClient } from '../server/clients/audius.client'
 import { YouTubeMusicClient } from '../server/clients/youtube-music.client'
-import { AudioSourceNotFoundError } from '../server/services/audio-source.errors'
-import {
-  AudiusAudioSourceResolver,
-  type AudioSourceResolver,
-} from '../server/services/audio-source-resolver'
 import { selectYouTubeMusicCandidate } from '../server/services/audio-source-matching'
-import { FallbackAudioSourceResolver } from '../server/services/fallback-audio-source-resolver'
 
 const catalog: TrackMetadata[] = [
   {
@@ -156,37 +149,6 @@ async function runCatalogSmoke() {
   return results
 }
 
-async function runAudiusFallbackSmoke() {
-  const audiusClient = new AudiusClient()
-  const candidates = await audiusClient.searchTracks('Audius', 10)
-  const candidate = candidates.find((item) => !item.is_stream_gated && item.stream)
-  if (!candidate) {
-    return { success: false, reason: 'no_controlled_audius_candidate' }
-  }
-
-  const controlledTrack: TrackMetadata = {
-    id: 'smoke:audius-fallback',
-    provider: 'spotify',
-    providerTrackId: 'audius-fallback',
-    title: candidate.title,
-    artists: [candidate.user.name],
-    durationMs: candidate.duration * 1000,
-  }
-  const unavailablePrimary: AudioSourceResolver = {
-    resolve: () => Promise.reject(new AudioSourceNotFoundError()),
-  }
-  const resolver = new FallbackAudioSourceResolver(
-    unavailablePrimary,
-    new AudiusAudioSourceResolver(audiusClient),
-  )
-  const source = await resolver.resolve(controlledTrack)
-  return {
-    success: await opensStream(source.streamUrl),
-    provider: source.provider,
-    sourceIdentifier: source.sourceIdentifier,
-  }
-}
-
 const catalogResults = await runCatalogSmoke()
 const report = {
   executedAt: new Date().toISOString(),
@@ -197,10 +159,6 @@ const report = {
     streamsOpened: catalogResults.filter((result) => result.streamOpened).length,
     total: catalogResults.length,
   },
-  audiusFallback: await runAudiusFallbackSmoke().catch(() => ({
-    success: false,
-    reason: 'safe_provider_error',
-  })),
 }
 
 console.log(JSON.stringify(report, null, 2))

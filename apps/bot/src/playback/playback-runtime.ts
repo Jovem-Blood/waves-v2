@@ -8,6 +8,7 @@ import {
   type AudioPlayer,
   type AudioResource,
 } from '@discordjs/voice'
+import type { AudioSourceProvider } from '@waves/shared'
 
 import type { BotLogger } from '../logger.js'
 import { classifyPlaybackError, SafePlaybackError } from '../observability.js'
@@ -15,7 +16,7 @@ import { classifyPlaybackError, SafePlaybackError } from '../observability.js'
 export interface ResourceCreationContext {
   logger: BotLogger
   playbackAttemptId: string
-  provider: string
+  provider: AudioSourceProvider
   sourceIdentifier: string
   attempt: number
   signal?: AbortSignal

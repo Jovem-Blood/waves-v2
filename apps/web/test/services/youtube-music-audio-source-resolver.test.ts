@@ -69,7 +69,7 @@ describe('YouTubeMusicAudioSourceResolver', () => {
 
     await expect(
       resolver.resolve(track, {
-        preferredSource: { provider: 'youtube_music', sourceIdentifier: 'video-1' },
+        preferredSource: { sourceIdentifier: 'video-1' },
       }),
     ).resolves.toMatchObject({ sourceIdentifier: 'video-1' })
     expect(searchSongs).not.toHaveBeenCalled()
@@ -94,7 +94,7 @@ describe('YouTubeMusicAudioSourceResolver', () => {
 
     await expect(
       new YouTubeMusicAudioSourceResolver(client).resolve(track, {
-        preferredSource: { provider: 'youtube_music', sourceIdentifier: 'video-1' },
+        preferredSource: { sourceIdentifier: 'video-1' },
       }),
     ).resolves.toMatchObject({ sourceIdentifier: 'video-2' })
   })

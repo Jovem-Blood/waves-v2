@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import type { QueueItem } from '@waves/shared'
+import type { AudioSourceProvider, QueueItem } from '@waves/shared'
 import { ActivityType } from 'discord.js'
 import type { Client } from 'discord.js'
 import { AudioPlayerStatus, type AudioPlayer, type AudioPlayerState } from '@discordjs/voice'
@@ -36,7 +36,7 @@ interface CurrentPlayback {
   retries: number
   playbackAttemptId: string
   abortController: AbortController
-  provider?: string
+  provider?: AudioSourceProvider
   sourceIdentifier?: string
   failureStage?: 'claim' | 'resolve' | 'transport' | 'demux' | 'resource' | 'player' | 'sync'
   failureClass?: 'operational' | 'intentional' | 'sync' | 'internal'

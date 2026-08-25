@@ -4,7 +4,7 @@
 
 Waves is a private dashboard for managing the music queue and playback of a
 Discord bot. Spotify provides search and metadata, while the bot resolves audio
-through YouTube Music with Audius fallback. Authentication remains outside the
+through YouTube Music. Authentication remains outside the
 panel and must be provided by an external protection layer.
 
 The visual direction is a dark operational interface with neon mint, cyan, and
@@ -14,7 +14,7 @@ and fast Spotify search.
 ## Design Files
 
 - Pencil source: `pencil.pen`
-- Discord bot avatar: `exports/ojohg.png`
+- Discord bot avatar: `apps/bot/assets/qr-code-icon.png`
 - Avatar source frame: `Discord Bot Avatar - Colored`
 
 The Pencil document contains four independent top-level frames:

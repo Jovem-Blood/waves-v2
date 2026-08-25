@@ -47,8 +47,8 @@ describe('ResolvedSourceRepository', () => {
     repository.replace({
       id: 'source-1',
       queueItemId: 'queue-1',
-      provider: 'audius',
-      sourceIdentifier: 'audius-1',
+      provider: 'youtube_music',
+      sourceIdentifier: 'youtube-1',
       streamUrl: 'https://stream.example/one',
       expiresAt: '2026-06-20T12:05:00.000Z',
       createdAt: '2026-06-20T12:00:00.000Z',
@@ -56,7 +56,7 @@ describe('ResolvedSourceRepository', () => {
     })
 
     expect(repository.findReusable('queue-1', '2026-06-20T12:04:59.000Z')).toMatchObject({
-      sourceIdentifier: 'audius-1',
+      sourceIdentifier: 'youtube-1',
     })
     expect(repository.findReusable('queue-1', '2026-06-20T12:05:00.000Z')).toBeUndefined()
   })
@@ -65,7 +65,7 @@ describe('ResolvedSourceRepository', () => {
     const repository = setup()
     const base = {
       queueItemId: 'queue-1',
-      provider: 'audius' as const,
+      provider: 'youtube_music' as const,
       createdAt: '2026-06-20T12:00:00.000Z',
       updatedAt: '2026-06-20T12:00:00.000Z',
     }
