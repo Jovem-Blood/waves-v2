@@ -70,7 +70,7 @@ export class AutoplaySessionProfile {
     return this.humanAnchor
   }
 
-  recordCompleted(item: QueueItem, suggestion?: StoredAutoplaySuggestion): void {
+  recordCompleted(item: QueueItem): void {
     this.completions += 1
     const artist = normalizeMusicText(item.track.artists[0] ?? '')
     if (artist) this.completedArtists.add(artist)
@@ -79,8 +79,8 @@ export class AutoplaySessionProfile {
     const promoted = this.promotedMetadata.get(identity(item.track))
     this.adjust(this.trackScores, identity(item.track), 0.1)
     this.adjust(this.artistScores, artist, 0.05)
-    const sourceTag = suggestion?.sourceTag ?? promoted?.sourceTag
-    const strategy = suggestion?.strategy ?? promoted?.strategy
+    const sourceTag = promoted?.sourceTag
+    const strategy = promoted?.strategy
     if (sourceTag) {
       const normalizedTag = normalizeMusicText(sourceTag)
       this.adjust(this.tagScores, normalizedTag, 0.03)
@@ -151,7 +151,7 @@ export class AutoplaySessionProfile {
     return Math.max(-0.3, Math.min(0.2, raw))
   }
 
-  aggregateActive(): boolean {
+  private aggregateActive(): boolean {
     return (
       this.completions >= MIN_COMPLETIONS &&
       this.completedArtists.size >= MIN_UNIQUE_ARTISTS &&

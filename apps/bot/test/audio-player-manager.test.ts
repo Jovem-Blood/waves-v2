@@ -13,12 +13,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { WavesApi } from '../src/api/waves-api.client.js'
 import type { BotLogger } from '../src/logger.js'
+import { AudioPlayerManager } from '../src/playback/audio-player-manager.js'
 import {
-  AudioPlayerManager,
   createRangedAudioStream,
   type ResourceCreationContext,
   type PlaybackRuntime,
-} from '../src/playback/audio-player-manager.js'
+} from '../src/playback/playback-runtime.js'
 import type { VoiceManager } from '../src/voice/voice-manager.js'
 
 beforeEach(() => {

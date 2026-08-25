@@ -48,8 +48,8 @@ describe('AuthService', () => {
     const service = new AuthService(
       new UserRepository(connection.db),
       new SessionRepository(connection.db),
-      undefined,
-      undefined,
+      new DiscordLoginTokenRepository(connection.db),
+      new QueueRepository(connection.db),
       now,
       undefined,
       () => 'session-token',

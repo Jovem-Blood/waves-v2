@@ -329,11 +329,6 @@ export class PlayerStateService {
     return result
   }
 
-  completePlayback(input: CompletePlaybackInput): PlaybackTransitionResult {
-    const parsed = completePlaybackInputSchema.parse(input)
-    return this.transitionCurrent(parsed)
-  }
-
   promoteAutoplaySuggestion(expectedSeedFingerprint: string): PlaybackClaimResult {
     const result = this.unitOfWork.run(({ autoplay, autoplaySuggestion, playerState, queue }) => {
       const state = autoplay.get()
@@ -389,10 +384,10 @@ export class PlayerStateService {
     return result
   }
 
-  private transitionCurrent(input: CompletePlaybackInput): PlaybackTransitionResult {
-    const queueItemId = input.queueItemId
-    const outcome = input.outcome
-    const parsed = input
+  completePlayback(input: CompletePlaybackInput): PlaybackTransitionResult {
+    const parsed = completePlaybackInputSchema.parse(input)
+    const queueItemId = parsed.queueItemId
+    const outcome = parsed.outcome
     const result = this.unitOfWork.run(({ playerState, queue, playbackAttempt }) => {
       const timestamp = this.now().toISOString()
       const player = playerState.get()
@@ -578,11 +573,10 @@ export class PlayerStateService {
       outcome === 'failed' ? 'Playback failed' : 'Playback completed',
     )
     if (outcome === 'failed') {
-      const failedItem = this.unitOfWork.run(({ queue }) => queue.findById(queueItemId))
-      if (failedItem) {
+      if (completedItem) {
         this.publishRealtime({
           type: 'queue.item_failed',
-          item: failedItem,
+          item: completedItem,
           queue: result.queue,
         })
       }

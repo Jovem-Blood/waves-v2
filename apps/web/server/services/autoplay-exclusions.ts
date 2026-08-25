@@ -2,7 +2,7 @@ import type { AutoplaySuggestion, QueueItem, TrackMetadata } from '@waves/shared
 
 export const RECENT_PLAYED_LIMIT = 20
 
-export interface AutoplayExclusionInput {
+interface AutoplayExclusionInput {
   active: readonly QueueItem[]
   recent: readonly QueueItem[]
   suggestions: readonly AutoplaySuggestion[]

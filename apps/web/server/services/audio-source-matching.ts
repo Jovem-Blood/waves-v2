@@ -208,7 +208,7 @@ function relaxedScoreCandidate(
   return { score: title * 0.45 + artists * 0.25 + duration * 0.2 + official * 0.1 }
 }
 
-export interface YouTubeMusicCandidateDiagnostic {
+interface YouTubeMusicCandidateDiagnostic {
   videoId: string
   title: string
   artists: string[]
@@ -219,7 +219,7 @@ export interface YouTubeMusicCandidateDiagnostic {
   score?: number
 }
 
-export interface YouTubeMusicMatchDiagnostics {
+interface YouTubeMusicMatchDiagnostics {
   candidateCount: number
   rejectedByQualifier: number
   rejectedByArtist: number

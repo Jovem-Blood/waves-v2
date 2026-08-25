@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import {
   queueItemAudioSourceSchema,
   type QueueItemAudioSource,
@@ -137,4 +139,3 @@ export class AudioSourceService {
     return queueItemAudioSourceSchema.parse({ queueItemId, source })
   }
 }
-import { randomUUID } from 'node:crypto'

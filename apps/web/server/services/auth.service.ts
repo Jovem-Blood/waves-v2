@@ -21,13 +21,13 @@ const DISCORD_LINK_DURATION_MS = 10 * 60 * 1000
 
 export const SESSION_COOKIE_NAME = 'waves_session'
 
-export interface CreatedSession {
+interface CreatedSession {
   token: string
   user: PublicUser
   expiresAt: string
 }
 
-export interface ConsumedDiscordLinkSession extends CreatedSession {
+interface ConsumedDiscordLinkSession extends CreatedSession {
   migratedQueueItems: number
 }
 
@@ -52,7 +52,7 @@ export class DiscordLinkUsedError extends Error {
   }
 }
 
-export interface CurrentSession {
+interface CurrentSession {
   user: PublicUser
   expiresAt: string
   renewed: boolean
@@ -76,8 +76,8 @@ export class AuthService {
   constructor(
     private readonly users: UserRepository,
     private readonly sessions: SessionRepository,
-    private readonly discordLoginTokens?: DiscordLoginTokenRepository,
-    private readonly queueRepository?: QueueRepository,
+    private readonly discordLoginTokens: DiscordLoginTokenRepository,
+    private readonly queueRepository: QueueRepository,
     private readonly now: () => Date = () => new Date(),
     private readonly generateId: () => string = randomUUID,
     private readonly generateToken: () => string = () => randomBytes(32).toString('base64url'),
@@ -151,30 +151,13 @@ export class AuthService {
       createdAt: timestamp,
       updatedAt: timestamp,
     })
-    const token = this.generateToken()
-    const expiresAt = new Date(this.now().getTime() + SESSION_DURATION_MS).toISOString()
-
-    this.sessions.create({
-      id: this.generateId(),
-      userId: user.id,
-      tokenHash: hashSessionToken(token),
-      expiresAt,
-      lastSeenAt: timestamp,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-
-    return { token, user: toPublicUser(user), expiresAt }
+    return this.createSessionForUser(user, timestamp)
   }
 
   createDiscordLink(
     input: CreateDiscordLinkInput,
     publicAppUrl: string,
   ): CreateDiscordLinkResponse {
-    if (!this.discordLoginTokens) {
-      throw new Error('Discord login token repository is required')
-    }
-
     const parsed = createDiscordLinkInputSchema.parse(input)
     const timestamp = this.now().toISOString()
     const token = this.generateToken()
@@ -202,19 +185,11 @@ export class AuthService {
   }
 
   validateDiscordLink(token: string): void {
-    if (!this.discordLoginTokens) {
-      throw new Error('Discord login token repository is required')
-    }
-
     const tokenHash = hashSessionToken(token)
     this.requireUsableDiscordLink(tokenHash)
   }
 
   consumeDiscordLink(token: string, existingSessionToken?: string): ConsumedDiscordLinkSession {
-    if (!this.discordLoginTokens) {
-      throw new Error('Discord login token repository is required')
-    }
-
     const tokenHash = hashSessionToken(token)
     const link = this.requireUsableDiscordLink(tokenHash)
     const now = this.now()
@@ -233,7 +208,7 @@ export class AuthService {
 
     let migratedQueueItems = 0
     const current = this.getCurrentSession(existingSessionToken)
-    if (current?.user.kind === 'guest' && this.queueRepository) {
+    if (current?.user.kind === 'guest') {
       migratedQueueItems = this.queueRepository.reassignRequester(
         current.user.id,
         user.id,
@@ -256,10 +231,12 @@ export class AuthService {
     this.sessions.deleteByTokenHash(hashSessionToken(token))
   }
 
-  private createSessionForUser(user: UserRow): CreatedSession {
-    const timestamp = this.now().toISOString()
+  private createSessionForUser(
+    user: UserRow,
+    timestamp = this.now().toISOString(),
+  ): CreatedSession {
     const token = this.generateToken()
-    const expiresAt = new Date(this.now().getTime() + SESSION_DURATION_MS).toISOString()
+    const expiresAt = new Date(new Date(timestamp).getTime() + SESSION_DURATION_MS).toISOString()
 
     this.sessions.create({
       id: this.generateId(),
@@ -275,10 +252,6 @@ export class AuthService {
   }
 
   private requireUsableDiscordLink(tokenHash: string) {
-    if (!this.discordLoginTokens) {
-      throw new Error('Discord login token repository is required')
-    }
-
     const link = this.discordLoginTokens.findByTokenHash(tokenHash)
     if (!link) throw new DiscordLinkInvalidError()
     if (link.usedAt !== null) throw new DiscordLinkUsedError()

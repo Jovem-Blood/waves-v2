@@ -20,7 +20,7 @@ export interface AudioSourceResolveOptions {
   preferredSource?: Pick<ResolvedAudioSource, 'provider' | 'sourceIdentifier'>
 }
 
-export interface AudiusAudioSourceResolverOptions {
+interface AudiusAudioSourceResolverOptions {
   searchLimit?: number
   ttlMs?: number
 }

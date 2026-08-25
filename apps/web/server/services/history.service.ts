@@ -10,7 +10,7 @@ import type { QueueRepository } from '../repositories/queue.repository'
 
 const PAGE_SIZE = 20
 
-export function decodeHistoryCursor(cursor: string | undefined): HistoryCursor | undefined {
+function decodeHistoryCursor(cursor: string | undefined): HistoryCursor | undefined {
   if (!cursor) return undefined
 
   return historyCursorSchema.parse(JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')))

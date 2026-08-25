@@ -22,7 +22,7 @@ export function createInternalEventsHandler(
     usePublicApiDependencies().playerStateService,
   getOperationalStatusService: () => PublicOperationalStatusService = () =>
     usePublicApiDependencies().operationalStatusService,
-  getAutoplayOrchestrator: () => PublicAutoplayOrchestrator | undefined = () =>
+  getAutoplayOrchestrator: () => PublicAutoplayOrchestrator = () =>
     usePublicApiDependencies().autoplayOrchestrator,
 ) {
   return defineInternalApiHandler(async (event) => {
@@ -48,9 +48,7 @@ export function createInternalEventsHandler(
       )
       getOperationalStatusService().setVoiceStatus('connected')
     } else if (botEvent.type === 'voice.disconnected') {
-      const orchestrator = getAutoplayOrchestrator()
-      if (orchestrator) orchestrator.voiceDisconnected(botEvent.guildId!)
-      else getPlayerStateService().voiceDisconnected(botEvent.guildId!)
+      getAutoplayOrchestrator().voiceDisconnected(botEvent.guildId!)
       getOperationalStatusService().setVoiceStatus('disconnected')
     } else if (botEvent.type === 'voice.reconnecting') {
       getOperationalStatusService().setVoiceStatus('reconnecting')

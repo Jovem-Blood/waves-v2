@@ -18,11 +18,8 @@ export function createAutoplaySuggestionRejectHandler(
     const session = dependencies.authService.getCurrentSession(token)
     if (!session) throw new UnauthorizedError()
     if (token && session.renewed) writeSessionCookie(event, token, { expiresAt: session.expiresAt })
-    if (!dependencies.autoplayService) throw new Error('Autoplay service is unavailable')
     const input = rejectAutoplaySuggestionInputSchema.parse(await readBody(event))
-    const state = dependencies.autoplayOrchestrator
-      ? await dependencies.autoplayOrchestrator.rejectSuggestion(input.providerTrackId)
-      : dependencies.autoplayService.rejectSuggestion(input.providerTrackId)
+    const state = await dependencies.autoplayOrchestrator.rejectSuggestion(input.providerTrackId)
     return autoplayStateSchema.parse(state)
   })
 }

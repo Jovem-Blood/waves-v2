@@ -10,9 +10,7 @@ export function createAutoplayGetHandler(
   getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
 ) {
   return definePublicApiHandler(() => {
-    const service = getDependencies().autoplayService
-    if (!service) throw new Error('Autoplay service is unavailable')
-    return autoplayStateSchema.parse(service.get())
+    return autoplayStateSchema.parse(getDependencies().autoplayService.get())
   })
 }
 
