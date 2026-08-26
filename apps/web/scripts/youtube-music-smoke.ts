@@ -190,7 +190,7 @@ async function runAudiusFallbackSmoke() {
 const catalogResults = await runCatalogSmoke()
 const report = {
   executedAt: new Date().toISOString(),
-  youtubeiVersion: '17.0.1',
+  youtubeiVersion: '18.0.0',
   catalogResults,
   totals: {
     candidatesCorrect: catalogResults.filter((result) => result.success).length,

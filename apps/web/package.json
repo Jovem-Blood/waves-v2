@@ -8,6 +8,7 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "smoke:youtube-music": "tsx scripts/youtube-music-smoke.ts",
+    "diagnose:youtube-music": "tsx scripts/youtube-music-diagnostics.ts",
     "test": "vitest run",
     "typecheck": "nuxt typecheck",
     "db:generate": "drizzle-kit generate",
@@ -22,7 +23,7 @@
     "@tailwindcss/vite": "^4.3.1",
     "@waves/shared": "workspace:*",
     "better-sqlite3": "^12.11.1",
-    "bgutils-js": "3.2.0",
+    "bgutils-js": "4.0.3",
     "drizzle-orm": "^0.45.2",
     "h3": "1.15.11",
     "jsdom": "^29.1.1",
@@ -31,7 +32,7 @@
     "sortablejs": "^1.15.7",
     "tailwindcss": "^4.3.1",
     "vue": "^3.5.38",
-    "youtubei.js": "^17.0.1",
+    "youtubei.js": "^18.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

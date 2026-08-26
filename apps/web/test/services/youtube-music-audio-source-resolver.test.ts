@@ -177,6 +177,6 @@ describe('YouTubeMusicAudioSourceResolver', () => {
     await expect(
       new YouTubeMusicAudioSourceResolver(client).resolve(trackWithMissingSongMatch),
     ).resolves.toMatchObject({ sourceIdentifier: 'video-upload' })
-    expect(searchVideos).toHaveBeenCalledWith('VAMPIRO DE MADUREIRA Mc Carol Mc Gorila', 10)
+    expect(searchVideos).toHaveBeenCalledWith('VAMPIRO DE MADUREIRA Mc Carol', 10)
   })
 })
