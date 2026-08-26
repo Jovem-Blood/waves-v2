@@ -128,7 +128,6 @@ function safeBadgeLabels(value: unknown): string[] {
 
 export class YouTubeMusicClient implements YouTubeMusicClientPort {
   private session: Promise<Innertube> | undefined
-  private sessionGeneration: number | undefined
   private readonly timeoutMs: number
   private readonly streamTtlMs: number
   private readonly now: () => number
@@ -212,7 +211,9 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
           durationMs:
             item.duration?.seconds === undefined ? undefined : item.duration.seconds * 1000,
           ...(channelName ? { channelName } : {}),
-          isOfficial: labels.some((label) => /official|verified/i.test(label)),
+          isOfficial:
+            labels.some((label) => /official|verified/i.test(label)) ||
+            Boolean(channelName && /vevo$/i.test(channelName)),
           isTopic: Boolean(channelName && /-\s*topic$/i.test(channelName)),
         })
         return parsed.success ? [parsed.data] : []
@@ -273,9 +274,12 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
   private async resolveAudioFormatUnobserved(videoId: string): Promise<YouTubeAudioFormat> {
     try {
       const tokens = await withTimeout(this.poTokenProvider.getTokens(videoId), this.timeoutMs)
-      const innertube = await this.getSession(tokens)
+      const innertube = await this.getSession()
       const info = await withTimeout(
-        innertube.music.getInfo(videoId, { po_token: tokens.contentToken }),
+        innertube.getBasicInfo(videoId, {
+          client: 'YTMUSIC',
+          po_token: tokens.contentToken,
+        }),
         this.timeoutMs,
       )
       const basicInfo = info.basic_info
@@ -330,23 +334,13 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
     }
   }
 
-  private getSession(tokens?: {
-    visitorData: string
-    sessionToken: string
-    generation: number
-  }): Promise<Innertube> {
-    if (tokens && this.sessionGeneration !== tokens.generation) {
-      this.session = undefined
-      this.sessionGeneration = tokens.generation
-    }
+  private getSession(): Promise<Innertube> {
     if (!this.session) {
       const pending = withTimeout(
         Innertube.create({
           cache: new UniversalCache(true),
           enable_session_cache: true,
-          generate_session_locally: true,
           retrieve_player: true,
-          ...(tokens ? { visitor_data: tokens.visitorData, po_token: tokens.sessionToken } : {}),
         }),
         this.timeoutMs,
       )

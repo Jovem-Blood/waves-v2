@@ -209,7 +209,7 @@ export function createRangedAudioStream(
 export const defaultPlaybackRuntime: PlaybackRuntime = {
   createPlayer() {
     return createAudioPlayer({
-      behaviors: { noSubscriber: NoSubscriberBehavior.Stop },
+      behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
     })
   },
   async createResource(streamUrl, queueItemId, context) {

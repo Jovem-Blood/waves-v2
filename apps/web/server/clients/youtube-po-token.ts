@@ -1,6 +1,8 @@
-import { BG, buildURL, GOOG_API_KEY, type WebPoSignalOutput } from 'bgutils-js'
+import { BotGuardClient, getChallenge } from 'bgutils-js/botguard'
+import type { WebPoSignalOutput } from 'bgutils-js/shared-types'
+import { buildURL, getHeaders, USER_AGENT } from 'bgutils-js/utils'
+import { WebPoMinter } from 'bgutils-js/webpo'
 import { JSDOM } from 'jsdom'
-import { Innertube } from 'youtubei.js'
 import { z } from 'zod'
 
 const BOTGUARD_REQUEST_KEY = 'O43z0dpjhgX20SCx4KAo'
@@ -15,15 +17,11 @@ const integrityTokenResponseSchema = z.tuple([
 ])
 
 export interface YouTubePoTokens {
-  visitorData: string
-  sessionToken: string
   contentToken: string
   generation: number
 }
 
 interface AttestationSession {
-  visitorData: string
-  sessionToken: string
   expiresAt: number
   mintContentToken(videoId: string): Promise<string>
   dispose(): Promise<void>
@@ -44,8 +42,6 @@ export class YouTubePoTokenProvider {
   async getTokens(videoId: string): Promise<YouTubePoTokens> {
     const session = await this.getSession()
     return {
-      visitorData: session.visitorData,
-      sessionToken: session.sessionToken,
       contentToken: await session.mintContentToken(videoId),
       generation: this.generation,
     }
@@ -56,14 +52,16 @@ export class YouTubePoTokenProvider {
       return this.session
     }
 
-    if (this.session) {
-      await Promise.resolve(this.session.dispose()).catch(() => undefined)
-      this.session = undefined
-    }
+    this.pendingSession ??= this.refreshSession()
+    return this.pendingSession
+  }
 
-    this.pendingSession ??= this.createSession()
+  private async refreshSession(): Promise<AttestationSession> {
+    const previous = this.session
+    this.session = undefined
+    await Promise.resolve(previous?.dispose()).catch(() => undefined)
     try {
-      const next = await this.pendingSession
+      const next = await this.createSession()
       this.session = next
       this.generation += 1
       return next
@@ -74,20 +72,17 @@ export class YouTubePoTokenProvider {
 }
 
 async function createAttestationSession(): Promise<AttestationSession> {
-  const bootstrap = await Innertube.create({
-    retrieve_player: false,
-    generate_session_locally: true,
+  const dom = new JSDOM('<!doctype html><html lang="en"><head></head><body></body></html>', {
+    url: 'https://www.youtube.com/',
+    referrer: 'https://www.youtube.com/',
   })
-  const visitorData = bootstrap.session.context.client.visitorData
-  if (!visitorData) {
-    throw new Error('YouTube attestation visitor data unavailable')
-  }
-
-  const dom = new JSDOM()
   const previousWindow = Reflect.get(globalThis, 'window')
   const previousDocument = Reflect.get(globalThis, 'document')
+  const previousLocation = Reflect.get(globalThis, 'location')
+  const previousOrigin = Reflect.get(globalThis, 'origin')
+  const hadNavigator = Reflect.has(globalThis, 'navigator')
   let globalName: string | undefined
-  let botguard: InstanceType<typeof BG.BotGuardClient> | undefined
+  let botguard: BotGuardClient | undefined
   let completed = false
 
   const cleanup = async () => {
@@ -105,24 +100,33 @@ async function createAttestationSession(): Promise<AttestationSession> {
     } else {
       Reflect.set(globalThis, 'document', previousDocument)
     }
+    if (previousLocation === undefined) Reflect.deleteProperty(globalThis, 'location')
+    else Reflect.set(globalThis, 'location', previousLocation)
+    if (previousOrigin === undefined) Reflect.deleteProperty(globalThis, 'origin')
+    else Reflect.set(globalThis, 'origin', previousOrigin)
+    if (!hadNavigator) Reflect.deleteProperty(globalThis, 'navigator')
     dom.window.close()
   }
 
   try {
     Reflect.set(globalThis, 'window', dom.window)
     Reflect.set(globalThis, 'document', dom.window.document)
-
-    const bgConfig = {
-      fetch,
-      globalObj: globalThis,
-      identifier: visitorData,
-      requestKey: BOTGUARD_REQUEST_KEY,
-      useYouTubeAPI: true,
+    Reflect.set(globalThis, 'location', dom.window.location)
+    Reflect.set(globalThis, 'origin', dom.window.origin)
+    if (!Reflect.has(globalThis, 'navigator')) {
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: dom.window.navigator,
+      })
     }
-    const challenge = await BG.Challenge.create(bgConfig)
+
+    const challenge = await getChallenge({
+      fetchFunction: fetch,
+      requestKey: BOTGUARD_REQUEST_KEY,
+    })
     const interpreter =
-      challenge?.interpreterJavascript.privateDoNotAccessOrElseSafeScriptWrappedValue
-    if (!challenge || !interpreter) {
+      challenge.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue
+    if (!interpreter) {
       throw new Error('YouTube attestation challenge unavailable')
     }
 
@@ -132,9 +136,9 @@ async function createAttestationSession(): Promise<AttestationSession> {
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call
     new Function(interpreter)()
 
-    botguard = await BG.BotGuardClient.create({
+    botguard = await BotGuardClient.create({
       globalName: challenge.globalName,
-      globalObj: globalThis,
+      globalObject: globalThis,
       program: challenge.program,
     })
     const webPoSignalOutput: WebPoSignalOutput = []
@@ -142,9 +146,8 @@ async function createAttestationSession(): Promise<AttestationSession> {
     const response = await fetch(buildURL('GenerateIT', true), {
       method: 'POST',
       headers: {
-        'content-type': 'application/json+protobuf',
-        'x-goog-api-key': GOOG_API_KEY,
-        'x-user-agent': 'grpc-web-javascript/0.1',
+        ...getHeaders(),
+        'user-agent': USER_AGENT,
       },
       body: JSON.stringify([BOTGUARD_REQUEST_KEY, botguardResponse]),
     })
@@ -154,17 +157,14 @@ async function createAttestationSession(): Promise<AttestationSession> {
 
     const [integrityToken, estimatedTtlSecs, mintRefreshThreshold, websafeFallbackToken] =
       integrityTokenResponseSchema.parse(await response.json())
-    const minter = await BG.WebPoMinter.create(
+    const minter = await WebPoMinter.create(
       { integrityToken, estimatedTtlSecs, mintRefreshThreshold, websafeFallbackToken },
       webPoSignalOutput,
     )
-    const sessionToken = await minter.mintAsWebsafeString(visitorData)
     const expiresAt = Date.now() + (estimatedTtlSecs ?? DEFAULT_ATTESTATION_TTL_MS / 1000) * 1000
 
     completed = true
     return {
-      visitorData,
-      sessionToken,
       expiresAt,
       mintContentToken: (videoId) => minter.mintAsWebsafeString(videoId),
       dispose: cleanup,

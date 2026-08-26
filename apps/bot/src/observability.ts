@@ -17,6 +17,8 @@ export type PlaybackErrorCode =
   | 'PLAYER_ERROR'
   | 'PREMATURE_IDLE'
   | 'PLAYBACK_SYNC_FAILED'
+  | 'SOURCE_NOT_FOUND'
+  | 'SOURCE_UNAVAILABLE'
   | 'API_TIMEOUT'
   | 'API_UNAVAILABLE'
   | 'API_INVALID_RESPONSE'
@@ -55,6 +57,9 @@ export function classifyPlaybackError(error: unknown): {
     return { errorCode: 'API_INVALID_RESPONSE' }
   }
   if (error instanceof WavesApiError) {
+    if (error.code === 'SOURCE_NOT_FOUND' || error.code === 'SOURCE_UNAVAILABLE') {
+      return { errorCode: error.code, httpStatus: error.statusCode }
+    }
     return { errorCode: 'API_ERROR', httpStatus: error.statusCode }
   }
   if (error instanceof Error) {
@@ -70,6 +75,7 @@ export function playbackFailureStage(
   if (errorCode.startsWith('SOURCE_FETCH_') || errorCode.startsWith('SOURCE_HTTP_'))
     return 'transport'
   if (errorCode === 'SOURCE_INVALID_RANGE' || errorCode === 'SOURCE_EMPTY_RANGE') return 'transport'
+  if (errorCode === 'SOURCE_NOT_FOUND' || errorCode === 'SOURCE_UNAVAILABLE') return 'resolve'
   if (errorCode === 'DEMUX_PROBE_FAILED') return 'demux'
   if (errorCode === 'AUDIO_RESOURCE_FAILED') return 'resource'
   if (errorCode === 'PLAYBACK_SYNC_FAILED' || errorCode.startsWith('API_')) return 'sync'

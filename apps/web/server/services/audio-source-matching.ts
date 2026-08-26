@@ -15,6 +15,7 @@ const CONFLICTING_QUALIFIERS = [
   'sped up',
   'nightcore',
   'acoustic',
+  'lyrics',
   'lyric video',
 ] as const
 
@@ -78,6 +79,20 @@ function maximumArtistCoverage(expected: string, candidates: string[]): number {
   return Math.max(0, ...candidates.map((candidate) => tokenCoverage(expected, candidate)))
 }
 
+function isTrustedPrimaryArtistChannel(
+  track: TrackMetadata,
+  candidate: YouTubeMusicCandidate,
+): boolean {
+  const primaryArtist = track.artists[0]
+  return (
+    primaryArtist !== undefined &&
+    candidate.channelName !== undefined &&
+    tokenCoverage(primaryArtist, candidate.channelName) >= 0.8 &&
+    titleTokenCoverage(track.title, candidate.title) === 1 &&
+    Math.abs(track.durationMs - candidate.durationMs) <= 3_000
+  )
+}
+
 function hasSharedNonLatinTitleToken(expected: string, candidate: string): boolean {
   const candidateTokens = new Set(stripFeatClause(candidate).split(' ').filter(Boolean))
   return stripFeatClause(expected)
@@ -133,6 +148,7 @@ function relaxedDurationScore(expectedMs: number, candidateMs: number): number |
 function scoreCandidate(
   track: TrackMetadata,
   candidate: YouTubeMusicCandidate,
+  isrcCandidateIds: ReadonlySet<string>,
 ): { score?: number; rejection?: 'qualifier' | 'artist' | 'duration' } {
   if (hasConflictingQualifier(track.title, candidate.title)) {
     return { rejection: 'qualifier' }
@@ -143,12 +159,30 @@ function scoreCandidate(
   const primaryArtistCoverage = primaryArtist
     ? maximumArtistCoverage(primaryArtist, effectiveArtists)
     : 0
+  const anyArtistCoverage = Math.max(
+    0,
+    ...track.artists.map((artist) => maximumArtistCoverage(artist, effectiveArtists)),
+  )
+  const trustedIsrcMatch =
+    isrcCandidateIds.has(candidate.videoId) &&
+    (candidate.isOfficial || candidate.isTopic) &&
+    anyArtistCoverage >= 0.8
+  const trustedListedArtistMatch =
+    (candidate.isOfficial || candidate.isTopic) &&
+    anyArtistCoverage >= 0.8 &&
+    titleTokenCoverage(track.title, candidate.title) === 1 &&
+    Math.abs(track.durationMs - candidate.durationMs) <= 3_000
   const inferredTransliteratedArtist = canTrustTransliteratedPrimaryArtist(
     track,
     candidate,
     effectiveArtists,
   )
-  if (primaryArtistCoverage < 0.8 && !inferredTransliteratedArtist) {
+  if (
+    primaryArtistCoverage < 0.8 &&
+    !inferredTransliteratedArtist &&
+    !trustedIsrcMatch &&
+    !trustedListedArtistMatch
+  ) {
     return { rejection: 'artist' }
   }
 
@@ -157,7 +191,7 @@ function scoreCandidate(
     return { rejection: 'duration' }
   }
 
-  const title = titleTokenCoverage(track.title, candidate.title)
+  const title = trustedIsrcMatch ? 1 : titleTokenCoverage(track.title, candidate.title)
   const artists =
     track.artists.reduce(
       (total, artist, index) =>
@@ -233,11 +267,13 @@ interface YouTubeMusicMatchDiagnostics {
 export function analyzeYouTubeMusicCandidates(
   track: TrackMetadata,
   candidates: YouTubeMusicCandidate[],
+  options: { isrcCandidateIds?: ReadonlySet<string> } = {},
 ): {
   candidate?: YouTubeMusicCandidate
   ranked: YouTubeMusicCandidate[]
   diagnostics: YouTubeMusicMatchDiagnostics
 } {
+  const isrcCandidateIds = options.isrcCandidateIds ?? new Set<string>()
   const diagnostics: YouTubeMusicMatchDiagnostics = {
     candidateCount: candidates.length,
     rejectedByQualifier: 0,
@@ -249,7 +285,7 @@ export function analyzeYouTubeMusicCandidates(
   }
   const ranked = candidates
     .map((candidate) => {
-      const result = scoreCandidate(track, candidate)
+      const result = scoreCandidate(track, candidate, isrcCandidateIds)
       diagnostics.candidateDetails.push({
         videoId: candidate.videoId,
         title: candidate.title,
@@ -271,22 +307,24 @@ export function analyzeYouTubeMusicCandidates(
     )
     .sort((left, right) => right.score - left.score)
 
-  const best = ranked[0]
+  const acceptedRanked = ranked.filter((entry) => entry.score >= 0.75)
+  const best = acceptedRanked[0]
   if (best && best.score >= 0.75) {
-    const second = ranked[1]
+    const second = acceptedRanked[1]
     if (
       second &&
       best.score - second.score < 0.03 &&
       !best.candidate.isOfficial &&
-      !best.candidate.isTopic
+      !best.candidate.isTopic &&
+      !isTrustedPrimaryArtistChannel(track, best.candidate)
     ) {
       diagnostics.ambiguous = true
-      return { ranked: ranked.map((e) => e.candidate), diagnostics }
+      return { ranked: acceptedRanked.map((entry) => entry.candidate), diagnostics }
     }
     diagnostics.selected = { videoId: best.candidate.videoId, score: best.score }
     return {
       candidate: best.candidate,
-      ranked: ranked.map((e) => e.candidate),
+      ranked: acceptedRanked.map((entry) => entry.candidate),
       diagnostics,
     }
   }
@@ -308,7 +346,15 @@ export function analyzeYouTubeMusicCandidates(
     return { ranked: [], diagnostics }
   }
 
-  const allRanked = [...ranked.map((e) => e.candidate), ...relaxedRanked.map((e) => e.candidate)]
+  const safeRelaxedRanked = relaxedRanked.filter((entry) => entry.score >= 0.78)
+  const allRanked = [
+    ...new Map(
+      [...safeRelaxedRanked, ...acceptedRanked].map((entry) => [
+        entry.candidate.videoId,
+        entry.candidate,
+      ]),
+    ).values(),
+  ]
 
   const relaxedSecond = relaxedRanked[1]
   if (

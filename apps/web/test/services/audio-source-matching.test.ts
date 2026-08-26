@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { YouTubeMusicCandidate } from '../../server/clients/youtube-music.schemas'
 import {
+  analyzeYouTubeMusicCandidates,
   normalizeMusicText,
   selectYouTubeMusicCandidate,
 } from '../../server/services/audio-source-matching'
@@ -61,7 +62,7 @@ describe('YouTube Music matching', () => {
     expect(selected?.videoId).toBe('topic')
   })
 
-  it.each(['Cover', 'Remix', 'Live', 'Karaoke', 'Instrumental', 'Slowed + Reverb'])(
+  it.each(['Cover', 'Remix', 'Live', 'Karaoke', 'Instrumental', 'Slowed + Reverb', 'Lyrics'])(
     'rejects an unsolicited %s version',
     (qualifier) => {
       expect(
@@ -83,6 +84,65 @@ describe('YouTube Music matching', () => {
         candidate({ videoId: 'two', durationMs: 200_100 }),
       ]),
     ).toBeUndefined()
+  })
+
+  it('prefers an exact upload from the primary artist channel over mirrors', () => {
+    const selected = selectYouTubeMusicCandidate(track, [
+      candidate({ videoId: 'artist-upload', channelName: 'Artista Um' }),
+      candidate({ videoId: 'mirror', channelName: 'Lyrics Channel', durationMs: 200_100 }),
+    ])
+
+    expect(selected?.videoId).toBe('artist-upload')
+  })
+
+  it('trusts an official ISRC result with a listed artist and matching duration', () => {
+    const spotifyTrack: TrackMetadata = {
+      id: 'spotify:happy',
+      provider: 'spotify',
+      providerTrackId: 'happy',
+      title: 'Happy',
+      artists: ['Pharrell Williams', 'Noteservice Wind Ensemble'],
+      durationMs: 123_309,
+      isrc: 'NODGN1607240',
+    }
+    const exactCatalogCandidate = candidate({
+      videoId: 'youtube-happy',
+      title: 'Happy',
+      artists: ['Noteservice Wind Ensemble'],
+      durationMs: 124_000,
+      isOfficial: true,
+    })
+
+    expect(
+      analyzeYouTubeMusicCandidates(spotifyTrack, [exactCatalogCandidate], {
+        isrcCandidateIds: new Set(['youtube-happy']),
+      }).candidate?.videoId,
+    ).toBe('youtube-happy')
+  })
+
+  it('uses trusted ISRC metadata when catalog title spelling differs', () => {
+    const spotifyTrack: TrackMetadata = {
+      id: 'spotify:scheibe',
+      provider: 'spotify',
+      providerTrackId: 'scheibe',
+      title: 'ScheiBe',
+      artists: ['Lady Gaga'],
+      durationMs: 225_466,
+      isrc: 'USUM71106448',
+    }
+    const exactCatalogCandidate = candidate({
+      videoId: 'youtube-scheisse',
+      title: 'Scheiße',
+      artists: ['Lady Gaga'],
+      durationMs: 226_000,
+      isOfficial: true,
+    })
+
+    expect(
+      analyzeYouTubeMusicCandidates(spotifyTrack, [exactCatalogCandidate], {
+        isrcCandidateIds: new Set(['youtube-scheisse']),
+      }).candidate?.videoId,
+    ).toBe('youtube-scheisse')
   })
 
   it('matches when track title has feat. artists but candidate title does not', () => {

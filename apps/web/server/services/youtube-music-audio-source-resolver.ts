@@ -74,12 +74,14 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
       }
     }
 
-    const query = `${track.title} ${track.artists.join(' ')}`
+    const query = `${track.title} ${track.artists[0]}`
     let candidates
+    const isrcCandidateIds = new Set<string>()
     try {
       candidates = await this.client.searchSongs(query, this.searchLimit)
       if (track.isrc) {
         const isrcCandidates = await this.client.searchSongs(track.isrc, this.searchLimit)
+        for (const candidate of isrcCandidates) isrcCandidateIds.add(candidate.videoId)
         candidates = [...candidates, ...isrcCandidates]
       }
     } catch (error) {
@@ -87,19 +89,51 @@ export class YouTubeMusicAudioSourceResolver implements AudioSourceResolver {
     }
 
     let searchSurface = 'songs'
-    let match = analyzeYouTubeMusicCandidates(track, [
-      ...new Map(candidates.map((candidate) => [candidate.videoId, candidate])).values(),
-    ])
+    let match = analyzeYouTubeMusicCandidates(
+      track,
+      [...new Map(candidates.map((candidate) => [candidate.videoId, candidate])).values()],
+      { isrcCandidateIds },
+    )
+
+    if (!match.candidate && track.artists.length > 1) {
+      try {
+        const alternateArtistCandidates = (
+          await Promise.all(
+            track.artists
+              .slice(1)
+              .map((artist) =>
+                this.client.searchSongs(`${track.title} ${artist}`, this.searchLimit),
+              ),
+          )
+        ).flat()
+        candidates = [...candidates, ...alternateArtistCandidates]
+        searchSurface = 'songs_artist_fallback'
+        match = analyzeYouTubeMusicCandidates(
+          track,
+          [...new Map(candidates.map((candidate) => [candidate.videoId, candidate])).values()],
+          { isrcCandidateIds },
+        )
+      } catch (error) {
+        throw this.translateError(error)
+      }
+    }
 
     if (!match.candidate) {
       try {
         const videoCandidates = await this.client.searchVideos(query, this.searchLimit)
-        searchSurface = 'songs_videos'
-        match = analyzeYouTubeMusicCandidates(track, [
-          ...new Map(
-            [...candidates, ...videoCandidates].map((candidate) => [candidate.videoId, candidate]),
-          ).values(),
-        ])
+        searchSurface = `${searchSurface}_videos`
+        match = analyzeYouTubeMusicCandidates(
+          track,
+          [
+            ...new Map(
+              [...candidates, ...videoCandidates].map((candidate) => [
+                candidate.videoId,
+                candidate,
+              ]),
+            ).values(),
+          ],
+          { isrcCandidateIds },
+        )
       } catch (error) {
         throw this.translateError(error)
       }
