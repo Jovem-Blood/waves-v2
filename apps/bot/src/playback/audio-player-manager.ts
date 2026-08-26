@@ -261,7 +261,7 @@ const defaultRuntime: PlaybackRuntime = {
   createPlayer() {
     return createAudioPlayer({
       behaviors: {
-        noSubscriber: NoSubscriberBehavior.Stop,
+        noSubscriber: NoSubscriberBehavior.Pause,
       },
     })
   },
@@ -387,7 +387,8 @@ export class AudioPlayerManager implements PlaybackManager {
   }
 
   hasActivePlayback(guildId: string): boolean {
-    return this.sessions.get(guildId)?.current !== undefined
+    const session = this.sessions.get(guildId)
+    return session?.current !== undefined || session?.settling === true
   }
 
   async skip(guildId: string): Promise<SkipPlaybackResult> {

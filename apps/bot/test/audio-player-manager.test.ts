@@ -228,6 +228,18 @@ function setup(connected = true) {
   }
 }
 
+describe('playback reconciliation', () => {
+  it('stays active while a completed item is being synchronized', async () => {
+    const { manager, player, mocks } = setup()
+    mocks.completePlayback.mockImplementation(() => new Promise(() => undefined))
+
+    await manager.start('guild-1')
+    player.finish()
+
+    expect(manager.hasActivePlayback('guild-1')).toBe(true)
+  })
+})
+
 describe('AudioPlayerManager', () => {
   it('does not claim playback without a ready voice connection', async () => {
     const { manager, mocks } = setup(false)
