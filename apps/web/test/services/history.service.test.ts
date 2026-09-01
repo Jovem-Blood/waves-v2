@@ -1,7 +1,7 @@
 import type { QueueItem } from '@waves/shared'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { decodeHistoryCursor, HistoryService } from '../../server/services/history.service'
+import { HistoryService } from '../../server/services/history.service'
 
 const track = {
   id: 'spotify:track-1',
@@ -27,7 +27,7 @@ function item(index: number): QueueItem {
 describe('HistoryService', () => {
   it('returns a bounded page and encodes the next cursor from the final returned item', () => {
     const repository = {
-      listHistory: () => Array.from({ length: 21 }, (_, index) => item(index + 1)),
+      listHistory: vi.fn(() => Array.from({ length: 21 }, (_, index) => item(index + 1))),
     }
     const service = new HistoryService(repository as never)
     const page = service.list()
@@ -35,9 +35,10 @@ describe('HistoryService', () => {
     expect(page.items).toHaveLength(20)
     expect(page.items[0]?.id).toBe('item-1')
     expect(page.nextCursor).toEqual(expect.any(String))
-    expect(decodeHistoryCursor(page.nextCursor ?? undefined)).toEqual({
-      updatedAt: '2026-06-18T12:20:00.000Z',
-      id: 'item-20',
+    service.list(page.nextCursor ?? undefined)
+    expect(repository.listHistory).toHaveBeenLastCalledWith({
+      cursor: { updatedAt: '2026-06-18T12:20:00.000Z', id: 'item-20' },
+      limit: 21,
     })
   })
 

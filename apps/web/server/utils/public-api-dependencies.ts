@@ -1,21 +1,3 @@
-import type {
-  AddQueueItemInput,
-  BotHeartbeatInput,
-  MoveQueueItemInput,
-  OperationalStatus,
-  PlayerState,
-  QueueItem,
-  RemoveQueueItemResult,
-  RestoreQueueItemResult,
-  TrackMetadata,
-  AutoplayState,
-  HistoryPage,
-  UpdateAutoplayInput,
-  PlaybackTransitionResult,
-  CompletePlaybackInput,
-  PlaybackAttemptReport,
-} from '@waves/shared'
-
 import { SpotifyClient } from '../clients/spotify.client'
 import { LastFmClient } from '../clients/lastfm.client'
 import { YouTubeMusicClient } from '../clients/youtube-music.client'
@@ -31,9 +13,7 @@ import { DiscordLoginTokenRepository } from '../repositories/discord-login-token
 import { SessionRepository } from '../repositories/session.repository'
 import { DatabaseUnitOfWork } from '../repositories/unit-of-work'
 import { UserRepository } from '../repositories/user.repository'
-import type { AuthService } from '../services/auth.service'
-import { AuthService as RuntimeAuthService } from '../services/auth.service'
-import type { SkipResult } from '../services/player-state.service'
+import { AuthService } from '../services/auth.service'
 import { PlayerStateService } from '../services/player-state.service'
 import { OperationalStatusService } from '../services/operational-status.service'
 import { QueueService } from '../services/queue.service'
@@ -50,84 +30,44 @@ import { parseLastFmConfig } from './lastfm-config'
 import { parseSpotifyConfig } from './spotify-config'
 import { getRealtimeEventBus } from './realtime-events'
 
-export interface PublicQueueService {
-  list(): QueueItem[]
-  add(input: AddQueueItemInput): QueueItem
-  remove(id: string): RemoveQueueItemResult
-  restore(id: string): RestoreQueueItemResult
-  move(id: string, input: MoveQueueItemInput): QueueItem[]
-}
-
-export interface PublicHistoryService {
-  list(cursor?: string): HistoryPage
-}
-
-export interface PublicPlaybackHealthService {
-  get(query?: {
-    from?: string
-    to?: string
-    sourceProvider?: string
-    errorCode?: string
-  }): ReturnType<PlaybackHealthService['get']>
-}
-
-export interface PublicOperationalStatusService {
-  get(): OperationalStatus
-  heartbeat(input: BotHeartbeatInput): OperationalStatus
-  setVoiceStatus(status: 'connected' | 'disconnected' | 'reconnecting'): OperationalStatus
-}
-
-export interface PublicPlayerStateService {
-  get(): PlayerState
-  skip(): SkipResult
-  pause(): PlayerState
-  resume(): PlayerState
-  setVolume(input: { volume: number }): PlayerState
-  updateProgress(input: { queueItemId: string; progressMs: number }): PlayerState
-  voiceConnected(
-    guildId: string,
-    guildName: string,
-    voiceChannelId: string,
-    voiceChannelName: string,
-  ): PlayerState
-  voiceDisconnected(guildId: string): PlayerState
-  claimPlayback(
-    input?: Parameters<PlayerStateService['claimPlayback']>[0],
-  ): ReturnType<PlayerStateService['claimPlayback']>
-  completePlayback(
-    input: Parameters<PlayerStateService['completePlayback']>[0],
-  ): ReturnType<PlayerStateService['completePlayback']>
-  reportPlaybackAttempt(input: PlaybackAttemptReport): void
-}
-
-export interface PublicSpotifyService {
-  searchTracks(query: string): Promise<TrackMetadata[]>
-}
-
-export interface PublicAutoplayService {
-  get(): AutoplayState
-  update(input: UpdateAutoplayInput): AutoplayState
-  rejectSuggestion(providerTrackId: string): AutoplayState
-}
-
-export interface PublicAutoplayOrchestrator {
-  completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult>
-  queueChanged(): Promise<void>
-  skip(): Promise<SkipResult>
-  rejectSuggestion(providerTrackId: string): Promise<AutoplayState>
-  voiceDisconnected(guildId: string): PlayerState
-}
+type PublicQueueService = Pick<QueueService, 'list' | 'add' | 'remove' | 'restore' | 'move'>
+type PublicHistoryService = Pick<HistoryService, 'list'>
+type PublicPlaybackHealthService = Pick<PlaybackHealthService, 'get'>
+export type PublicOperationalStatusService = Pick<
+  OperationalStatusService,
+  'get' | 'heartbeat' | 'setVoiceStatus'
+>
+export type PublicPlayerStateService = Pick<
+  PlayerStateService,
+  | 'get'
+  | 'skip'
+  | 'pause'
+  | 'resume'
+  | 'setVolume'
+  | 'updateProgress'
+  | 'voiceConnected'
+  | 'voiceDisconnected'
+  | 'claimPlayback'
+  | 'completePlayback'
+  | 'reportPlaybackAttempt'
+>
+export type PublicSpotifyService = Pick<SpotifyService, 'searchTracks'>
+type PublicAutoplayService = Pick<AutoplayService, 'get' | 'update'>
+export type PublicAutoplayOrchestrator = Pick<
+  AutoplayOrchestrator,
+  'completePlayback' | 'queueChanged' | 'skip' | 'rejectSuggestion' | 'voiceDisconnected'
+>
 
 export interface PublicApiDependencies {
   playerStateService: PublicPlayerStateService
   queueService: PublicQueueService
   historyService: PublicHistoryService
-  playbackHealthService?: PublicPlaybackHealthService
+  playbackHealthService: PublicPlaybackHealthService
   spotifyService: PublicSpotifyService
   operationalStatusService: PublicOperationalStatusService
   authService: AuthService
-  autoplayService?: PublicAutoplayService
-  autoplayOrchestrator?: PublicAutoplayOrchestrator
+  autoplayService: PublicAutoplayService
+  autoplayOrchestrator: PublicAutoplayOrchestrator
 }
 
 let runtimeDependencies: PublicApiDependencies | undefined
@@ -218,7 +158,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
       undefined,
       publishRealtime,
     ),
-    authService: new RuntimeAuthService(
+    authService: new AuthService(
       userRepository,
       sessionRepository,
       discordLoginTokenRepository,

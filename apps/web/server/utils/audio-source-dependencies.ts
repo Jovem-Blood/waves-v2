@@ -1,11 +1,8 @@
-import { AudiusClient } from '../clients/audius.client'
 import { YouTubeMusicClient } from '../clients/youtube-music.client'
 import { useDatabase } from '../db/client'
 import { QueueRepository } from '../repositories/queue.repository'
 import { ResolvedSourceRepository } from '../repositories/resolved-source.repository'
-import { AudiusAudioSourceResolver } from '../services/audio-source-resolver'
 import { AudioSourceService } from '../services/audio-source.service'
-import { FallbackAudioSourceResolver } from '../services/fallback-audio-source-resolver'
 import { YouTubeMusicAudioSourceResolver } from '../services/youtube-music-audio-source-resolver'
 
 export interface InternalAudioSourceService {
@@ -31,10 +28,7 @@ export function useAudioSourceApiDependencies(): AudioSourceApiDependencies {
     audioSourceService: new AudioSourceService(
       new QueueRepository(db),
       new ResolvedSourceRepository(db),
-      new FallbackAudioSourceResolver(
-        new YouTubeMusicAudioSourceResolver(new YouTubeMusicClient()),
-        new AudiusAudioSourceResolver(new AudiusClient()),
-      ),
+      new YouTubeMusicAudioSourceResolver(new YouTubeMusicClient()),
     ),
   }
   return runtimeDependencies

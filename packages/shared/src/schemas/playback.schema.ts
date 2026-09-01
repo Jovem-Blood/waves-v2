@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { audioSourceProviderSchema } from './audio-source.schema.js'
 import { playerStateSchema } from './player.schema.js'
 import { queueItemSchema, queueSchema } from './queue.schema.js'
 
@@ -33,7 +34,7 @@ const playbackDiagnosticFields = {
   trackTitle: z.string().trim().min(1).optional(),
   trackArtists: z.string().trim().min(1).optional(),
   trackProvider: z.string().trim().min(1).optional(),
-  sourceProvider: z.string().trim().min(1).optional(),
+  sourceProvider: audioSourceProviderSchema.optional(),
   sourceIdentifier: z.string().trim().min(1).optional(),
   failureStage: playbackFailureStageSchema.optional(),
   failureClass: playbackFailureClassSchema.optional(),

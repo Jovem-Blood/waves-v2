@@ -17,7 +17,7 @@ export function createQueueRemoveHandler(
     const id = routeIdSchema.parse(getRouterParam(event, 'id'))
     const dependencies = getDependencies()
     const result = dependencies.queueService.remove(id)
-    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    await dependencies.autoplayOrchestrator.queueChanged().catch(() => undefined)
     return removeQueueItemResultSchema.parse(result)
   })
 }

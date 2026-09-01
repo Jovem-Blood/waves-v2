@@ -73,8 +73,8 @@ describe('WavesApiClient', () => {
         jsonResponse({
           queueItemId: item.id,
           source: {
-            provider: 'audius',
-            sourceIdentifier: 'audius-1',
+            provider: 'youtube_music',
+            sourceIdentifier: 'youtube-1',
             streamUrl: 'https://stream.example/signed',
             expiresAt: '2026-06-20T12:05:00.000Z',
           },
@@ -136,7 +136,7 @@ describe('WavesApiClient', () => {
     })
     await expect(client.resolveSource(item.id, true)).resolves.toMatchObject({
       queueItemId: item.id,
-      source: { provider: 'audius', sourceIdentifier: 'audius-1' },
+      source: { provider: 'youtube_music', sourceIdentifier: 'youtube-1' },
     })
     await expect(client.claimPlayback()).resolves.toMatchObject({
       item: { id: item.id, status: 'playing' },

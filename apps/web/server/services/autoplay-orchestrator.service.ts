@@ -56,7 +56,6 @@ interface RecommendationEngine {
 }
 
 interface RecommendationContext {
-  guildId: string
   humanAnchor?: TrackMetadata
   continuitySeed: TrackMetadata
   seeds: TrackMetadata[]
@@ -208,17 +207,13 @@ export class AutoplayOrchestrator {
       if (active.length > 0) this.autoplayService.recordFailure('no_seeds')
       return
     }
-    this.profile.begin(context.guildId)
     if (context.humanAnchor) this.profile.observeHumanInput(context.humanAnchor)
 
     const recent = this.queueRepository.listRecentPlayed(RECENT_PLAYED_LIMIT)
     const blockedTracks = [...active, ...recent].map((item) => item.track)
-    const existing = this.validSuggestions(
-      this.suggestionRepository.list(),
-      context.fingerprint,
-      blockedTracks,
-    )
-    if (this.suggestionsChanged(this.suggestionRepository.list(), existing)) {
+    const storedSuggestions = this.suggestionRepository.list()
+    const existing = this.validSuggestions(storedSuggestions, context.fingerprint, blockedTracks)
+    if (this.suggestionsChanged(storedSuggestions, existing)) {
       this.suggestionRepository.replaceAll(existing)
     }
 
@@ -229,7 +224,7 @@ export class AutoplayOrchestrator {
           candidate.seedFingerprint === context.fingerprint &&
           !this.candidateBlocked(candidate, blockedTracks, existing),
       )
-    const continuityKey = this.trackProviderKey(context.continuitySeed)
+    const continuityKey = `${context.continuitySeed.provider}:${context.continuitySeed.providerTrackId}`
     const needsEnrichment =
       bank.length < REFILL_THRESHOLD ||
       !bank.some((candidate) => candidate.seedTrackKey === continuityKey)
@@ -288,7 +283,6 @@ export class AutoplayOrchestrator {
       )
     const stableAnchor = humanAnchor ?? continuitySeed
     return {
-      guildId: player.guildId,
       ...(humanAnchor === undefined ? {} : { humanAnchor }),
       continuitySeed,
       seeds,
@@ -528,9 +522,5 @@ export class AutoplayOrchestrator {
 
   private trackIdentityKey(track: Pick<TrackMetadata, 'title' | 'artists'>): string {
     return `${normalizeMusicText(track.title)}::${normalizeMusicText(track.artists[0] ?? '')}`
-  }
-
-  private trackProviderKey(track: TrackMetadata): string {
-    return `${track.provider}:${track.providerTrackId}`
   }
 }

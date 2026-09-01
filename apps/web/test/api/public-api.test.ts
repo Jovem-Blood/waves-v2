@@ -114,9 +114,10 @@ async function startTestApi(): Promise<TestContext> {
   const playerStateRepository = new PlayerStateRepository(connection.db, now)
   const operationalStatusRepository = new OperationalStatusRepository(connection.db, now)
   const unitOfWork = new DatabaseUnitOfWork(connection.db, now)
+  const autoplaySuggestionRepository = new AutoplaySuggestionRepository(connection.db)
   const autoplayService = new AutoplayService(
     new AutoplayRepository(connection.db, now),
-    new AutoplaySuggestionRepository(connection.db),
+    autoplaySuggestionRepository,
     now,
   )
   let nextId = 0
@@ -127,10 +128,12 @@ async function startTestApi(): Promise<TestContext> {
     searchTracks: spotifySearch,
   }
   const realtimeBus = createRealtimeEventBus()
+  const queueService = new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`)
+  const playerStateService = new PlayerStateService(playerStateRepository, unitOfWork, now)
   const dependencies: PublicApiDependencies = {
-    queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
+    queueService,
     historyService: new HistoryService(queueRepository),
-    playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
+    playerStateService,
     operationalStatusService: new OperationalStatusService(
       operationalStatusRepository,
       playerStateRepository,
@@ -152,6 +155,23 @@ async function startTestApi(): Promise<TestContext> {
     ),
     spotifyService,
     autoplayService,
+    autoplayOrchestrator: {
+      completePlayback: (input) => Promise.resolve(playerStateService.completePlayback(input)),
+      queueChanged: () => Promise.resolve(),
+      skip: () => Promise.resolve(playerStateService.skip()),
+      rejectSuggestion: (providerTrackId) => {
+        if (autoplaySuggestionRepository.removeByProviderTrackId(providerTrackId)) {
+          autoplaySuggestionRepository.compactPositions()
+        }
+        return Promise.resolve(autoplayService.get())
+      },
+      voiceDisconnected: (guildId) => playerStateService.voiceDisconnected(guildId),
+    },
+    playbackHealthService: {
+      get: () => {
+        throw new Error('Playback health is outside this API test fixture')
+      },
+    },
   }
   const getDependencies = () => dependencies
   const router = createRouter()

@@ -113,25 +113,22 @@ describe('round one UX contracts', () => {
 })
 
 describe('audio source contracts', () => {
-  it.each(['youtube_music', 'audius'] as const)(
-    'accepts a normalized %s source response',
-    (provider) => {
-      expect(
-        queueItemAudioSourceSchema.parse({
-          queueItemId: 'queue-1',
-          source: {
-            provider,
-            sourceIdentifier: 'source-1',
-            streamUrl: 'https://stream.example/signed',
-            expiresAt: '2026-06-20T12:05:00.000Z',
-          },
-        }),
-      ).toMatchObject({
+  it('accepts a normalized YouTube Music source response', () => {
+    expect(
+      queueItemAudioSourceSchema.parse({
         queueItemId: 'queue-1',
-        source: { provider },
-      })
-    },
-  )
+        source: {
+          provider: 'youtube_music',
+          sourceIdentifier: 'source-1',
+          streamUrl: 'https://stream.example/signed',
+          expiresAt: '2026-06-20T12:05:00.000Z',
+        },
+      }),
+    ).toMatchObject({
+      queueItemId: 'queue-1',
+      source: { provider: 'youtube_music' },
+    })
+  })
 
   it('rejects unsupported providers, invalid URLs and extra fields', () => {
     expect(
@@ -143,6 +140,17 @@ describe('audio source contracts', () => {
           streamUrl: 'not-a-url',
           expiresAt: '2026-06-20T12:05:00.000Z',
           token: 'must-not-pass',
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      queueItemAudioSourceSchema.safeParse({
+        queueItemId: 'queue-1',
+        source: {
+          provider: 'audius',
+          sourceIdentifier: 'legacy-source',
+          streamUrl: 'https://stream.example/signed',
+          expiresAt: '2026-06-20T12:05:00.000Z',
         },
       }).success,
     ).toBe(false)
@@ -366,6 +374,13 @@ describe('player, event and error contracts', () => {
         outcome: 'played',
       }).success,
     ).toBe(true)
+    expect(
+      completePlaybackInputSchema.safeParse({
+        queueItemId: 'queue-1',
+        outcome: 'failed',
+        sourceProvider: 'audius',
+      }).success,
+    ).toBe(false)
     expect(
       playbackTransitionResultSchema.safeParse({
         completedQueueItemId: 'queue-1',

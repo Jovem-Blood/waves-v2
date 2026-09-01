@@ -32,7 +32,7 @@ export function createQueueAddHandler(
         requestedByDisplayName: session.user.displayName,
       }),
     )
-    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    await dependencies.autoplayOrchestrator.queueChanged().catch(() => undefined)
     return item
   })
 }

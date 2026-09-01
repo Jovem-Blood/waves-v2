@@ -11,7 +11,7 @@ import type { AutoplaySuggestionRepository } from '../repositories/autoplay-sugg
 export class AutoplayService {
   constructor(
     private readonly repository: AutoplayRepository,
-    private readonly suggestions?: AutoplaySuggestionRepository,
+    private readonly suggestions: AutoplaySuggestionRepository,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -22,7 +22,7 @@ export class AutoplayService {
 
   update(input: UpdateAutoplayInput): AutoplayState {
     const parsed = updateAutoplayInputSchema.parse(input)
-    if (!parsed.enabled) this.suggestions?.clear()
+    if (!parsed.enabled) this.suggestions.clear()
     const state = this.repository.update({ enabled: parsed.enabled, failureCode: null })
     return { ...state, suggestions: this.publicSuggestions() }
   }
@@ -37,21 +37,15 @@ export class AutoplayService {
     return { ...state, suggestions: this.publicSuggestions() }
   }
 
-  rejectSuggestion(providerTrackId: string): AutoplayState {
-    if (this.suggestions?.removeByProviderTrackId(providerTrackId))
-      this.suggestions.compactPositions()
-    return this.get()
-  }
-
   private publicSuggestions(): AutoplayState['suggestions'] {
-    return (this.suggestions?.list() ?? []).map(
-      ({ track, provider, generatedAt, seedFingerprint, strategy }) => ({
+    return this.suggestions
+      .list()
+      .map(({ track, provider, generatedAt, seedFingerprint, strategy }) => ({
         track,
         provider,
         generatedAt,
         seedFingerprint,
         strategy,
-      }),
-    )
+      }))
   }
 }

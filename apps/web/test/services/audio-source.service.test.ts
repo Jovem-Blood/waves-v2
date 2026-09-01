@@ -14,8 +14,8 @@ import { QueueItemNotFoundError } from '../../server/services/domain-errors'
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []
 const source: ResolvedAudioSource = {
-  provider: 'audius',
-  sourceIdentifier: 'audius-1',
+  provider: 'youtube_music',
+  sourceIdentifier: 'youtube-1',
   streamUrl: 'https://stream.example/signed-secret',
   expiresAt: '2026-06-20T12:05:00.000Z',
 }
@@ -98,8 +98,8 @@ describe('AudioSourceService', () => {
     expect(loggerInfo).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: 'cache_hit',
-        provider: 'audius',
-        sourceIdentifier: 'audius-1',
+        provider: 'youtube_music',
+        sourceIdentifier: 'youtube-1',
       }),
       'Audio source cache hit',
     )
@@ -111,21 +111,20 @@ describe('AudioSourceService', () => {
     setTime('2026-06-20T12:05:00.000Z')
     resolve.mockResolvedValue({
       ...source,
-      sourceIdentifier: 'audius-2',
+      sourceIdentifier: 'youtube-2',
       streamUrl: 'https://stream.example/renewed',
       expiresAt: '2026-06-20T12:10:00.000Z',
     })
 
     await expect(service.resolve('queue-1')).resolves.toMatchObject({
-      source: { sourceIdentifier: 'audius-2' },
+      source: { sourceIdentifier: 'youtube-2' },
     })
     expect(resolve).toHaveBeenCalledTimes(2)
     expect(resolve).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({
         preferredSource: {
-          provider: 'audius',
-          sourceIdentifier: 'audius-1',
+          sourceIdentifier: 'youtube-1',
         },
       }),
     )
@@ -137,13 +136,13 @@ describe('AudioSourceService', () => {
     setTime('2026-06-20T12:04:01.000Z')
     resolve.mockResolvedValue({
       ...source,
-      sourceIdentifier: 'audius-2',
+      sourceIdentifier: 'youtube-2',
       streamUrl: 'https://stream.example/renewed',
       expiresAt: '2026-06-20T12:10:00.000Z',
     })
 
     await expect(service.resolve('queue-1')).resolves.toMatchObject({
-      source: { sourceIdentifier: 'audius-2' },
+      source: { sourceIdentifier: 'youtube-2' },
     })
     expect(resolve).toHaveBeenCalledTimes(2)
   })

@@ -17,7 +17,7 @@ export function createQueueRestoreHandler(
     const id = routeIdSchema.parse(getRouterParam(event, 'id'))
     const dependencies = getDependencies()
     const result = dependencies.queueService.restore(id)
-    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    await dependencies.autoplayOrchestrator.queueChanged().catch(() => undefined)
     return restoreQueueItemResultSchema.parse(result)
   })
 }

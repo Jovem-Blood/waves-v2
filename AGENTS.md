@@ -59,7 +59,7 @@ Antes de concluir trabalho de UI:
 - Estado observável é sincronizado pela API interna.
 - Resolução de fonte fica atrás de `AudioSourceResolver` e é separada da busca de
   metadados do Spotify.
-- YouTube Music via `youtubei.js` é a fonte primária; Audius é fallback.
+- YouTube Music via `youtubei.js` é a única fonte de áudio.
 - Não substituir o provedor nem introduzir `play-dl`, `@distube/ytdl-core`, yt-dlp
   ou Lavalink sem decisão arquitetural explícita.
 - Não alterar o schema de `resolved_sources` sem necessidade comprovada.

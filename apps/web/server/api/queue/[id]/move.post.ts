@@ -18,7 +18,7 @@ export function createQueueMoveHandler(
     const input = moveQueueItemInputSchema.parse(await readBody(event))
     const dependencies = getDependencies()
     const queue = dependencies.queueService.move(id, input)
-    await dependencies.autoplayOrchestrator?.queueChanged().catch(() => undefined)
+    await dependencies.autoplayOrchestrator.queueChanged().catch(() => undefined)
     return queueSchema.parse(queue)
   })
 }

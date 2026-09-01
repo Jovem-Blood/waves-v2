@@ -90,10 +90,15 @@ async function startTestApi(): Promise<TestContext> {
       expiresAt: '2026-06-20T12:05:00.000Z',
     },
   })
+  const queueService = new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`)
+  const playerStateService = new PlayerStateService(playerStateRepository, unitOfWork, now)
+  const unavailableAutoplay = () => {
+    throw new Error('Autoplay state is outside this internal API test fixture')
+  }
   const dependencies: PublicApiDependencies = {
-    queueService: new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`),
+    queueService,
     historyService: new HistoryService(queueRepository),
-    playerStateService: new PlayerStateService(playerStateRepository, unitOfWork, now),
+    playerStateService,
     operationalStatusService: new OperationalStatusService(
       operationalStatusRepository,
       playerStateRepository,
@@ -109,6 +114,22 @@ async function startTestApi(): Promise<TestContext> {
       () => 'auth-token',
     ),
     spotifyService,
+    autoplayService: {
+      get: unavailableAutoplay,
+      update: unavailableAutoplay,
+    },
+    autoplayOrchestrator: {
+      completePlayback: (input) => Promise.resolve(playerStateService.completePlayback(input)),
+      queueChanged: () => Promise.resolve(),
+      skip: () => Promise.resolve(playerStateService.skip()),
+      rejectSuggestion: () => Promise.reject(new Error('Autoplay is outside this test fixture')),
+      voiceDisconnected: (guildId) => playerStateService.voiceDisconnected(guildId),
+    },
+    playbackHealthService: {
+      get: () => {
+        throw new Error('Playback health is outside this internal API test fixture')
+      },
+    },
   }
   const loggerInfo = vi.fn()
   const logger = {

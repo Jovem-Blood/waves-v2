@@ -20,7 +20,6 @@ export function createAutoplayUpdateHandler(
     if (!session) throw new UnauthorizedError()
     if (token && session.renewed) writeSessionCookie(event, token, { expiresAt: session.expiresAt })
 
-    if (!dependencies.autoplayService) throw new Error('Autoplay service is unavailable')
     return autoplayStateSchema.parse(dependencies.autoplayService.update(input))
   })
 }

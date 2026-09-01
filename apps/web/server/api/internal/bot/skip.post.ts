@@ -22,9 +22,7 @@ export function createInternalSkipHandler(
     () =>
       loggedOperation(useLogger(), { operation: 'route.internal.skip' }, async () => {
         const dependencies = getDependencies()
-        const result = dependencies.autoplayOrchestrator
-          ? await dependencies.autoplayOrchestrator.skip()
-          : dependencies.playerStateService.skip()
+        const result = await dependencies.autoplayOrchestrator.skip()
         return skipResultSchema.parse(result)
       }),
     getExpectedToken,

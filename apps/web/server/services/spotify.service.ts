@@ -9,7 +9,7 @@ interface CachedSpotifyToken {
   expiresAt: number
 }
 
-export interface SpotifyServiceOptions {
+interface SpotifyServiceOptions {
   tokenRefreshMarginMs?: number
   searchLimit?: number
 }
