@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { useHead, useRequestURL, useSeoMeta } from '#imports'
+import { setLucideProps } from '@lucide/vue'
+
+setLucideProps({ strokeWidth: 1.5 })
 
 const siteTitle = 'Waves — Painel de música para Discord'
 const siteDescription =
