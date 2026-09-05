@@ -1,8 +1,36 @@
 import { describe, expect, it } from 'vitest'
 
-import { selectYouTubeAudioFormat } from '../../server/clients/youtube-music.client'
+import {
+  hasOfficialMusicVideoEndpoint,
+  selectYouTubeAudioFormat,
+} from '../../server/clients/youtube-music.client'
 
 describe('YouTube Music audio format selection', () => {
+  it('recognizes the official artist video marker returned by YouTube Music', () => {
+    expect(
+      hasOfficialMusicVideoEndpoint({
+        endpoint: {
+          payload: {
+            watchEndpointMusicSupportedConfigs: {
+              watchEndpointMusicConfig: { musicVideoType: 'MUSIC_VIDEO_TYPE_OMV' },
+            },
+          },
+        },
+      }),
+    ).toBe(true)
+    expect(
+      hasOfficialMusicVideoEndpoint({
+        endpoint: {
+          payload: {
+            watchEndpointMusicSupportedConfigs: {
+              watchEndpointMusicConfig: { musicVideoType: 'MUSIC_VIDEO_TYPE_UGC' },
+            },
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+
   it('prefers audio-only Opus/WebM near the target bitrate', () => {
     const selected = selectYouTubeAudioFormat(
       'video-1',

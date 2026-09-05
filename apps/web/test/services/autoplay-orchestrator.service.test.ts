@@ -11,12 +11,12 @@ import { AutoplaySuggestionRepository } from '../../server/repositories/autoplay
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
-import { AutoplayOrchestrator } from '../../server/services/autoplay-orchestrator.service'
-import { AutoplayService } from '../../server/services/autoplay.service'
-import type { RecommendationCandidate } from '../../server/services/recommendation.types'
-import { RecommendationUnavailableError } from '../../server/services/recommendation.errors'
-import { PlayerStateService } from '../../server/services/player-state.service'
-import { QueueService } from '../../server/services/queue.service'
+import { AutoplayOrchestrator } from '../../server/services/autoplay/orchestrator.service'
+import { AutoplayService } from '../../server/services/autoplay/service'
+import { PlayerStateService } from '../../server/services/playback/player-state.service'
+import { QueueService } from '../../server/services/queue/service'
+import { RecommendationUnavailableError } from '../../server/services/recommendation/errors'
+import type { RecommendationCandidate } from '../../server/services/recommendation/types'
 import type { WavesLogger } from '../../server/utils/logger'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))

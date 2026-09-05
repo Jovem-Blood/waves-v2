@@ -1,7 +1,7 @@
 import type { TrackMetadata } from '@waves/shared'
 
 import { YouTubeMusicClient } from '../server/clients/youtube-music.client'
-import { analyzeYouTubeMusicCandidates } from '../server/services/audio-source-matching'
+import { analyzeYouTubeMusicCandidates } from '../server/services/audio-source/matching'
 
 const tracks: TrackMetadata[] = [
   {

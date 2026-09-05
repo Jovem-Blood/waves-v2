@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { ResolvedSourceRepository } from '../../server/repositories/resolved-source.repository'
-import type { AudioSourceResolver } from '../../server/services/audio-source-resolver'
-import { AudioSourceService } from '../../server/services/audio-source.service'
+import type { AudioSourceResolver } from '../../server/services/audio-source/resolver'
+import { AudioSourceService } from '../../server/services/audio-source/service'
 import { QueueItemNotFoundError } from '../../server/services/domain-errors'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))

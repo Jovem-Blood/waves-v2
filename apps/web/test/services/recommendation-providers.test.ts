@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { LastFmUnavailableError } from '../../server/clients/lastfm.errors'
 import { YouTubeMusicUnavailableError } from '../../server/clients/youtube-music.errors'
-import { LastFmRecommendationProvider } from '../../server/services/lastfm-recommendation.provider'
-import { RecommendationProviderUnavailableError } from '../../server/services/recommendation.errors'
-import { YouTubeMusicRecommendationProvider } from '../../server/services/youtube-music-recommendation.provider'
+import { RecommendationProviderUnavailableError } from '../../server/services/recommendation/errors'
+import { LastFmRecommendationProvider } from '../../server/services/recommendation/lastfm.provider'
+import { YouTubeMusicRecommendationProvider } from '../../server/services/recommendation/youtube-music.provider'
 
 const seed: TrackMetadata = {
   id: 'spotify:seed',

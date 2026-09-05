@@ -1,7 +1,7 @@
 import type { QueueItem, TrackMetadata } from '@waves/shared'
 import { describe, expect, it } from 'vitest'
 
-import { AutoplaySessionProfile } from '../../server/services/autoplay-session-profile'
+import { AutoplaySessionProfile } from '../../server/services/autoplay/session-profile'
 
 const track: TrackMetadata = {
   id: 'spotify:track',

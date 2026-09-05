@@ -6,7 +6,7 @@ import {
   type QueueItem,
 } from '@waves/shared'
 
-import type { QueueRepository } from '../repositories/queue.repository'
+import type { QueueRepository } from '../../repositories/queue.repository'
 
 const PAGE_SIZE = 20
 

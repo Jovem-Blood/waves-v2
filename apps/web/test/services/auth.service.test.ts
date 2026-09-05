@@ -8,7 +8,7 @@ import { SessionRepository } from '../../server/repositories/session.repository'
 import { UserRepository } from '../../server/repositories/user.repository'
 import { DiscordLoginTokenRepository } from '../../server/repositories/discord-login-token.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
-import { AuthService } from '../../server/services/auth.service'
+import { AuthService } from '../../server/services/auth/service'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []

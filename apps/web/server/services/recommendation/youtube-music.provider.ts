@@ -1,11 +1,10 @@
 import type { TrackMetadata } from '@waves/shared'
 
-import type { YouTubeMusicClientPort } from '../clients/youtube-music.client'
-import { YouTubeMusicUnavailableError } from '../clients/youtube-music.errors'
-import { analyzeYouTubeMusicCandidates } from './audio-source-matching'
-import { RecommendationProviderUnavailableError } from './recommendation.errors'
-import type { RecommendationCandidate, RecommendationProvider } from './recommendation.types'
-import { normalizeMusicText } from './audio-source-matching'
+import type { YouTubeMusicClientPort } from '../../clients/youtube-music.client'
+import { YouTubeMusicUnavailableError } from '../../clients/youtube-music.errors'
+import { analyzeYouTubeMusicCandidates, normalizeMusicText } from '../audio-source/matching'
+import { RecommendationProviderUnavailableError } from './errors'
+import type { RecommendationCandidate, RecommendationProvider } from './types'
 
 export class YouTubeMusicRecommendationProvider implements RecommendationProvider {
   readonly name = 'youtube_music' as const

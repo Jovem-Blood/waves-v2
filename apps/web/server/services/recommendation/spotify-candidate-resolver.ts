@@ -5,10 +5,10 @@ import {
   SpotifyConfigurationError,
   SpotifyInvalidResponseError,
   SpotifyUnavailableError,
-} from '../clients/spotify.errors'
-import { normalizeMusicText } from './audio-source-matching'
-import { RecommendationMetadataUnavailableError } from './recommendation.errors'
-import type { RecommendationCandidate } from './recommendation.types'
+} from '../../clients/spotify.errors'
+import { normalizeMusicText } from '../audio-source/matching'
+import { RecommendationMetadataUnavailableError } from './errors'
+import type { RecommendationCandidate } from './types'
 interface SpotifySearchProvider {
   searchTracks(query: string): Promise<TrackMetadata[]>
 }

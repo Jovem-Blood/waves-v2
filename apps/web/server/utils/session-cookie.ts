@@ -1,6 +1,6 @@
 import { deleteCookie, getCookie, setCookie, type H3Event } from 'h3'
 
-import { SESSION_COOKIE_NAME } from '../services/auth.service'
+import { SESSION_COOKIE_NAME } from '../services/auth/service'
 
 export interface SessionCookieOptions {
   expiresAt?: string

@@ -4,11 +4,11 @@ import {
   LastFmConfigurationError,
   LastFmInvalidResponseError,
   LastFmUnavailableError,
-} from '../clients/lastfm.errors'
-import type { LastFmClientPort } from '../clients/lastfm.client'
-import { normalizeMusicText } from './audio-source-matching'
-import { RecommendationProviderUnavailableError } from './recommendation.errors'
-import type { RecommendationCandidate, RecommendationProvider } from './recommendation.types'
+} from '../../clients/lastfm.errors'
+import type { LastFmClientPort } from '../../clients/lastfm.client'
+import { normalizeMusicText } from '../audio-source/matching'
+import { RecommendationProviderUnavailableError } from './errors'
+import type { RecommendationCandidate, RecommendationProvider } from './types'
 
 const SIMILAR_LIMIT = 14
 const ADJACENT_LIMIT = 10

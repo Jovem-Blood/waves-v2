@@ -1,7 +1,7 @@
 import type { QueueItem } from '@waves/shared'
 import { describe, expect, it, vi } from 'vitest'
 
-import { HistoryService } from '../../server/services/history.service'
+import { HistoryService } from '../../server/services/queue/history.service'
 
 const track = {
   id: 'spotify:track-1',

@@ -1,6 +1,6 @@
 import type { TrackMetadata } from '@waves/shared'
 
-import type { YouTubeMusicCandidate } from '../clients/youtube-music.schemas'
+import type { YouTubeMusicCandidate } from '../../clients/youtube-music.schemas'
 
 const CONFLICTING_QUALIFIERS = [
   'cover',
@@ -172,6 +172,10 @@ function scoreCandidate(
     anyArtistCoverage >= 0.8 &&
     titleTokenCoverage(track.title, candidate.title) === 1 &&
     Math.abs(track.durationMs - candidate.durationMs) <= 3_000
+  const trustedOfficialArtistVideo =
+    candidate.isOfficialArtistVideo === true &&
+    titleTokenCoverage(track.title, candidate.title) === 1 &&
+    Math.abs(track.durationMs - candidate.durationMs) <= 3_000
   const inferredTransliteratedArtist = canTrustTransliteratedPrimaryArtist(
     track,
     candidate,
@@ -181,7 +185,8 @@ function scoreCandidate(
     primaryArtistCoverage < 0.8 &&
     !inferredTransliteratedArtist &&
     !trustedIsrcMatch &&
-    !trustedListedArtistMatch
+    !trustedListedArtistMatch &&
+    !trustedOfficialArtistVideo
   ) {
     return { rejection: 'artist' }
   }
@@ -196,7 +201,7 @@ function scoreCandidate(
     track.artists.reduce(
       (total, artist, index) =>
         total +
-        (inferredTransliteratedArtist && index === 0
+        ((inferredTransliteratedArtist || trustedOfficialArtistVideo) && index === 0
           ? 1
           : maximumArtistCoverage(artist, effectiveArtists)),
       0,
@@ -248,6 +253,7 @@ interface YouTubeMusicCandidateDiagnostic {
   artists: string[]
   durationMs: number
   isOfficial: boolean
+  isOfficialArtistVideo: boolean
   isTopic: boolean
   rejection?: 'qualifier' | 'artist' | 'duration'
   score?: number
@@ -292,6 +298,7 @@ export function analyzeYouTubeMusicCandidates(
         artists: candidate.artists,
         durationMs: candidate.durationMs,
         isOfficial: candidate.isOfficial,
+        isOfficialArtistVideo: candidate.isOfficialArtistVideo ?? false,
         isTopic: candidate.isTopic,
         rejection: result.rejection,
         score: result.score,

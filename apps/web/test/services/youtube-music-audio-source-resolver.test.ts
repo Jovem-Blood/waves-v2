@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { YouTubeMusicClientPort } from '../../server/clients/youtube-music.client'
 import { YouTubeMusicCandidateUnavailableError } from '../../server/clients/youtube-music.errors'
-import { YouTubeMusicAudioSourceResolver } from '../../server/services/youtube-music-audio-source-resolver'
+import { YouTubeMusicAudioSourceResolver } from '../../server/services/audio-source/youtube-music-resolver'
 
 const track: TrackMetadata = {
   id: 'spotify:one',
@@ -178,5 +178,44 @@ describe('YouTubeMusicAudioSourceResolver', () => {
       new YouTubeMusicAudioSourceResolver(client).resolve(trackWithMissingSongMatch),
     ).resolves.toMatchObject({ sourceIdentifier: 'video-upload' })
     expect(searchVideos).toHaveBeenCalledWith('VAMPIRO DE MADUREIRA Mc Carol', 10)
+  })
+
+  it('resolves an official artist video published under the artist legal name', async () => {
+    const searchSongs = vi.fn().mockResolvedValue([])
+    const searchVideos = vi.fn().mockResolvedValue([
+      {
+        videoId: 'official-audio',
+        title: 'Disparate Youth',
+        artists: ['Santi White'],
+        durationMs: 285_000,
+        isOfficial: true,
+        isOfficialArtistVideo: true,
+        isTopic: false,
+      },
+    ])
+    const resolveAudioFormat = vi.fn().mockResolvedValue({
+      videoId: 'official-audio',
+      streamUrl: 'https://media.example/disparate-youth',
+      mimeType: 'audio/webm; codecs="opus"',
+      expiresAt: '2026-06-20T12:10:00.000Z',
+    })
+    const client: YouTubeMusicClientPort = {
+      searchSongs,
+      searchVideos,
+      getUpNextSongs: vi.fn(),
+      resolveAudioFormat,
+    }
+    const disparateYouth: TrackMetadata = {
+      id: 'spotify:disparate-youth',
+      provider: 'spotify',
+      providerTrackId: 'disparate-youth',
+      title: 'Disparate Youth',
+      artists: ['Santigold'],
+      durationMs: 284_400,
+    }
+
+    await expect(
+      new YouTubeMusicAudioSourceResolver(client).resolve(disparateYouth),
+    ).resolves.toMatchObject({ sourceIdentifier: 'official-audio' })
   })
 })

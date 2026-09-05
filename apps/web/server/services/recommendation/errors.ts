@@ -1,4 +1,4 @@
-import type { RecommendationProviderName } from './recommendation.types'
+import type { RecommendationProviderName } from './types'
 
 export class RecommendationProviderUnavailableError extends Error {
   readonly code = 'RECOMMENDATION_PROVIDER_UNAVAILABLE'

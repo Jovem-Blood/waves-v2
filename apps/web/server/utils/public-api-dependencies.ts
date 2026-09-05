@@ -13,19 +13,19 @@ import { DiscordLoginTokenRepository } from '../repositories/discord-login-token
 import { SessionRepository } from '../repositories/session.repository'
 import { DatabaseUnitOfWork } from '../repositories/unit-of-work'
 import { UserRepository } from '../repositories/user.repository'
-import { AuthService } from '../services/auth.service'
-import { PlayerStateService } from '../services/player-state.service'
-import { OperationalStatusService } from '../services/operational-status.service'
-import { QueueService } from '../services/queue.service'
-import { HistoryService } from '../services/history.service'
+import { AuthService } from '../services/auth/service'
+import { AutoplayOrchestrator } from '../services/autoplay/orchestrator.service'
+import { AutoplayService } from '../services/autoplay/service'
+import { PlaybackHealthService } from '../services/playback/health.service'
+import { OperationalStatusService } from '../services/playback/operational-status.service'
+import { PlayerStateService } from '../services/playback/player-state.service'
+import { HistoryService } from '../services/queue/history.service'
+import { QueueService } from '../services/queue/service'
+import { LastFmRecommendationProvider } from '../services/recommendation/lastfm.provider'
+import { RecommendationService } from '../services/recommendation/service'
+import { SpotifyCandidateResolver } from '../services/recommendation/spotify-candidate-resolver'
+import { YouTubeMusicRecommendationProvider } from '../services/recommendation/youtube-music.provider'
 import { SpotifyService } from '../services/spotify.service'
-import { AutoplayService } from '../services/autoplay.service'
-import { AutoplayOrchestrator } from '../services/autoplay-orchestrator.service'
-import { LastFmRecommendationProvider } from '../services/lastfm-recommendation.provider'
-import { YouTubeMusicRecommendationProvider } from '../services/youtube-music-recommendation.provider'
-import { SpotifyCandidateResolver } from '../services/spotify-candidate-resolver.service'
-import { DualProviderRecommendationService } from '../services/dual-provider-recommendation.service'
-import { PlaybackHealthService } from '../services/playback-health.service'
 import { parseLastFmConfig } from './lastfm-config'
 import { parseSpotifyConfig } from './spotify-config'
 import { getRealtimeEventBus } from './realtime-events'
@@ -120,7 +120,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
     lastFmClient ??= new LastFmClient(parseLastFmConfig())
     return lastFmClient
   }
-  const recommendationService = new DualProviderRecommendationService(
+  const recommendationService = new RecommendationService(
     [
       new LastFmRecommendationProvider({
         getSimilarTracks: async (seed, limit) => getLastFmClient().getSimilarTracks(seed, limit),

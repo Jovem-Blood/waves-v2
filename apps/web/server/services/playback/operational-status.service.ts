@@ -7,9 +7,9 @@ import {
   type VoiceOperationalStatus,
 } from '@waves/shared'
 
-import type { OperationalStatusRepository } from '../repositories/operational-status.repository'
-import type { PlayerStateRepository } from '../repositories/player-state.repository'
-import type { RealtimePublisher } from '../utils/realtime-events'
+import type { OperationalStatusRepository } from '../../repositories/operational-status.repository'
+import type { PlayerStateRepository } from '../../repositories/player-state.repository'
+import type { RealtimePublisher } from '../../utils/realtime-events'
 
 const BOT_OFFLINE_AFTER_MS = 15_000
 const noopPublish: RealtimePublisher = (event) => ({ id: '0', event })

@@ -11,13 +11,13 @@ import {
   type QueueItem,
 } from '@waves/shared'
 
-import type { PlayerStateRepository } from '../repositories/player-state.repository'
-import type { UnitOfWork } from '../repositories/unit-of-work'
-import { PlaybackConflictError, QueueItemNotFoundError } from './domain-errors'
-import { type WavesLogger, useLogger } from '../utils/logger'
-import type { RealtimePublisher } from '../utils/realtime-events'
+import type { PlayerStateRepository } from '../../repositories/player-state.repository'
+import type { UnitOfWork } from '../../repositories/unit-of-work'
+import { type WavesLogger, useLogger } from '../../utils/logger'
+import type { RealtimePublisher } from '../../utils/realtime-events'
 import { randomUUID } from 'node:crypto'
-import { RECENT_PLAYED_LIMIT } from './autoplay-exclusions'
+import { PlaybackConflictError, QueueItemNotFoundError } from '../domain-errors'
+import { RECENT_PLAYED_LIMIT } from './constants'
 
 export interface SkipResult {
   player: PlayerState

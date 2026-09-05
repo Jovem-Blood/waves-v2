@@ -10,10 +10,10 @@ import {
   type PublicUser,
 } from '@waves/shared'
 
-import type { DiscordLoginTokenRepository } from '../repositories/discord-login-token.repository'
-import type { QueueRepository } from '../repositories/queue.repository'
-import type { SessionRepository } from '../repositories/session.repository'
-import type { UserRepository, UserRow } from '../repositories/user.repository'
+import type { DiscordLoginTokenRepository } from '../../repositories/discord-login-token.repository'
+import type { QueueRepository } from '../../repositories/queue.repository'
+import type { SessionRepository } from '../../repositories/session.repository'
+import type { UserRepository, UserRow } from '../../repositories/user.repository'
 
 const SESSION_DURATION_MS = 90 * 24 * 60 * 60 * 1000
 const SESSION_RENEW_AFTER_MS = 24 * 60 * 60 * 1000
