@@ -40,7 +40,7 @@ interface CurrentPlayback {
   provider?: AudioSourceProvider
   sourceIdentifier?: string
   failureStage?: 'claim' | 'resolve' | 'transport' | 'demux' | 'resource' | 'player' | 'sync'
-  failureClass?: 'operational' | 'intentional' | 'sync' | 'internal'
+  failureClass?: PlaybackAttemptReport['failureClass']
   errorCode?: string
   httpStatus?: number
 }
@@ -290,7 +290,7 @@ export class AudioPlayerManager implements PlaybackManager {
         outcome: reason === 'VOICE_DISCONNECTED' ? 'failed' : 'cancelled',
         terminal: true,
         failureStage: 'player',
-        failureClass: reason === 'VOICE_DISCONNECTED' ? 'operational' : 'intentional',
+        failureClass: reason === 'VOICE_DISCONNECTED' ? 'player' : 'intentional',
         errorCode: reason,
         sourceProvider: current.provider,
         sourceIdentifier: current.sourceIdentifier,
@@ -413,6 +413,7 @@ export class AudioPlayerManager implements PlaybackManager {
       retries,
       playbackAttemptId,
       abortController,
+      provider: 'youtube_music',
     }
     session.current = current
     const logger = playbackLogger(this.logger, {
@@ -428,13 +429,14 @@ export class AudioPlayerManager implements PlaybackManager {
       trackArtists: item.track.artists.join(', '),
       trackProvider: item.track.provider,
     })
-    if (attempt > 1) {
+    {
       void this.reportAttempt({
         queueItemId: item.id,
         playbackAttemptId,
         attempt,
         outcome: 'pending',
         terminal: false,
+        sourceProvider: current.provider,
       })
     }
     try {
@@ -642,7 +644,7 @@ export class AudioPlayerManager implements PlaybackManager {
       ) {
         const error = new SafePlaybackError('PREMATURE_IDLE')
         current.failureStage = 'player'
-        current.failureClass = 'operational'
+        current.failureClass = 'player'
         current.errorCode = error.code
         this.logger.warn(
           {
@@ -703,13 +705,13 @@ export class AudioPlayerManager implements PlaybackManager {
         ...classifyPlaybackError(error),
         errorCode: 'PLAYER_ERROR',
         failureStage: 'player',
-        failureClass: 'operational',
+        failureClass: 'player',
         err: error,
       },
       'Audio player error',
     )
     current.failureStage = 'player'
-    current.failureClass = 'operational'
+    current.failureClass = 'player'
     current.errorCode = 'PLAYER_ERROR'
     await this.retryOrFail(guildId, session, current)
   }
@@ -722,6 +724,17 @@ export class AudioPlayerManager implements PlaybackManager {
     session.settling = true
     current.abortController.abort()
     session.current = undefined
+    await this.reportAttempt({
+      queueItemId: current.item.id,
+      playbackAttemptId: current.playbackAttemptId,
+      attempt: current.retries + 1,
+      outcome: 'failed',
+      terminal: current.retries >= 1,
+      sourceProvider: current.provider,
+      failureStage: current.failureStage,
+      failureClass: current.failureClass,
+      errorCode: current.errorCode,
+    })
     if (current.retries < 1) {
       session.settling = false
       await this.playItem(

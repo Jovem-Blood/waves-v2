@@ -1,4 +1,5 @@
 export * from './schemas/audio-source.schema.js'
+export * from './playback-diagnostics.js'
 export * from './schemas/autoplay.schema.js'
 export * from './schemas/error.schema.js'
 export * from './schemas/events.schema.js'

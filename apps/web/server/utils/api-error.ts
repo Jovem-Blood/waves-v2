@@ -1,4 +1,4 @@
-import { apiErrorSchema, type ApiError } from '@waves/shared'
+import { apiErrorSchema, classifySourceFailure, type ApiError } from '@waves/shared'
 import {
   type EventHandler,
   type H3Event,
@@ -91,18 +91,26 @@ function toApiError(error: unknown): ApiError {
   }
 
   if (error instanceof AudioSourceNotFoundError) {
+    const diagnostic = classifySourceFailure(error)
     return apiErrorSchema.parse({
       statusCode: 404,
       statusMessage: 'Audio source not found',
-      data: { code: 'SOURCE_NOT_FOUND' },
+      data: {
+        code: diagnostic?.errorCode ?? 'SOURCE_NOT_FOUND',
+        details: { httpStatus: diagnostic?.httpStatus },
+      },
     })
   }
 
   if (error instanceof AudioSourceUnavailableError) {
+    const diagnostic = classifySourceFailure(error)
     return apiErrorSchema.parse({
       statusCode: 503,
       statusMessage: 'Audio source unavailable',
-      data: { code: 'SOURCE_UNAVAILABLE' },
+      data: {
+        code: diagnostic?.errorCode ?? 'SOURCE_UNAVAILABLE',
+        details: { httpStatus: diagnostic?.httpStatus },
+      },
     })
   }
 

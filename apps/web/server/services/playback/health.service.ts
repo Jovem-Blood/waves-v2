@@ -160,6 +160,9 @@ export class PlaybackHealthService {
         trackArtists: final.trackArtists.join(', '),
         sourceProvider: final.sourceProvider,
         errorCode: final.errorCode,
+        failureStage: final.failureStage,
+        failureClass: final.failureClass,
+        httpStatus: final.httpStatus,
         occurredAt: lastOccurrence(final),
       }))
 

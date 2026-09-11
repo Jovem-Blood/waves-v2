@@ -430,7 +430,7 @@ describe('AudioPlayerManager', () => {
           attempt: 2,
           retryCount: 1,
           failureStage: 'player',
-          failureClass: 'operational',
+          failureClass: 'player',
           errorCode: 'PLAYER_ERROR',
           sourceProvider: 'youtube_music',
           sourceIdentifier: 'youtube-1',

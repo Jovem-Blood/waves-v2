@@ -305,6 +305,10 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
       )
       const basicInfo = info.basic_info
 
+      if (info.playability_status?.status === 'LOGIN_REQUIRED') {
+        throw new YouTubeMusicCandidateUnavailableError(undefined, 'SOURCE_AUTH_REQUIRED')
+      }
+
       if (
         basicInfo.id !== videoId ||
         basicInfo.is_private ||
@@ -341,7 +345,7 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
         info.streaming_data.expires.toISOString(),
       )
       if (!selected) {
-        throw new YouTubeMusicCandidateUnavailableError()
+        throw new YouTubeMusicCandidateUnavailableError(undefined, 'SOURCE_NO_PLAYABLE_FORMAT')
       }
       return selected
     } catch (error) {

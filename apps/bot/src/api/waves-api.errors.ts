@@ -5,6 +5,7 @@ export class WavesApiError extends Error {
     readonly code: ApiErrorCode,
     readonly statusCode: number,
     cause?: unknown,
+    readonly sourceHttpStatus?: number,
   ) {
     super(`Waves API request failed: ${code}`, cause === undefined ? undefined : { cause })
     this.name = 'WavesApiError'

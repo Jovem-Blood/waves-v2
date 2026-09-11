@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sourceErrorCodeSchema } from '../playback-diagnostics.js'
 
 export const apiErrorCodeSchema = z.enum([
   'VALIDATION_ERROR',
@@ -11,6 +12,7 @@ export const apiErrorCodeSchema = z.enum([
   'QUEUE_RESTORE_EXPIRED',
   'SOURCE_NOT_FOUND',
   'SOURCE_UNAVAILABLE',
+  ...sourceErrorCodeSchema.options,
   'PLAYBACK_CONFLICT',
   'SPOTIFY_UNAVAILABLE',
   'INTERNAL_ERROR',

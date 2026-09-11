@@ -212,7 +212,15 @@ export class WavesApiClient implements WavesApi {
       if (!apiError.success || !apiError.data.data) {
         throw new WavesApiInvalidResponseError()
       }
-      throw new WavesApiError(apiError.data.data.code, apiError.data.statusCode)
+      const diagnostic = z
+        .object({ httpStatus: z.number().int().min(400).max(599).optional() })
+        .safeParse(apiError.data.data.details)
+      throw new WavesApiError(
+        apiError.data.data.code,
+        apiError.data.statusCode,
+        undefined,
+        diagnostic.success ? diagnostic.data.httpStatus : undefined,
+      )
     }
 
     const result = schema.safeParse(body)

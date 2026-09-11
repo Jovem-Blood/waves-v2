@@ -24,7 +24,17 @@ export const playbackFailureStageSchema = z.enum([
   'sync',
 ])
 
-export const playbackFailureClassSchema = z.enum(['operational', 'intentional', 'sync', 'internal'])
+export const playbackFailureClassSchema = z.enum([
+  'operational',
+  'content',
+  'provider',
+  'network',
+  'media',
+  'player',
+  'intentional',
+  'sync',
+  'internal',
+])
 
 const playbackDiagnosticFields = {
   playbackAttemptId: z.string().trim().min(1).optional(),

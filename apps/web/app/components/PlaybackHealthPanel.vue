@@ -205,6 +205,11 @@ async function copyAttempt(id: string) {
               ><strong>{{ failure.trackTitle }}</strong> · {{ failure.trackArtists }}</span
             >
             <code>{{ failure.errorCode ?? 'UNKNOWN' }}</code>
+            <span class="failure-context">
+              Provedor: {{ failure.sourceProvider ?? 'desconhecido' }} · Etapa:
+              {{ failure.failureStage ?? 'desconhecida' }} · Classe:
+              {{ failure.failureClass ?? 'desconhecida' }} · HTTP: {{ failure.httpStatus ?? '—' }}
+            </span>
             <time :datetime="failure.occurredAt">{{ formatDate(failure.occurredAt) }}</time>
             <button type="button" @click="copyAttempt(failure.playbackAttemptId)">
               <Clipboard :size="14" aria-hidden="true" />
@@ -430,6 +435,10 @@ code {
 .recent-failures time {
   font-family: 'Geist Mono Variable', monospace;
   font-size: 9px;
+}
+.failure-context {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 71.99rem) {
   .health-heading {

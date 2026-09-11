@@ -71,6 +71,9 @@ export const playbackHealthResponseSchema = z
         .object({
           playbackAttemptId: z.string(),
           queueItemId: z.string(),
+          failureStage: z.string().nullable().default(null),
+          failureClass: z.string().nullable().default(null),
+          httpStatus: z.number().int().nullable().default(null),
           trackTitle: z.string(),
           trackArtists: z.string(),
           sourceProvider: z.string().nullable(),
