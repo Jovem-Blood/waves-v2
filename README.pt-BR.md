@@ -2,6 +2,8 @@
 
 [English](README.md) | [Português (Brasil)](README.pt-BR.md)
 
+[![CI](https://github.com/Jovem-Blood/waves-v2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Jovem-Blood/waves-v2/actions/workflows/ci.yml)
+
 ![Waves — painel de fila de música para Discord](apps/web/public/images/waves-banner.png)
 
 Waves é um painel privado e mobile-first para um bot de música do Discord. Ele
@@ -206,6 +208,7 @@ Instale as dependências e aplique as migrações:
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm --filter @waves/shared build
 pnpm --filter web db:migrate
 ```
 
@@ -222,6 +225,8 @@ pnpm dev:web
 pnpm dev:bot
 ```
 
+Recompile `@waves/shared` após alterar seus schemas ou tipos.
+
 Os dois processos leem o `.env` da raiz. O bot registra os nove comandos do guild
 antes de entrar. Para registrá-los sem iniciar o bot:
 
@@ -230,6 +235,9 @@ pnpm --filter bot bot:register
 ```
 
 Comandos de qualidade úteis:
+
+A CI executa estas verificações e o build Docker em pushes para `main` e pull
+requests. O deploy na máquina auto-hospedada é manual.
 
 ```bash
 pnpm lint
@@ -284,7 +292,4 @@ Depois de iniciar:
 
 ## Licença
 
-Este repositório ainda não inclui uma licença. A visibilidade pública, sozinha,
-não concede permissão para usar, modificar ou redistribuir o código. Os
-mantenedores devem adicionar uma licença explícita antes de incentivar o reúso ou
-contribuições.
+O Waves está disponível sob a [Licença MIT](LICENSE).

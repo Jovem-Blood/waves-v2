@@ -1,132 +1,53 @@
-# AGENTS.md
+# Guia de trabalho
 
-## Projeto
+Waves é um painel privado para controlar a fila e o player de um bot Discord.
+Leia este arquivo antes de trabalhar no repositório.
 
-Waves é um sistema privado, mobile-first, para controlar a fila e o player de
-músicas de um bot Discord. O nome técnico do monorepo é `discord-music-panel`.
+## Arquitetura
 
-Sempre verifique este `AGENTS.md` na raiz do projeto antes de iniciar trabalho no
-repositório.
-
-## Interface web e design
-
-Qualquer trabalho que crie, altere, revise ou teste a UI de `apps/web` deve começar
-pela leitura integral de:
-
-1. [`DESIGN.md`](DESIGN.md), fonte normativa para direção visual, tokens,
-   tipografia, componentes, responsividade, estados e acessibilidade.
-2. [`pencil.pen`](pencil.pen), fonte visual complementar com os frames e
-   componentes desenhados no Pencil.
-
-Não implemente a interface apenas a partir do `.pen`: use o `DESIGN.md` para
-interpretar corretamente os detalhes visuais e transformar o desenho em componentes
-consistentes. Da mesma forma, não ignore o `.pen` quando a tarefa depender de
-composição, proporções ou comparação visual.
-
-Ordem de precedência para decisões de UI:
-
-1. Requisitos e restrições já implementados no código e nos testes.
-2. Regras explícitas de `DESIGN.md`.
-3. Composição e aparência do `pencil.pen`.
-
-Se houver divergência material entre `DESIGN.md` e `pencil.pen`, não invente uma
-terceira direção. Registre a divergência e solicite decisão antes de alterar a
-linguagem visual.
-
-Antes de concluir trabalho de UI:
-
-- valide primeiro o viewport mobile definido no design;
-- valide também desktop e largura intermediária;
-- compare a implementação renderizada com os frames relevantes do Pencil;
-- verifique estados default, hover, focus-visible, active, disabled e loading;
-- preserve WCAG AA, alvos de toque e alternativas ao drag-and-drop;
-- use os tokens e componentes descritos no `DESIGN.md`;
-- não substitua a direção Queue Social por padrões genéricos de dashboard.
-
-## Arquitetura obrigatória
-
-- `apps/web`: Nuxt 4 fullstack, API Nitro, regras de negócio e acesso ao banco.
-- `apps/bot`: discord.js; comunica-se apenas com a API interna.
+- `apps/web`: Nuxt 4, API Nitro, regras de negócio e persistência SQLite/Drizzle.
+- `apps/bot`: discord.js; acessa somente a API interna protegida.
 - `packages/shared`: schemas Zod e tipos compartilhados.
-- O bot nunca acessa SQLite ou Drizzle diretamente.
-- O Nuxt é a fonte da verdade da fila e do player.
+- Nuxt é a fonte da verdade da fila e do player. O bot mantém apenas conexões de
+  voz, players, subscriptions e streams efêmeros, sincronizados pela API.
+- Spotify fornece metadados; YouTube Music via `youtubei.js` é a única fonte de
+  áudio, isolada atrás de `AudioSourceResolver`.
+- Trocar o provedor ou introduzir play-dl, @distube/ytdl-core, yt-dlp ou Lavalink
+  exige decisão arquitetural explícita. Altere `resolved_sources` somente com
+  necessidade comprovada.
+- Sessões e vinculação Discord identificam usuários, mas não protegem o acesso à
+  implantação. Exposição pública exige autenticação externa.
 
-## Arquitetura e limites
+## Interface
 
-- Nuxt é a fonte da verdade da fila e do player.
-- O bot mantém somente recursos efêmeros de runtime, como `VoiceConnection`,
-  `AudioPlayer`, subscriptions e streams.
-- Estado observável é sincronizado pela API interna.
-- Resolução de fonte fica atrás de `AudioSourceResolver` e é separada da busca de
-  metadados do Spotify.
-- YouTube Music via `youtubei.js` é a única fonte de áudio.
-- Não substituir o provedor nem introduzir `play-dl`, `@distube/ytdl-core`, yt-dlp
-  ou Lavalink sem decisão arquitetural explícita.
-- Não alterar o schema de `resolved_sources` sem necessidade comprovada.
-- O painel não possui autenticação própria e não deve ser exposto publicamente sem
-  proteção externa.
+Antes de criar, alterar, revisar ou testar a UI de `apps/web`, leia integralmente
+[DESIGN.md](DESIGN.md) e [pencil.pen](pencil.pen). Use o primeiro para interpretar
+tokens, componentes e acessibilidade; use o segundo para composição e proporções.
 
-## Forma de trabalho
+Precedência: requisitos do código e testes, regras do DESIGN.md e composição do
+Pencil. Em divergência material, registre o conflito e solicite decisão antes de
+alterar a linguagem visual.
 
-1. Preserve TypeScript strict e `exactOptionalPropertyTypes`.
-2. Use Zod para env, payloads e respostas externas.
-3. Mantenha rotas finas, regras em services e persistência em repositories.
-4. Preserve compatibilidade entre painel, API e comandos Discord.
-5. Execute os gates aplicáveis antes de concluir mudanças.
+Preserve Queue Social e mobile-first. Valide o viewport mobile do design, uma
+largura intermediária e desktop; compare com os frames relevantes. Confira
+default, hover, focus-visible, active, disabled e loading, WCAG AA, alvos de toque
+e alternativas ao drag-and-drop.
 
-## Documentação atual
+## Convenções
 
-Use o `ctx7` CLI para buscar documentação atual sempre que o usuário perguntar sobre
-biblioteca, framework, SDK, API, CLI tool ou serviço de nuvem, inclusive tecnologias
-conhecidas como React, Next.js, Prisma, Express, Tailwind, Django ou Spring Boot.
-Isso inclui sintaxe de API, configuração, migração de versão, debugging específico
-de biblioteca, setup e uso de CLI.
+- Preserve TypeScript strict e `exactOptionalPropertyTypes`; justifique qualquer
+  uso de `any`.
+- Valide env, payloads e respostas externas com Zod.
+- Mantenha rotas finas, regras em services e persistência em repositories.
+- Preserve compatibilidade entre painel, API e comandos Discord.
+- Código, nomes técnicos e commits em inglês; interface e documentação interna
+  em português. Atualize os dois READMEs quando mudar informação pública.
+- Nunca registre credenciais, tokens ou headers de autorização.
 
-Não use Context7 para refatoração, scripts escritos do zero, debugging de regra de
-negócio, code review ou conceitos gerais de programação.
+## Verificação
 
-Fluxo obrigatório:
-
-1. Resolva a biblioteca:
-
-   ```bash
-   npx ctx7@latest library <nome> "<pergunta completa do usuário>"
-   ```
-
-2. Escolha o melhor match pelo nome exato, relevância da descrição, quantidade de
-   snippets, reputação da fonte e benchmark score.
-3. Busque a documentação:
-
-   ```bash
-   npx ctx7@latest docs <libraryId> "<pergunta completa do usuário>"
-   ```
-
-4. Responda usando a documentação buscada.
-
-Regras adicionais:
-
-- chame `library` primeiro para obter um ID válido, exceto quando o usuário já
-  fornecer um ID no formato `/org/project`;
-- use o nome oficial da biblioteca com pontuação correta, como `Next.js`,
-  `Customer.io` ou `Three.js`;
-- para docs versionadas, use o ID versionado retornado pelo `library`, como
-  `/vercel/next.js/v14.3.0`;
-- não rode mais de 3 comandos por pergunta;
-- não inclua secrets, API keys, senhas ou credenciais nas consultas;
-- rode as consultas do Context7 fora do sandbox padrão do Codex;
-- se um comando falhar com DNS, `ENOTFOUND`, falha de resolução de host ou
-  `fetch failed`, execute novamente fora do sandbox;
-- se houver erro de quota, informe o usuário e sugira `npx ctx7@latest login` ou
-  definir `CONTEXT7_API_KEY` para limites maiores.
-
-## Comandos de qualidade
-
-Por padrão, não execute `pnpm build` como gate de rotina: builds consomem muitos
-tokens e só devem ser rodados quando o usuário pedir explicitamente ou quando a
-mudança envolver empacotamento, deploy, Docker, configuração de build ou outro
-comportamento que apenas o build valide. Para mudanças de código, o gate mínimo
-obrigatório é `pnpm typecheck`, com testes/lint/format aplicáveis conforme o
-escopo da alteração.
+Execute `pnpm typecheck` para mudanças de código e os testes, lint e formatação
+aplicáveis. Os gates da CI são:
 
 ```bash
 pnpm lint
@@ -135,11 +56,25 @@ pnpm test
 pnpm format:check
 ```
 
-## Convenções
+Use o Node declarado em `.node-version` e o pnpm de `packageManager`. Antes da
+primeira verificação ou após alterar o pacote compartilhado, execute
+`pnpm --filter @waves/shared build`. Execute o build completo
+build somente quando solicitado ou necessário para validar empacotamento,
+Docker, deploy ou comportamento exclusivo de produção. O deploy é manual.
 
-- Código, nomes técnicos e commits em inglês.
-- Documentação e interface inicial em português.
-- Não use `any` sem justificativa explícita.
-- Não registre tokens, secrets ou headers de autorização.
-- Preserve a direção visual Queue Social e o comportamento mobile-first conforme
-  `DESIGN.md` e `pencil.pen`.
+## Documentação de dependências
+
+Para perguntas de API, configuração, migração, setup ou debugging de biblioteca,
+busque documentação atual com Context7 fora do sandbox:
+
+```bash
+npx ctx7@latest library <nome-oficial> "<pergunta-completa>"
+npx ctx7@latest docs <libraryId> "<pergunta-completa>"
+```
+
+Resolva o ID primeiro, exceto se fornecido pelo usuário; prefira nome exato,
+relevância, snippets, reputação e benchmark. Use o ID versionado retornado quando
+aplicável. Limite a três comandos por pergunta e não inclua secrets. Em falha de
+rede, repita fora do sandbox; em quota, informe e sugira `npx ctx7@latest login` ou
+`CONTEXT7_API_KEY`. Não use Context7 para refatoração, scripts do zero, regras de
+negócio, revisão de código ou conceitos gerais.
