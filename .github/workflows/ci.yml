@@ -18,13 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version-file: .node-version
+          package-manager-cache: false
       - run: npm install --global pnpm@11.5.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @waves/shared build
+      - run: pnpm --filter web exec nuxt prepare
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -35,5 +37,5 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - run: docker build --quiet -t waves:ci .

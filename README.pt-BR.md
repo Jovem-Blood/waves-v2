@@ -209,6 +209,7 @@ Instale as dependências e aplique as migrações:
 ```bash
 pnpm install --frozen-lockfile
 pnpm --filter @waves/shared build
+pnpm --filter web exec nuxt prepare
 pnpm --filter web db:migrate
 ```
 

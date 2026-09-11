@@ -58,7 +58,8 @@ pnpm format:check
 
 Use o Node declarado em `.node-version` e o pnpm de `packageManager`. Antes da
 primeira verificação ou após alterar o pacote compartilhado, execute
-`pnpm --filter @waves/shared build`. Execute o build completo
+`pnpm --filter @waves/shared build` e `pnpm --filter web exec nuxt prepare`.
+Execute o build completo
 build somente quando solicitado ou necessário para validar empacotamento,
 Docker, deploy ou comportamento exclusivo de produção. O deploy é manual.
 
