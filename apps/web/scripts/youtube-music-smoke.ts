@@ -1,7 +1,7 @@
 import type { TrackMetadata } from '@waves/shared'
 
 import { YouTubeMusicClient } from '../server/clients/youtube-music.client'
-import { selectYouTubeMusicCandidate } from '../server/services/audio-source-matching'
+import { selectYouTubeMusicCandidate } from '../server/services/audio-source/matching'
 
 const catalog: TrackMetadata[] = [
   {

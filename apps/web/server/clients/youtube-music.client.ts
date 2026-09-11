@@ -126,6 +126,24 @@ function safeBadgeLabels(value: unknown): string[] {
   })
 }
 
+function readRecord(value: unknown, key: string): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || !(key in value)) {
+    return undefined
+  }
+  const child = (value as Record<string, unknown>)[key]
+  return typeof child === 'object' && child !== null
+    ? (child as Record<string, unknown>)
+    : undefined
+}
+
+export function hasOfficialMusicVideoEndpoint(value: unknown): boolean {
+  const endpoint = readRecord(value, 'endpoint')
+  const payload = readRecord(endpoint, 'payload')
+  const supportedConfigs = readRecord(payload, 'watchEndpointMusicSupportedConfigs')
+  const musicConfig = readRecord(supportedConfigs, 'watchEndpointMusicConfig')
+  return musicConfig?.musicVideoType === 'MUSIC_VIDEO_TYPE_OMV'
+}
+
 export class YouTubeMusicClient implements YouTubeMusicClientPort {
   private session: Promise<Innertube> | undefined
   private readonly timeoutMs: number
@@ -204,6 +222,7 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
         const labels = safeBadgeLabels(item.badges)
         const authors = item.authors?.map((author) => author.name).filter(Boolean) ?? []
         const channelName = item.author?.name ?? authors[0]
+        const isOfficialArtistVideo = hasOfficialMusicVideoEndpoint(item.flex_columns[0]?.title)
         const parsed = youtubeMusicCandidateSchema.safeParse({
           videoId: item.id,
           title: item.title,
@@ -212,8 +231,10 @@ export class YouTubeMusicClient implements YouTubeMusicClientPort {
             item.duration?.seconds === undefined ? undefined : item.duration.seconds * 1000,
           ...(channelName ? { channelName } : {}),
           isOfficial:
+            isOfficialArtistVideo ||
             labels.some((label) => /official|verified/i.test(label)) ||
             Boolean(channelName && /vevo$/i.test(channelName)),
+          ...(isOfficialArtistVideo ? { isOfficialArtistVideo: true } : {}),
           isTopic: Boolean(channelName && /-\s*topic$/i.test(channelName)),
         })
         return parsed.success ? [parsed.data] : []

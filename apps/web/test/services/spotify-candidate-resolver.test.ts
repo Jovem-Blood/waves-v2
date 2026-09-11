@@ -2,9 +2,9 @@ import type { TrackMetadata } from '@waves/shared'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SpotifyUnavailableError } from '../../server/clients/spotify.errors'
-import { RecommendationMetadataUnavailableError } from '../../server/services/recommendation.errors'
-import type { RecommendationCandidate } from '../../server/services/recommendation.types'
-import { SpotifyCandidateResolver } from '../../server/services/spotify-candidate-resolver.service'
+import { RecommendationMetadataUnavailableError } from '../../server/services/recommendation/errors'
+import { SpotifyCandidateResolver } from '../../server/services/recommendation/spotify-candidate-resolver'
+import type { RecommendationCandidate } from '../../server/services/recommendation/types'
 
 const candidate: RecommendationCandidate = {
   provider: 'lastfm',

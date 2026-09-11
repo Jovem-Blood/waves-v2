@@ -18,7 +18,7 @@ import {
 import {
   AudioSourceNotFoundError,
   AudioSourceUnavailableError,
-} from '../services/audio-source.errors'
+} from '../services/audio-source/errors'
 import {
   DuplicateTrackError,
   PlaybackConflictError,

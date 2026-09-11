@@ -13,25 +13,26 @@ import type {
 import type {
   AutoplayCandidateRepository,
   StoredRecommendationCandidate,
-} from '../repositories/autoplay-candidate.repository'
+} from '../../repositories/autoplay-candidate.repository'
 import type {
   AutoplaySuggestionRepository,
   StoredAutoplaySuggestion,
-} from '../repositories/autoplay-suggestion.repository'
-import type { QueueRepository } from '../repositories/queue.repository'
-import type { WavesLogger } from '../utils/logger'
-import { useLogger } from '../utils/logger'
-import { normalizeMusicText } from './audio-source-matching'
-import { buildAutoplayExcludedTrackIds, RECENT_PLAYED_LIMIT } from './autoplay-exclusions'
-import { AutoplaySessionProfile } from './autoplay-session-profile'
-import type { AutoplayService } from './autoplay.service'
+} from '../../repositories/autoplay-suggestion.repository'
+import type { QueueRepository } from '../../repositories/queue.repository'
+import type { WavesLogger } from '../../utils/logger'
+import { useLogger } from '../../utils/logger'
+import { normalizeMusicText } from '../audio-source/matching'
+import { RECENT_PLAYED_LIMIT } from '../playback/constants'
+import type { PlayerStateService, SkipResult } from '../playback/player-state.service'
 import {
   RecommendationMetadataUnavailableError,
   RecommendationUnavailableError,
-} from './recommendation.errors'
-import type { RecommendationCandidate } from './recommendation.types'
-import type { PlayerStateService, SkipResult } from './player-state.service'
-import type { QueueService } from './queue.service'
+} from '../recommendation/errors'
+import type { RecommendationCandidate } from '../recommendation/types'
+import type { QueueService } from '../queue/service'
+import { buildAutoplayExcludedTrackIds } from './exclusions'
+import type { AutoplayService } from './service'
+import { AutoplaySessionProfile } from './session-profile'
 
 const TARGET_SUGGESTIONS = 6
 const TARGET_CANDIDATES = 30

@@ -7,7 +7,7 @@ import {
 import type {
   PlaybackAttemptRecord,
   PlaybackAttemptRepository,
-} from '../repositories/playback-attempt.repository'
+} from '../../repositories/playback-attempt.repository'
 
 interface LogicalPlayback {
   attempts: PlaybackAttemptRecord[]

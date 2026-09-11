@@ -5,8 +5,8 @@ import {
   type UpdateAutoplayInput,
 } from '@waves/shared'
 
-import type { AutoplayRepository } from '../repositories/autoplay.repository'
-import type { AutoplaySuggestionRepository } from '../repositories/autoplay-suggestion.repository'
+import type { AutoplayRepository } from '../../repositories/autoplay.repository'
+import type { AutoplaySuggestionRepository } from '../../repositories/autoplay-suggestion.repository'
 
 export class AutoplayService {
   constructor(

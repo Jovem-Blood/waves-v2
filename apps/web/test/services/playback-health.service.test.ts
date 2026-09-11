@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { PlaybackAttemptRepository } from '../../server/repositories/playback-attempt.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
-import { PlaybackHealthService } from '../../server/services/playback-health.service'
+import { PlaybackHealthService } from '../../server/services/playback/health.service'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []

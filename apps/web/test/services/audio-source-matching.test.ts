@@ -6,7 +6,7 @@ import {
   analyzeYouTubeMusicCandidates,
   normalizeMusicText,
   selectYouTubeMusicCandidate,
-} from '../../server/services/audio-source-matching'
+} from '../../server/services/audio-source/matching'
 
 const track: TrackMetadata = {
   id: 'spotify:one',
@@ -74,6 +74,52 @@ describe('YouTube Music matching', () => {
   it('rejects candidates without the primary artist', () => {
     expect(
       selectYouTubeMusicCandidate(track, [candidate({ artists: ['Artista Dois'] })]),
+    ).toBeUndefined()
+  })
+
+  it('accepts an exact official artist video when YouTube exposes a legal-name alias', () => {
+    const disparateYouth: TrackMetadata = {
+      id: 'spotify:disparate-youth',
+      provider: 'spotify',
+      providerTrackId: 'disparate-youth',
+      title: 'Disparate Youth',
+      artists: ['Santigold'],
+      durationMs: 284_400,
+    }
+
+    expect(
+      selectYouTubeMusicCandidate(disparateYouth, [
+        candidate({
+          videoId: 'official-audio',
+          title: 'Disparate Youth',
+          artists: ['Santi White'],
+          durationMs: 285_000,
+          isOfficial: true,
+          isOfficialArtistVideo: true,
+        }),
+      ])?.videoId,
+    ).toBe('official-audio')
+  })
+
+  it('does not trust an artist alias without the official artist video marker', () => {
+    const disparateYouth: TrackMetadata = {
+      id: 'spotify:disparate-youth',
+      provider: 'spotify',
+      providerTrackId: 'disparate-youth',
+      title: 'Disparate Youth',
+      artists: ['Santigold'],
+      durationMs: 284_400,
+    }
+
+    expect(
+      selectYouTubeMusicCandidate(disparateYouth, [
+        candidate({
+          title: 'Disparate Youth',
+          artists: ['Unrelated Artist'],
+          durationMs: 285_000,
+          isOfficial: true,
+        }),
+      ]),
     ).toBeUndefined()
   })
 

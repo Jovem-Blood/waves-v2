@@ -1,13 +1,13 @@
 import type { TrackMetadata } from '@waves/shared'
 import { describe, expect, it, vi } from 'vitest'
 
-import { DualProviderRecommendationService } from '../../server/services/dual-provider-recommendation.service'
+import { RecommendationService } from '../../server/services/recommendation/service'
 import {
   RecommendationMetadataUnavailableError,
   RecommendationProviderUnavailableError,
   RecommendationUnavailableError,
-} from '../../server/services/recommendation.errors'
-import type { RecommendationProvider } from '../../server/services/recommendation.types'
+} from '../../server/services/recommendation/errors'
+import type { RecommendationProvider } from '../../server/services/recommendation/types'
 
 const seed: TrackMetadata = {
   id: 'spotify:seed',
@@ -41,12 +41,12 @@ function candidate(name: string, providerName: RecommendationProvider['name'] = 
   }
 }
 
-describe('DualProviderRecommendationService', () => {
+describe('RecommendationService', () => {
   it('aggregates partial provider pools and removes duplicate identities', async () => {
     const duplicate = candidate('Result', 'youtube_music')
     const lastFm = provider('lastfm', [candidate('Result')])
     const youtube = provider('youtube_music', [duplicate, candidate('Fallback', 'youtube_music')])
-    const service = new DualProviderRecommendationService([lastFm, youtube], { resolve: vi.fn() })
+    const service = new RecommendationService([lastFm, youtube], { resolve: vi.fn() })
 
     await expect(service.getCandidates([seed])).resolves.toEqual([
       candidate('Result'),
@@ -59,7 +59,7 @@ describe('DualProviderRecommendationService', () => {
   it('distinguishes total provider failure from valid exhaustion', async () => {
     const unavailable = (name: RecommendationProvider['name']) =>
       provider(name, new RecommendationProviderUnavailableError(name))
-    const failed = new DualProviderRecommendationService(
+    const failed = new RecommendationService(
       [unavailable('lastfm'), unavailable('youtube_music')],
       { resolve: vi.fn() },
     )
@@ -67,7 +67,7 @@ describe('DualProviderRecommendationService', () => {
       RecommendationUnavailableError,
     )
 
-    const exhausted = new DualProviderRecommendationService(
+    const exhausted = new RecommendationService(
       [unavailable('lastfm'), provider('youtube_music', [])],
       { resolve: vi.fn().mockResolvedValue(undefined) },
     )
@@ -76,7 +76,7 @@ describe('DualProviderRecommendationService', () => {
 
   it('stops provider aggregation when metadata is unavailable', async () => {
     const youtube = provider('youtube_music', [])
-    const service = new DualProviderRecommendationService(
+    const service = new RecommendationService(
       [provider('lastfm', new RecommendationMetadataUnavailableError()), youtube],
       { resolve: vi.fn() },
     )
@@ -90,7 +90,7 @@ describe('DualProviderRecommendationService', () => {
 
   it('delegates candidate resolution without owning recommendation iteration', async () => {
     const resolver = { resolve: vi.fn().mockResolvedValue(resolved) }
-    const service = new DualProviderRecommendationService([], resolver)
+    const service = new RecommendationService([], resolver)
     const recommendation = candidate('Result')
     const excluded = new Set(['existing'])
 

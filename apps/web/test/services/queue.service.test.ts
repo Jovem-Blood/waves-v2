@@ -13,7 +13,7 @@ import {
   QueueItemNotRemovableError,
   QueueRestoreExpiredError,
 } from '../../server/services/domain-errors'
-import { QueueService } from '../../server/services/queue.service'
+import { QueueService } from '../../server/services/queue/service'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []

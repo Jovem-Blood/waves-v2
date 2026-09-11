@@ -9,6 +9,7 @@ export const youtubeMusicCandidateSchema = z
     albumName: z.string().trim().min(1).optional(),
     channelName: z.string().trim().min(1).optional(),
     isOfficial: z.boolean(),
+    isOfficialArtistVideo: z.boolean().optional(),
     isTopic: z.boolean(),
   })
   .strict()

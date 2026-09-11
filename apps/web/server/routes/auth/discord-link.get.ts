@@ -4,7 +4,7 @@ import {
   DiscordLinkExpiredError,
   DiscordLinkInvalidError,
   DiscordLinkUsedError,
-} from '../../services/auth.service'
+} from '../../services/auth/service'
 import {
   type PublicApiDependencies,
   usePublicApiDependencies,

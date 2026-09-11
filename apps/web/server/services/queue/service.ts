@@ -10,16 +10,16 @@ import {
   type RestoreQueueItemResult,
 } from '@waves/shared'
 
-import type { QueueRepository } from '../repositories/queue.repository'
-import type { UnitOfWork } from '../repositories/unit-of-work'
-import type { RealtimePublisher } from '../utils/realtime-events'
+import type { QueueRepository } from '../../repositories/queue.repository'
+import type { UnitOfWork } from '../../repositories/unit-of-work'
+import type { RealtimePublisher } from '../../utils/realtime-events'
 import {
   DuplicateTrackError,
   QueueItemNotFoundError,
   QueueItemNotRemovableError,
   QueueItemNotRestorableError,
   QueueRestoreExpiredError,
-} from './domain-errors'
+} from '../domain-errors'
 
 const RESTORE_WINDOW_MS = 10_000
 const noopPublish: RealtimePublisher = (event) => ({ id: '0', event })

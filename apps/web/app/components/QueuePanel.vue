@@ -2,7 +2,7 @@
 import type { AutoplayState, Queue, QueueItem } from '@waves/shared'
 import { Clock3, ListMusic, LoaderCircle, Radio, RefreshCw, Sparkles, Users } from '@lucide/vue'
 import Sortable, { type SortableEvent } from 'sortablejs'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, shallowRef, watch } from 'vue'
 
 import QueueItemRow from './QueueItem.vue'
 import AutoplaySuggestionRow from './AutoplaySuggestionRow.vue'
@@ -32,7 +32,7 @@ const emit = defineEmits<{
   autoplayCommit: [suggestion: AutoplayState['suggestions'][number]]
 }>()
 
-const queueItemsRef = ref<HTMLElement | null>(null)
+const queueItemsRef = shallowRef<HTMLElement | null>(null)
 let sortable: Sortable | undefined
 let dragging = false
 

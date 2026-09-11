@@ -4,17 +4,17 @@ import {
   type TrackMetadata,
 } from '@waves/shared'
 
-import type { YouTubeMusicClientPort } from '../clients/youtube-music.client'
+import type { YouTubeMusicClientPort } from '../../clients/youtube-music.client'
 import {
   YouTubeMusicCandidateUnavailableError,
   YouTubeMusicInvalidResponseError,
   YouTubeMusicUnavailableError,
-} from '../clients/youtube-music.errors'
-import type { AudioSourceResolveOptions, AudioSourceResolver } from './audio-source-resolver'
-import { AudioSourceNotFoundError, AudioSourceUnavailableError } from './audio-source.errors'
-import { analyzeYouTubeMusicCandidates } from './audio-source-matching'
-import { type WavesLogger, useLogger } from '../utils/logger'
-import { classifyExternalError } from '../utils/observability'
+} from '../../clients/youtube-music.errors'
+import { type WavesLogger, useLogger } from '../../utils/logger'
+import { classifyExternalError } from '../../utils/observability'
+import { AudioSourceNotFoundError, AudioSourceUnavailableError } from './errors'
+import { analyzeYouTubeMusicCandidates } from './matching'
+import type { AudioSourceResolveOptions, AudioSourceResolver } from './resolver'
 
 const DEFAULT_SEARCH_LIMIT = 10
 

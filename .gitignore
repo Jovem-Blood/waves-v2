@@ -14,4 +14,7 @@ dist
 node_modules
 *.log
 artifacts/
+exports/
+apps/web/--host/
+apps/web/--port/
 mise.toml

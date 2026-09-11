@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm'
 
 import type { WavesDatabaseExecutor } from '../db/client'
 import { autoplayCandidates } from '../db/schema'
-import type { RecommendationCandidate } from '../services/recommendation.types'
+import type { RecommendationCandidate } from '../services/recommendation/types'
 
 const MAX_AUTOPLAY_CANDIDATES = 30
 

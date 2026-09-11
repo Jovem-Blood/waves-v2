@@ -1,8 +1,8 @@
 import type { AutoplaySuggestionStrategy, QueueItem, TrackMetadata } from '@waves/shared'
 
-import type { StoredAutoplaySuggestion } from '../repositories/autoplay-suggestion.repository'
-import type { RecommendationCandidate } from './recommendation.types'
-import { normalizeMusicText } from './audio-source-matching'
+import type { StoredAutoplaySuggestion } from '../../repositories/autoplay-suggestion.repository'
+import { normalizeMusicText } from '../audio-source/matching'
+import type { RecommendationCandidate } from '../recommendation/types'
 
 const MIN_COMPLETIONS = 20
 const MIN_UNIQUE_ARTISTS = 8

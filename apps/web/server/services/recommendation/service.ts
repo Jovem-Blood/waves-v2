@@ -1,16 +1,16 @@
 import type { TrackMetadata } from '@waves/shared'
 
-import type { WavesLogger } from '../utils/logger'
-import { useLogger } from '../utils/logger'
+import type { WavesLogger } from '../../utils/logger'
+import { useLogger } from '../../utils/logger'
 import {
   RecommendationMetadataUnavailableError,
   RecommendationProviderUnavailableError,
   RecommendationUnavailableError,
-} from './recommendation.errors'
-import type { RecommendationCandidate, RecommendationProvider } from './recommendation.types'
-import type { SpotifyCandidateResolver } from './spotify-candidate-resolver.service'
+} from './errors'
+import type { SpotifyCandidateResolver } from './spotify-candidate-resolver'
+import type { RecommendationCandidate, RecommendationProvider } from './types'
 
-export class DualProviderRecommendationService {
+export class RecommendationService {
   constructor(
     private readonly providers: readonly RecommendationProvider[],
     private readonly spotifyResolver: SpotifyCandidateResolver,

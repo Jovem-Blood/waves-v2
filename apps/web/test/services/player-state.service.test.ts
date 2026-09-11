@@ -12,7 +12,7 @@ import {
   type RepositoryContext,
   type UnitOfWork,
 } from '../../server/repositories/unit-of-work'
-import { PlayerStateService } from '../../server/services/player-state.service'
+import { PlayerStateService } from '../../server/services/playback/player-state.service'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []

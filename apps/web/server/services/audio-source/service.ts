@@ -6,12 +6,12 @@ import {
   type ResolvedAudioSource,
 } from '@waves/shared'
 
-import type { QueueRepository } from '../repositories/queue.repository'
-import type { ResolvedSourceRepository } from '../repositories/resolved-source.repository'
-import type { AudioSourceResolver } from './audio-source-resolver'
-import { QueueItemNotFoundError } from './domain-errors'
-import { type WavesLogger, useLogger } from '../utils/logger'
-import { classifyExternalError } from '../utils/observability'
+import type { QueueRepository } from '../../repositories/queue.repository'
+import type { ResolvedSourceRepository } from '../../repositories/resolved-source.repository'
+import { type WavesLogger, useLogger } from '../../utils/logger'
+import { classifyExternalError } from '../../utils/observability'
+import { QueueItemNotFoundError } from '../domain-errors'
+import type { AudioSourceResolver } from './resolver'
 
 const SOURCE_EXPIRY_REFRESH_MARGIN_MS = 60_000
 

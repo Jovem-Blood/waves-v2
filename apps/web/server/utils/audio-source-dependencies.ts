@@ -2,8 +2,8 @@ import { YouTubeMusicClient } from '../clients/youtube-music.client'
 import { useDatabase } from '../db/client'
 import { QueueRepository } from '../repositories/queue.repository'
 import { ResolvedSourceRepository } from '../repositories/resolved-source.repository'
-import { AudioSourceService } from '../services/audio-source.service'
-import { YouTubeMusicAudioSourceResolver } from '../services/youtube-music-audio-source-resolver'
+import { AudioSourceService } from '../services/audio-source/service'
+import { YouTubeMusicAudioSourceResolver } from '../services/audio-source/youtube-music-resolver'
 
 export interface InternalAudioSourceService {
   resolve(

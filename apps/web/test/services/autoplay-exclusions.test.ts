@@ -1,10 +1,8 @@
 import type { AutoplaySuggestion, QueueItem, TrackMetadata } from '@waves/shared'
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildAutoplayExcludedTrackIds,
-  RECENT_PLAYED_LIMIT,
-} from '../../server/services/autoplay-exclusions'
+import { buildAutoplayExcludedTrackIds } from '../../server/services/autoplay/exclusions'
+import { RECENT_PLAYED_LIMIT } from '../../server/services/playback/constants'
 
 const track = (providerTrackId: string): TrackMetadata => ({
   id: `spotify:${providerTrackId}`,

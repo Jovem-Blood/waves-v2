@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { OperationalStatusRepository } from '../../server/repositories/operational-status.repository'
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
-import { OperationalStatusService } from '../../server/services/operational-status.service'
+import { OperationalStatusService } from '../../server/services/playback/operational-status.service'
 
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url))
 const connections: DatabaseConnection[] = []

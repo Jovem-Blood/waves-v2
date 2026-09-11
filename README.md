@@ -1,185 +1,287 @@
 # Waves
 
-Waves é um painel privado mobile-first para controlar a fila e a reprodução de
-músicas de um bot Discord.
+[English](README.md) | [Português (Brasil)](README.pt-BR.md)
 
-## Estrutura
+![Waves — Discord music queue panel](apps/web/public/images/waves-banner.png)
+
+Waves is a private, mobile-first control panel for a Discord music bot. It keeps
+the queue, player state, listening history, and operational status in one
+self-hosted web application while the Discord process handles only voice and
+other ephemeral runtime resources.
+
+> [!IMPORTANT]
+> Waves has no built-in deployment access control. Guest sessions and Discord
+> account linking identify users inside the application, but they do not protect
+> the panel from unauthorized visitors. Do not expose Waves directly to the
+> public internet; put it behind HTTPS and an authentication-aware reverse proxy,
+> VPN, or zero-trust gateway.
+
+## Features
+
+- Persistent, mobile-first collaborative queue backed by SQLite.
+- Spotify track search and metadata.
+- YouTube Music audio resolution and playback through Discord voice.
+- Web controls for play state, pause, resume, skip, volume, queue ordering, and
+  removal/restoration.
+- Discord commands: `/play`, `/queue`, `/login`, `/join`, `/leave`, `/pause`,
+  `/resume`, `/skip`, and `/volume`.
+- Guest sessions plus one-time Discord account linking by private link and QR
+  code.
+- Automatic queue progression and autoplay suggestions from Last.fm and YouTube
+  Music, resolved back to Spotify metadata.
+- Real-time browser synchronization, listening history, and playback diagnostics.
+- Separate web, bot, and voice status reporting, structured logs, health checks,
+  and SQLite backups.
+
+## Architecture
 
 ```text
 apps/
-  web/       Nuxt 4 fullstack e API Nitro
-  bot/       processo discord.js
+  web/       Nuxt 4 full-stack app, Nitro API, domain rules, and SQLite access
+  bot/       discord.js process, voice connections, players, and streams
 packages/
-  shared/    schemas e tipos compartilhados
+  shared/    shared Zod schemas and TypeScript types
 ```
 
-## Requisitos
+Nuxt is the source of truth for the queue and player. The bot communicates only
+with the protected internal API and never opens SQLite directly. Spotify is used
+for search and metadata; YouTube Music through `youtubei.js` is the only audio
+source. Runtime voice connections, audio players, subscriptions, and streams
+remain ephemeral inside the bot.
 
-- Node.js 25.5.0 ou superior
-- pnpm 10 ou superior
-- FFmpeg no `PATH`, compilado com suporte a `libopus`
-- acesso de rede ao YouTube Music
+## Requirements
 
-## Preparação
+### Docker self-hosting
+
+- Docker Engine with Docker Compose v2.
+- A Discord application installed in one server.
+- Spotify application credentials.
+- A Last.fm API key is optional but recommended for richer autoplay suggestions.
+- Network access to Discord, Spotify, Last.fm when configured, and YouTube Music.
+
+The image already includes FFmpeg and the required Node.js runtime.
+
+### Local development
+
+- Node.js 25.5.0 or newer, as declared in `.node-version` and `.mise.toml`.
+- pnpm 11.5.2, as declared by `packageManager`.
+- FFmpeg available on `PATH` with Opus support.
+- The same provider credentials and network access required for self-hosting.
+
+## Provider setup
+
+### Discord
+
+1. Create an application and bot in the Discord Developer Portal.
+2. Copy the bot token and application ID.
+3. Enable installation for the target server with the `bot` and
+   `applications.commands` scopes. Grant at least View Channels, Connect, and
+   Speak in the voice channels Waves will use.
+4. Enable Developer Mode in Discord, copy the target server ID, and store all
+   three values in `.env`.
+
+Waves only requests the `Guilds` and `GuildVoiceStates` gateway intents; it does
+not require privileged message-content or member intents. Commands are registered
+for the configured server at startup, so updates normally appear immediately.
+
+### Spotify
+
+Create an application in the Spotify Developer Dashboard and copy its client ID
+and client secret. Waves uses the client-credentials flow on the server; these
+values must never be exposed to the browser or committed to Git.
+
+### Last.fm
+
+Create a Last.fm API account and set `LASTFM_API_KEY` to enable the Last.fm
+autoplay provider. If it is omitted, Waves can still try the YouTube Music
+recommendation provider.
+
+## Environment configuration
+
+Copy the example file and edit the local copy:
 
 ```bash
-pnpm install
+cp .env.example .env
 ```
 
-Copie `.env.example` para `.env` na raiz e preencha:
+PowerShell equivalent:
 
-- Spotify: `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET`;
-- Discord: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID` e `DISCORD_GUILD_ID`;
-- API interna: o mesmo `BOT_INTERNAL_SECRET` para web e bot;
-- `INTERNAL_WEB_URL`, normalmente `http://localhost:3000`;
-- `PUBLIC_APP_URL`, a URL HTTP(S) pública do painel incluída no link e QR code
-  enviados pelo bot.
-- `LOG_LEVEL`, com `debug`, `info`, `warn` ou `error`. O default é `debug` em
-  desenvolvimento e `info` nos demais ambientes.
-- `SESSION_COOKIE_SECURE`, use `false` para Docker local via HTTP e `true` quando
-  acessar o painel por HTTPS.
+```powershell
+Copy-Item .env.example .env
+```
 
-O bot carrega o `.env` da raiz durante o desenvolvimento.
-O script `dev:web` também aponta explicitamente para esse arquivo no monorepo.
-`INTERNAL_API_TOKEN`, `BOT_API_BASE_URL` e `APP_HOSTNAME` continuam aceitos como
-aliases legados, mas não devem ser usados em novas instalações.
+The minimum values to review are:
 
-## Scripts
+| Variable                | Required    | Purpose                                                                   |
+| ----------------------- | ----------- | ------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`         | Yes         | Discord bot token.                                                        |
+| `DISCORD_CLIENT_ID`     | Yes         | Discord application ID.                                                   |
+| `DISCORD_GUILD_ID`      | Yes         | Server where guild commands are registered.                               |
+| `SPOTIFY_CLIENT_ID`     | Yes         | Spotify server-side client ID.                                            |
+| `SPOTIFY_CLIENT_SECRET` | Yes         | Spotify server-side client secret.                                        |
+| `BOT_INTERNAL_SECRET`   | Yes         | Random secret shared only by the web app and bot.                         |
+| `PUBLIC_APP_URL`        | Yes         | Browser-reachable panel URL used in Discord login links and QR codes.     |
+| `INTERNAL_WEB_URL`      | Development | Web origin used by the local bot; normally `http://localhost:3000`.       |
+| `LASTFM_API_KEY`        | No          | Enables the Last.fm recommendation provider.                              |
+| `DATABASE_URL`          | Development | SQLite URL; the default is `file:./dev.db`. Docker uses `/data/waves.db`. |
+| `SESSION_COOKIE_SECURE` | Deployment  | Use `true` behind HTTPS; local HTTP uses `false`.                         |
+| `WAVES_BIND_ADDRESS`    | No          | Published Docker address; defaults to loopback (`127.0.0.1`).             |
+| `LOG_LEVEL`             | No          | `debug`, `info`, `warn`, or `error`.                                      |
+
+Generate `BOT_INTERNAL_SECRET` with a password manager or a cryptographically
+secure generator; for example:
 
 ```bash
-pnpm dev
-pnpm dev:web
-pnpm dev:bot
-pnpm build
-pnpm lint
-pnpm format
-pnpm format:check
-pnpm typecheck
+openssl rand -hex 32
 ```
 
-## Banco
+The complete list, defaults, and tuning variables live in `.env.example`.
+`INTERNAL_API_TOKEN`, `BOT_API_BASE_URL`, and `APP_HOSTNAME` remain supported as
+legacy aliases, but new installations should use the names above.
 
-```bash
-pnpm --filter web db:migrate
-```
+## Self-hosting with Docker
 
-Execute a migração antes da primeira inicialização. Se `/api/queue` ou
-`/api/player` responder `INTERNAL_ERROR`, confirme primeiro que a migração foi
-aplicada e que `DATABASE_URL` aponta para um caminho gravável.
-
-## Discord
-
-Com o `.env` configurado e o bot adicionado ao guild:
-
-```bash
-pnpm dev:web
-pnpm dev:bot
-```
-
-O registro é feito por guild e cria os comandos `/play`, `/queue`, `/skip`, `/join`,
-`/leave`, `/pause`, `/resume` e `/volume`. O bot atualiza esses comandos
-automaticamente antes de fazer login. Use `pnpm --filter bot bot:register` apenas
-quando precisar registrar sem iniciar o processo do bot.
-
-## Docker
-
-Com o `.env` configurado na raiz:
+With `.env` configured:
 
 ```bash
 docker compose up --build -d
+docker compose ps
 docker compose logs -f web bot
 ```
 
-O Compose cria dois serviços a partir da mesma imagem local `waves:local`:
+Compose builds one local image and starts two services:
 
-- `web`: executa as migrações SQLite e inicia o Nuxt em `http://localhost:3000`.
-- `bot`: espera o healthcheck do web e comunica-se com `http://web:3000/api`.
+- `web` applies the SQLite migrations and serves the Nuxt application on
+  `http://127.0.0.1:3000` by default.
+- `bot` waits for the web readiness check, registers the guild commands, logs in
+  to Discord, and talks to `http://web:3000/api` over the Compose network.
 
-Os dois processos expõem liveness e readiness separados. O web usa
-`/api/health/live` e `/api/health/ready`; o healthcheck do bot fica disponível
-somente dentro do container em `/health/live` e `/health/ready`.
+Check web readiness from the host:
 
-Web e bot usam o driver Docker `json-file` com rotação de 10 MiB por arquivo e
-até cinco arquivos por container. Dozzle continua lendo esses logs pelo Docker;
-não há transport externo. Após alterar essa configuração, recrie os containers
-com `docker compose up -d --force-recreate`.
+```bash
+curl http://127.0.0.1:3000/api/health/ready
+```
 
-O banco fica no volume nomeado `waves-data`, montado em `/data`. Use
-`docker compose down` para parar sem apagar dados. Use
-`docker compose down -v` apenas quando quiser remover também o volume SQLite.
+The web service exposes `/api/health/live` and `/api/health/ready`. The bot also
+has `/health/live` and `/health/ready`, but its health server is available only
+inside the container by default.
 
-Backups online podem ser criados no volume `waves-backups` com
-`apps/web/backup-database.mjs`; o script mantém 14 cópias diárias e 4 semanais.
+Queue and player data live in the named `waves-data` volume. Stop the application
+without deleting data with:
 
-## Smoke test local
+```bash
+docker compose down
+```
 
-Com o banco migrado e o web ativo:
+`docker compose down -v` also deletes the SQLite and backup volumes; use it only
+when permanent data removal is intentional.
+
+### Production exposure
+
+Keep the default loopback binding when the reverse proxy runs on the same host.
+Terminate HTTPS at that proxy, require authentication there, set
+`PUBLIC_APP_URL` to the external HTTPS URL, and set `SESSION_COOKIE_SECURE=true`.
+If a proxy in another network must reach the published port, adjust
+`WAVES_BIND_ADDRESS` deliberately and enforce firewall restrictions.
+
+### Backups and logs
+
+Create an online SQLite backup with:
+
+```bash
+bash ops/backup.sh
+```
+
+Backups are written to the `waves-backups` volume. The application keeps 14 daily
+and 4 weekly copies. Application logs are structured Pino JSON on stdout; Docker
+rotates five 10 MiB files per service. See
+[`docs/observability.md`](docs/observability.md) for fields and diagnostic
+queries.
+
+## Local development
+
+Install dependencies and apply the migrations:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter web db:migrate
+```
+
+Start both processes:
+
+```bash
+pnpm dev
+```
+
+Or run them separately:
 
 ```bash
 pnpm dev:web
-```
-
-Verifique:
-
-1. `http://localhost:3000/api/health` retorna `{"ok":true}`;
-2. a busca Spotify retorna resultados;
-3. adicionar, mover e remover sobrevivem ao polling;
-4. skip atualiza player e fila;
-5. reiniciar o web preserva a fila no SQLite.
-
-Para validar o bot:
-
-```bash
-pnpm --filter bot bot:register
 pnpm dev:bot
 ```
 
-O log deve informar o registro de oito comandos e `Waves bot ready`, sem imprimir
-tokens ou headers de autorização.
+Both processes read the root `.env`. The bot registers the nine guild commands
+before logging in. To register them without starting the bot:
 
-Para diagnosticar playback, redirecione web e bot para arquivos locais ignorados:
-
-```powershell
-pnpm dev:web *> waves-web.log
-pnpm dev:bot *> waves-bot.log
+```bash
+pnpm --filter bot bot:register
 ```
 
-Use `playbackAttemptId`, `guildId` e `queueItemId` para reconstruir claim,
-resolução, ranges, probe, criação do recurso, transições do player e conclusão.
-Ranges aparecem em `debug`; marcos e transições aparecem em `info`. Antes de
-compartilhar logs, procure por `streamUrl`, `Authorization`, `signature`, `token`,
-`cookie`, `visitorData` e `poToken`.
+Useful quality commands:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm format:check
+```
+
+Use `pnpm build` when validating packaging, Docker, deployment, or another
+production-only behavior.
+
+## Verification checklist
+
+After startup:
+
+1. `/api/health/ready` returns a successful response.
+2. All nine Discord commands are visible in the configured server.
+3. Spotify search returns tracks.
+4. A user can join or create a guest session, add a track, reorder the queue, and
+   restore a removed item.
+5. `/join` connects the bot to the caller's voice channel and playback advances
+   to the next queue item.
+6. Web controls and Discord commands stay synchronized.
+7. Restarting the web service preserves the queue in SQLite.
 
 ## Troubleshooting
 
-- `SPOTIFY_UNAVAILABLE`: revise as credenciais e a conectividade com os endpoints
-  oficiais do Spotify.
-- `401 UNAUTHORIZED` na API interna: confirme que web e bot usam exatamente o
-  mesmo `BOT_INTERNAL_SECRET`.
-- Comandos não aparecem: registre novamente no guild correto e confirme
-  `DISCORD_CLIENT_ID` e `DISCORD_GUILD_ID`.
-- Bot conecta, mas não opera a fila: confirme `INTERNAL_WEB_URL` e que o web está
-  ativo.
-- Playback termina imediatamente: filtre pelo mesmo `playbackAttemptId` e localize
-  o primeiro `errorCode`, especialmente `SOURCE_HTTP_STATUS`,
-  `DEMUX_PROBE_FAILED`, `PLAYER_ERROR` ou `PREMATURE_IDLE`.
-- Nunca exponha o painel diretamente à internet sem uma camada externa de
-  autenticação e controle de acesso.
+- `SPOTIFY_UNAVAILABLE`: verify the Spotify credentials and outbound network
+  access.
+- `401 UNAUTHORIZED` on the internal API: make sure web and bot use the same
+  `BOT_INTERNAL_SECRET`.
+- Discord commands do not appear: check `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`,
+  the installation scopes, and restart the bot or run `bot:register`.
+- The bot connects but cannot control the queue: verify `INTERNAL_WEB_URL` in
+  development and confirm the web readiness endpoint succeeds.
+- Playback stops immediately: correlate logs by `playbackAttemptId` and find the
+  first `errorCode`, especially `SOURCE_HTTP_STATUS`, `DEMUX_PROBE_FAILED`,
+  `PLAYER_ERROR`, or `PREMATURE_IDLE`.
+- Before sharing logs, search for `streamUrl`, `Authorization`, `signature`,
+  `token`, `cookie`, `visitorData`, and `poToken` and remove sensitive values.
 
-## Arquitetura e limites
+## Limitations and responsible use
 
-- O Nuxt é o único proprietário do SQLite e das regras da fila/player.
-- O bot usa apenas a API interna protegida por bearer.
-- Spotify e tokens permanecem no servidor.
-- YouTube Music é a única fonte de áudio.
-- Conexões, players e streams existem apenas no runtime do bot.
+- Waves is designed for one private Discord server and a trusted group, not as a
+  public multi-tenant service.
+- YouTube Music access uses the private InnerTube API through `youtubei.js` and
+  may change, fail, or be rate-limited without notice.
+- Operators are responsible for complying with Discord, Spotify, Last.fm,
+  YouTube, and applicable copyright terms. Waves is not affiliated with those
+  services.
 
-## Estado atual
+## License
 
-O produto possui fila persistida, reprodução de voz, avanço automático, autojoin,
-pause, resume, volume, progresso, skip, leave e controles web sincronizados. O
-painel também informa separadamente a disponibilidade da web, do bot e da conexão
-de voz.
-
-O YouTube.js usa a API privada InnerTube e pode quebrar ou sofrer bloqueios sem
-aviso. A integração é destinada a uso privado e não utiliza cookies ou OAuth.
+This repository does not currently include a license. Public visibility alone
+does not grant permission to use, modify, or redistribute the code. The
+maintainers should add an explicit license before inviting reuse or
+contributions.

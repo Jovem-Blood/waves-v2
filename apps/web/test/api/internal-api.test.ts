@@ -23,11 +23,11 @@ import { DiscordLoginTokenRepository } from '../../server/repositories/discord-l
 import { SessionRepository } from '../../server/repositories/session.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
 import { UserRepository } from '../../server/repositories/user.repository'
-import { AuthService } from '../../server/services/auth.service'
-import { PlayerStateService } from '../../server/services/player-state.service'
-import { OperationalStatusService } from '../../server/services/operational-status.service'
-import { QueueService } from '../../server/services/queue.service'
-import { HistoryService } from '../../server/services/history.service'
+import { AuthService } from '../../server/services/auth/service'
+import { OperationalStatusService } from '../../server/services/playback/operational-status.service'
+import { PlayerStateService } from '../../server/services/playback/player-state.service'
+import { HistoryService } from '../../server/services/queue/history.service'
+import { QueueService } from '../../server/services/queue/service'
 import type { WavesLogger } from '../../server/utils/logger'
 import type {
   PublicApiDependencies,
