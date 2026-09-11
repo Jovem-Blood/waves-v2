@@ -77,6 +77,26 @@ afterEach(() => {
 })
 
 describe('PlayerStateService', () => {
+  it('starts a new logical execution when recovering an already terminal attempt', () => {
+    const { queueRepository, service } = setup()
+    queueRepository.insert(item('first', 0))
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'voice')
+    const claim = service.claimPlayback({ playbackAttemptId: 'original' })
+    service.reportPlaybackAttempt({
+      queueItemId: 'first',
+      playbackAttemptId: claim.playbackAttemptId!,
+      attempt: 1,
+      outcome: 'failed',
+      terminal: true,
+      errorCode: 'PLAYER_ERROR',
+    })
+    service.updateProgress({ queueItemId: 'first', progressMs: 10_000 })
+    expect(service.claimPlayback({ playbackAttemptId: 'recovery' })).toMatchObject({
+      playbackAttemptId: 'recovery',
+      attempt: 1,
+      player: { progressMs: 0 },
+    })
+  })
   it('releases the queue when exhausted completion delivery is reported later', () => {
     const { queueRepository, service } = setup()
     queueRepository.insert(item('first', 0))

@@ -248,6 +248,23 @@ export class PlayerStateService {
 
       if (current) {
         const existing = playbackAttempt.findLatestForQueueItem(current.id)
+        if (existing?.terminal) {
+          // Recovery after exhausted completion must not reuse an already finished execution.
+          const playbackAttemptId = input.playbackAttemptId ?? this.generateId()
+          const timestamp = this.now().toISOString()
+          playbackAttempt.start({
+            playbackAttemptId,
+            attemptNumber: 1,
+            queueItem: current,
+            startedAt: timestamp,
+          })
+          return {
+            player: playerState.update({ progressMs: 0, updatedAt: timestamp }),
+            item: current,
+            playbackAttemptId,
+            attempt: 1,
+          }
+        }
         return {
           player,
           item: current,
