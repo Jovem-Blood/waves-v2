@@ -1,5 +1,5 @@
 import type { PlaybackAttemptReport, QueueItem } from '@waves/shared'
-import { and, asc, eq, gte, lte } from 'drizzle-orm'
+import { and, asc, eq, gte, lte, sql, inArray } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 
 import type { WavesDatabaseExecutor } from '../db/client'
@@ -57,6 +57,31 @@ export interface PlaybackAttemptStartInput {
 
 export class PlaybackAttemptRepository {
   constructor(private readonly db: WavesDatabaseExecutor) {}
+
+  touchActive(ids: string[], now: string): void {
+    if (!ids.length) return
+    this.db
+      .update(playbackAttempts)
+      .set({ updatedAt: now })
+      .where(
+        and(inArray(playbackAttempts.playbackAttemptId, ids), eq(playbackAttempts.terminal, false)),
+      )
+      .run()
+  }
+
+  listIncomplete(): PlaybackAttemptRecord[] {
+    return this.db
+      .select()
+      .from(playbackAttempts)
+      .where(
+        and(
+          eq(playbackAttempts.terminal, false),
+          sql`not exists (select 1 from playback_attempts other where other.playback_attempt_id = ${playbackAttempts.playbackAttemptId} and (other.terminal = 1 or other.attempt_number > ${playbackAttempts.attemptNumber}))`,
+        ),
+      )
+      .all()
+      .map(mapRow)
+  }
 
   start(input: PlaybackAttemptStartInput): PlaybackAttemptRecord {
     const timestamp = input.startedAt

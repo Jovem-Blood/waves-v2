@@ -1,5 +1,6 @@
 import {
   apiErrorSchema,
+  botHeartbeatInputSchema,
   botEventSchema,
   botPlayInputSchema,
   completePlaybackInputSchema,
@@ -16,6 +17,7 @@ import {
   queueSchema,
   trackMetadataSchema,
   type BotEvent,
+  type BotHeartbeatInput,
   type BotPlayInput,
   type CompletePlaybackInput,
   type PlaybackAttemptReport,
@@ -67,7 +69,10 @@ export interface WavesApi {
   sendEvent(event: BotEvent): Promise<void>
   getPlayer(): Promise<PlayerState>
   updateProgress(queueItemId: string, progressMs: number): Promise<PlayerState>
-  heartbeat(occurredAt: string): Promise<OperationalStatus>
+  heartbeat(
+    occurredAt: string,
+    context?: Omit<BotHeartbeatInput, 'occurredAt'>,
+  ): Promise<OperationalStatus>
   createDiscordLink(input: CreateDiscordLinkInput): Promise<CreateDiscordLinkResponse>
 }
 
@@ -100,10 +105,13 @@ export class WavesApiClient implements WavesApi {
     })
   }
 
-  heartbeat(occurredAt: string): Promise<OperationalStatus> {
+  heartbeat(
+    occurredAt: string,
+    context: Omit<BotHeartbeatInput, 'occurredAt'> = {},
+  ): Promise<OperationalStatus> {
     return this.requestJson('/internal/bot/heartbeat', operationalStatusSchema, {
       method: 'POST',
-      body: JSON.stringify({ occurredAt }),
+      body: JSON.stringify(botHeartbeatInputSchema.parse({ occurredAt, ...context })),
     })
   }
 

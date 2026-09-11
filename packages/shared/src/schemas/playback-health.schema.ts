@@ -41,6 +41,10 @@ export const playbackHealthResponseSchema = z
         cancelled: z.number().int().nonnegative(),
         retries: z.number().int().nonnegative(),
         successRate: z.number().min(0).max(1),
+        incomplete: z.number().int().nonnegative().default(0),
+        stale: z.number().int().nonnegative().default(0),
+        orphaned: z.number().int().nonnegative().default(0),
+        denominator: z.literal('terminal_played_or_failed').default('terminal_played_or_failed'),
       })
       .strict(),
     topErrors: z.array(

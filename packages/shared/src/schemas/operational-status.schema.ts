@@ -8,6 +8,8 @@ export const voiceOperationalStatusSchema = z.enum(['connected', 'disconnected',
 export const botHeartbeatInputSchema = z
   .object({
     occurredAt: z.iso.datetime({ offset: true }),
+    startedAt: z.iso.datetime({ offset: true }).optional(),
+    activePlaybackAttemptIds: z.array(z.string().min(1)).max(100).optional(),
   })
   .strict()
 

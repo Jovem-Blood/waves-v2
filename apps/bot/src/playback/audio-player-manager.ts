@@ -156,6 +156,12 @@ export class AudioPlayerManager implements PlaybackManager {
     return session?.current !== undefined || session?.settling === true
   }
 
+  activeAttemptIds(): string[] {
+    return [...this.sessions.values()].flatMap((session) =>
+      session.current ? [session.current.playbackAttemptId] : [],
+    )
+  }
+
   async skip(guildId: string): Promise<SkipPlaybackResult> {
     const current = this.sessions.get(guildId)?.current
     const logger = playbackLogger(this.logger, {
@@ -264,7 +270,10 @@ export class AudioPlayerManager implements PlaybackManager {
     }
   }
 
-  destroyGuild(guildId: string): void {
+  destroyGuild(
+    guildId: string,
+    reason: 'PLAYBACK_CANCELLED' | 'VOICE_DISCONNECTED' | 'BOT_SHUTDOWN' = 'PLAYBACK_CANCELLED',
+  ): void {
     this.startingGuilds.delete(guildId)
     const session = this.sessions.get(guildId)
     if (!session) {
@@ -278,11 +287,11 @@ export class AudioPlayerManager implements PlaybackManager {
         queueItemId: current.item.id,
         playbackAttemptId: current.playbackAttemptId,
         attempt: current.retries + 1,
-        outcome: 'cancelled',
+        outcome: reason === 'VOICE_DISCONNECTED' ? 'failed' : 'cancelled',
         terminal: true,
         failureStage: 'player',
-        failureClass: 'intentional',
-        errorCode: 'PLAYBACK_CANCELLED',
+        failureClass: reason === 'VOICE_DISCONNECTED' ? 'operational' : 'intentional',
+        errorCode: reason,
         sourceProvider: current.provider,
         sourceIdentifier: current.sourceIdentifier,
       })
@@ -307,7 +316,7 @@ export class AudioPlayerManager implements PlaybackManager {
 
   destroyAll(): void {
     for (const guildId of [...this.sessions.keys()]) {
-      this.destroyGuild(guildId)
+      this.destroyGuild(guildId, 'BOT_SHUTDOWN')
     }
   }
 

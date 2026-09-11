@@ -120,7 +120,21 @@ async function copyAttempt(id: string) {
         <article>
           <span>CANCELADAS</span><strong>{{ data.summary.cancelled }}</strong>
         </article>
+        <article>
+          <span>INCOMPLETAS</span><strong>{{ data.summary.incomplete }}</strong>
+        </article>
+        <article>
+          <span>SEM HEARTBEAT</span><strong>{{ data.summary.stale }}</strong>
+        </article>
+        <article>
+          <span>ÓRFÃS RECONCILIADAS</span><strong>{{ data.summary.orphaned }}</strong>
+        </article>
       </div>
+      <p class="health-count">
+        Sucesso = concluídas com sucesso / (sucessos + falhas terminais). Incompletas e interrupções
+        intencionais ficam fora dessa taxa. Tentativas sem heartbeat por 2 minutos são
+        reconciliadas; reproduções pausadas mantêm heartbeat.
+      </p>
 
       <div v-if="!data.problematicTracks.length" class="state-message" aria-live="polite">
         <Activity :size="20" aria-hidden="true" />
@@ -429,7 +443,7 @@ code {
     padding: 24px;
   }
   .health-summary {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 @media (max-width: 47.99rem) {

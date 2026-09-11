@@ -20,6 +20,7 @@ export class OperationalStatusService {
     private readonly playerRepository: PlayerStateRepository,
     private readonly now: () => Date = () => new Date(),
     private readonly publishRealtime: RealtimePublisher = noopPublish,
+    private readonly reconcilePlayback: (heartbeat: BotHeartbeatInput) => void = () => {},
   ) {}
 
   get(): OperationalStatus {
@@ -43,6 +44,7 @@ export class OperationalStatusService {
 
   heartbeat(input: BotHeartbeatInput): OperationalStatus {
     const parsed = botHeartbeatInputSchema.parse(input)
+    this.reconcilePlayback(parsed)
     this.operationalRepository.update({
       botLastSeenAt: parsed.occurredAt,
       updatedAt: this.now().toISOString(),

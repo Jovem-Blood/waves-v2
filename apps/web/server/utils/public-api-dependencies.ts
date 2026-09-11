@@ -17,6 +17,7 @@ import { AuthService } from '../services/auth/service'
 import { AutoplayOrchestrator } from '../services/autoplay/orchestrator.service'
 import { AutoplayService } from '../services/autoplay/service'
 import { PlaybackHealthService } from '../services/playback/health.service'
+import { PlaybackMaintenanceService } from '../services/playback/maintenance.service'
 import { OperationalStatusService } from '../services/playback/operational-status.service'
 import { PlayerStateService } from '../services/playback/player-state.service'
 import { HistoryService } from '../services/queue/history.service'
@@ -89,6 +90,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   const autoplayCandidateRepository = new AutoplayCandidateRepository(db)
   const playbackAttemptRepository = new PlaybackAttemptRepository(db)
   const unitOfWork = new DatabaseUnitOfWork(db)
+  const playbackMaintenance = new PlaybackMaintenanceService(unitOfWork)
   const publishRealtime = getRealtimeEventBus().publish
   let spotifyService: SpotifyService | undefined
   let lastFmClient: LastFmClient | undefined
@@ -140,7 +142,9 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   runtimeDependencies = {
     queueService: runtimeQueueService,
     historyService: new HistoryService(queueRepository),
-    playbackHealthService: new PlaybackHealthService(playbackAttemptRepository),
+    playbackHealthService: new PlaybackHealthService(playbackAttemptRepository, undefined, () =>
+      playbackMaintenance.reconcile(),
+    ),
     playerStateService: runtimePlayerStateService,
     autoplayService: runtimeAutoplayService,
     autoplayOrchestrator: new AutoplayOrchestrator(
@@ -157,6 +161,9 @@ export function usePublicApiDependencies(): PublicApiDependencies {
       playerStateRepository,
       undefined,
       publishRealtime,
+      (heartbeat) => {
+        playbackMaintenance.reconcile(heartbeat)
+      },
     ),
     authService: new AuthService(
       userRepository,

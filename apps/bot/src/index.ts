@@ -104,7 +104,7 @@ export async function startBot(): Promise<Client> {
   const voiceManager = new DiscordVoiceManager(
     logger,
     async (guildId, voiceChannelId) => {
-      playbackReference.current?.destroyGuild(guildId)
+      playbackReference.current?.destroyGuild(guildId, 'VOICE_DISCONNECTED')
       await api.sendEvent({
         type: 'voice.disconnected',
         occurredAt: new Date().toISOString(),
@@ -126,6 +126,7 @@ export async function startBot(): Promise<Client> {
     },
   )
   const playbackManager = new AudioPlayerManager(api, voiceManager, logger, client)
+  const botStartedAt = new Date().toISOString()
   playbackReference.current = playbackManager
   const healthState: BotHealthState = {
     discordReady: false,
@@ -183,7 +184,10 @@ export async function startBot(): Promise<Client> {
     intervalMs: 5_000,
     maxBackoffMs: 30_000,
     async action() {
-      await api.heartbeat(new Date().toISOString())
+      await api.heartbeat(new Date().toISOString(), {
+        startedAt: botStartedAt,
+        activePlaybackAttemptIds: playbackManager.activeAttemptIds(),
+      })
       healthState.lastHeartbeatAt = Date.now()
     },
     onFailure(error) {
