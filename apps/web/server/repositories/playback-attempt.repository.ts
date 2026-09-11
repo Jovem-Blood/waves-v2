@@ -102,6 +102,7 @@ export class PlaybackAttemptRepository {
     const current = this.find(input.playbackAttemptId, input.attempt)
     if (!current) throw new Error('Playback attempt was not persisted')
     if (current.terminal) return current
+    if (current.outcome !== 'pending' && input.outcome === 'pending') return current
 
     const finished = input.outcome === 'pending' ? undefined : now
     this.db

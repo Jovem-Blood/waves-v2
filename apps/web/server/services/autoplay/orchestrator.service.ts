@@ -93,9 +93,17 @@ export class AutoplayOrchestrator {
   async completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult> {
     const activeBefore = this.queueService.list()
     const current = this.queueRepository.findById(input.queueItemId)
+    if (current?.status === 'played' || current?.status === 'failed') {
+      return this.playerStateService.completePlayback(input)
+    }
     const contextBefore = this.context(activeBefore)
     const wasEnabled = this.autoplayService.get().enabled
     if (wasEnabled) await this.safeQueueChanged()
+
+    const latest = this.queueRepository.findById(input.queueItemId)
+    if (latest?.status === 'played' || latest?.status === 'failed') {
+      return this.playerStateService.completePlayback(input)
+    }
 
     const completed = this.playerStateService.completePlayback(input)
     if (input.outcome === 'played' && current) this.profile.recordCompleted(current)

@@ -77,6 +77,28 @@ afterEach(() => {
 })
 
 describe('PlayerStateService', () => {
+  it('does not reset the next track or create attempts on duplicate completion', () => {
+    const { queueRepository, service, unitOfWork } = setup()
+    queueRepository.insert(item('first', 0))
+    queueRepository.insert(item('second', 1))
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'voice')
+    const claim = service.claimPlayback()
+    const input = {
+      queueItemId: 'first',
+      outcome: 'played' as const,
+      playbackAttemptId: claim.playbackAttemptId!,
+      attempt: 1,
+      nextPlaybackAttemptId: 'next',
+    }
+    service.completePlayback(input)
+    service.updateProgress({ queueItemId: 'second', progressMs: 20_000 })
+    const repeated = service.completePlayback({ ...input, nextPlaybackAttemptId: 'duplicate' })
+    expect(repeated.player.progressMs).toBe(20_000)
+    expect(repeated.nextPlaybackAttemptId).toBe('next')
+    expect(
+      unitOfWork.run(({ playbackAttempt }) => playbackAttempt.find('duplicate', 1)),
+    ).toBeUndefined()
+  })
   it('returns the initial logical player state', () => {
     const { service } = setup()
 

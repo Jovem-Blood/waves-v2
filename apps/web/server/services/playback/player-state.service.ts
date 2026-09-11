@@ -388,6 +388,7 @@ export class PlayerStateService {
     const parsed = completePlaybackInputSchema.parse(input)
     const queueItemId = parsed.queueItemId
     const outcome = parsed.outcome
+    let transitioned = false
     const result = this.unitOfWork.run(({ playerState, queue, playbackAttempt }) => {
       const timestamp = this.now().toISOString()
       const player = playerState.get()
@@ -397,15 +398,28 @@ export class PlayerStateService {
         throw new QueueItemNotFoundError(queueItemId)
       }
 
-      if (
-        current.status !== 'played' &&
-        current.status !== 'failed' &&
-        player.currentQueueItemId !== queueItemId
-      ) {
+      if (current.status === 'played' || current.status === 'failed') {
+        const nextItem = player.currentQueueItemId
+          ? queue.findById(player.currentQueueItemId)
+          : undefined
+        const nextAttempt = nextItem
+          ? playbackAttempt.findLatestForQueueItem(nextItem.id)
+          : undefined
+        return {
+          completedQueueItemId: queueItemId,
+          player,
+          queue: queue.listActive(),
+          ...(nextItem ? { nextItem } : {}),
+          ...(nextAttempt ? { nextPlaybackAttemptId: nextAttempt.playbackAttemptId } : {}),
+        }
+      }
+
+      if (player.currentQueueItemId !== queueItemId) {
         throw new PlaybackConflictError()
       }
 
       if (current?.status === 'playing') {
+        transitioned = true
         if (parsed.playbackAttemptId && parsed.attempt) {
           try {
             const attemptReport = {
@@ -441,7 +455,7 @@ export class PlayerStateService {
               current,
               timestamp,
             )
-          } catch {
+          } catch (error) {
             this.logger.error(
               {
                 event: 'playback',
@@ -455,6 +469,7 @@ export class PlayerStateService {
               },
               'Playback telemetry result failed',
             )
+            throw error
           }
         }
         queue.updateStatusAndPosition(current.id, {
@@ -499,7 +514,7 @@ export class PlayerStateService {
             queueItem: nextItem,
             startedAt: timestamp,
           })
-        } catch {
+        } catch (error) {
           this.logger.error(
             {
               event: 'playback',
@@ -513,6 +528,7 @@ export class PlayerStateService {
             },
             'Next playback telemetry start failed',
           )
+          throw error
         }
       }
 
@@ -524,6 +540,7 @@ export class PlayerStateService {
         ...(nextPlaybackAttemptId === undefined ? {} : { nextPlaybackAttemptId }),
       }
     })
+    if (!transitioned) return result
     this.logger.info(
       {
         event: 'playback',
@@ -646,7 +663,7 @@ export class PlayerStateService {
         },
         'Playback attempt telemetry failed',
       )
-      void error
+      throw error
     }
   }
 

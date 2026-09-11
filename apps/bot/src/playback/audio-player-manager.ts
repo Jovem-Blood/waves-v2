@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import type { AudioSourceProvider, QueueItem } from '@waves/shared'
+import type { AudioSourceProvider, PlaybackAttemptReport, QueueItem } from '@waves/shared'
 import { ActivityType } from 'discord.js'
 import type { Client } from 'discord.js'
 import { AudioPlayerStatus, type AudioPlayer, type AudioPlayerState } from '@discordjs/voice'
@@ -16,6 +16,7 @@ import {
 } from '../observability.js'
 import type { VoiceManager } from '../voice/voice-manager.js'
 import { defaultPlaybackRuntime, type PlaybackRuntime } from './playback-runtime.js'
+import { deliverPlayback } from './telemetry-delivery.js'
 
 export type StartPlaybackResult = 'started' | 'already-playing' | 'not-connected' | 'empty'
 export type SkipPlaybackResult = 'skipped' | 'not-connected' | 'empty'
@@ -55,6 +56,7 @@ const MIN_SUCCESSFUL_PLAYBACK_MS = 1_000
 export class AudioPlayerManager implements PlaybackManager {
   private readonly sessions = new Map<string, PlaybackSession>()
   private readonly startingGuilds = new Set<string>()
+  private readonly deliveries = new Set<Promise<void>>()
   private lastActivityGuildId: string | undefined
 
   constructor(
@@ -64,6 +66,25 @@ export class AudioPlayerManager implements PlaybackManager {
     private readonly client: Client,
     private readonly runtime: PlaybackRuntime = defaultPlaybackRuntime,
   ) {}
+
+  private reportAttempt(input: PlaybackAttemptReport): Promise<void> {
+    const delivery = deliverPlayback(
+      'telemetry.attempt',
+      input,
+      () => this.api.reportPlaybackAttempt(input),
+      this.logger,
+    ).catch(() => {
+      // Each failure and exhausted delivery was logged by deliverPlayback.
+      // Server-side stale reconciliation recovers attempts if the API stays offline.
+    })
+    this.deliveries.add(delivery)
+    void delivery.then(() => this.deliveries.delete(delivery))
+    return delivery
+  }
+
+  async flushTelemetry(): Promise<void> {
+    await Promise.all([...this.deliveries])
+  }
 
   async start(guildId: string): Promise<StartPlaybackResult> {
     const playbackAttemptId = randomUUID()
@@ -253,20 +274,18 @@ export class AudioPlayerManager implements PlaybackManager {
     session.settling = true
     current?.abortController.abort()
     if (current) {
-      void this.api
-        .reportPlaybackAttempt({
-          queueItemId: current.item.id,
-          playbackAttemptId: current.playbackAttemptId,
-          attempt: current.retries + 1,
-          outcome: 'cancelled',
-          terminal: true,
-          failureStage: 'player',
-          failureClass: 'intentional',
-          errorCode: 'PLAYBACK_CANCELLED',
-          sourceProvider: current.provider,
-          sourceIdentifier: current.sourceIdentifier,
-        })
-        .catch(() => undefined)
+      void this.reportAttempt({
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        attempt: current.retries + 1,
+        outcome: 'cancelled',
+        terminal: true,
+        failureStage: 'player',
+        failureClass: 'intentional',
+        errorCode: 'PLAYBACK_CANCELLED',
+        sourceProvider: current.provider,
+        sourceIdentifier: current.sourceIdentifier,
+      })
     }
     session.current = undefined
     session.player.stop(true)
@@ -294,20 +313,18 @@ export class AudioPlayerManager implements PlaybackManager {
 
   private stopAsSkipped(session: PlaybackSession, current?: CurrentPlayback): void {
     if (current) {
-      void this.api
-        .reportPlaybackAttempt({
-          queueItemId: current.item.id,
-          playbackAttemptId: current.playbackAttemptId,
-          attempt: current.retries + 1,
-          outcome: 'skipped',
-          terminal: true,
-          failureStage: 'player',
-          failureClass: 'intentional',
-          errorCode: 'PLAYBACK_SKIPPED',
-          sourceProvider: current.provider,
-          sourceIdentifier: current.sourceIdentifier,
-        })
-        .catch(() => undefined)
+      void this.reportAttempt({
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        attempt: current.retries + 1,
+        outcome: 'skipped',
+        terminal: true,
+        failureStage: 'player',
+        failureClass: 'intentional',
+        errorCode: 'PLAYBACK_SKIPPED',
+        sourceProvider: current.provider,
+        sourceIdentifier: current.sourceIdentifier,
+      })
     }
     session.settling = true
     current?.abortController.abort()
@@ -403,15 +420,13 @@ export class AudioPlayerManager implements PlaybackManager {
       trackProvider: item.track.provider,
     })
     if (attempt > 1) {
-      void this.api
-        .reportPlaybackAttempt({
-          queueItemId: item.id,
-          playbackAttemptId,
-          attempt,
-          outcome: 'pending',
-          terminal: false,
-        })
-        .catch(() => undefined)
+      void this.reportAttempt({
+        queueItemId: item.id,
+        playbackAttemptId,
+        attempt,
+        outcome: 'pending',
+        terminal: false,
+      })
     }
     try {
       logger.info(
@@ -526,21 +541,19 @@ export class AudioPlayerManager implements PlaybackManager {
       current.errorCode = classified.errorCode
       if (classified.httpStatus === undefined) delete current.httpStatus
       else current.httpStatus = classified.httpStatus
-      void this.api
-        .reportPlaybackAttempt({
-          queueItemId: item.id,
-          playbackAttemptId,
-          attempt,
-          outcome: 'failed',
-          terminal: retries >= 1,
-          failureStage: playbackFailureStage(classified.errorCode, 'resolve'),
-          failureClass: playbackFailureClass(classified.errorCode),
-          errorCode: classified.errorCode,
-          ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
-          sourceProvider: current.provider,
-          sourceIdentifier: current.sourceIdentifier,
-        })
-        .catch(() => undefined)
+      await this.reportAttempt({
+        queueItemId: item.id,
+        playbackAttemptId,
+        attempt,
+        outcome: 'failed',
+        terminal: retries >= 1,
+        failureStage: playbackFailureStage(classified.errorCode, 'resolve'),
+        failureClass: playbackFailureClass(classified.errorCode),
+        errorCode: classified.errorCode,
+        ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
+        sourceProvider: current.provider,
+        sourceIdentifier: current.sourceIdentifier,
+      })
       if (retries < 1) {
         await this.playItem(guildId, session, item, retries + 1, playbackAttemptId)
         return
@@ -724,30 +737,40 @@ export class AudioPlayerManager implements PlaybackManager {
     session.settling = true
     session.current = undefined
     try {
-      const result = await this.api.completePlayback({
-        queueItemId: current.item.id,
-        outcome,
-        playbackAttemptId: current.playbackAttemptId,
-        attempt: current.retries + 1,
-        retryCount: current.retries,
-        ...(current.provider === undefined ? {} : { sourceProvider: current.provider }),
-        ...(current.sourceIdentifier === undefined
-          ? {}
-          : { sourceIdentifier: current.sourceIdentifier }),
-        ...(outcome === 'played' || current.failureStage === undefined
-          ? {}
-          : { failureStage: current.failureStage }),
-        ...(outcome === 'played' || current.failureClass === undefined
-          ? {}
-          : { failureClass: current.failureClass }),
-        ...(outcome === 'played' || current.errorCode === undefined
-          ? {}
-          : { errorCode: current.errorCode }),
-        ...(outcome === 'played' || current.httpStatus === undefined
-          ? {}
-          : { httpStatus: current.httpStatus }),
-        nextPlaybackAttemptId,
-      })
+      const result = await deliverPlayback(
+        'playback.complete',
+        {
+          queueItemId: current.item.id,
+          playbackAttemptId: current.playbackAttemptId,
+          attempt: current.retries + 1,
+        },
+        () =>
+          this.api.completePlayback({
+            queueItemId: current.item.id,
+            outcome,
+            playbackAttemptId: current.playbackAttemptId,
+            attempt: current.retries + 1,
+            retryCount: current.retries,
+            ...(current.provider === undefined ? {} : { sourceProvider: current.provider }),
+            ...(current.sourceIdentifier === undefined
+              ? {}
+              : { sourceIdentifier: current.sourceIdentifier }),
+            ...(outcome === 'played' || current.failureStage === undefined
+              ? {}
+              : { failureStage: current.failureStage }),
+            ...(outcome === 'played' || current.failureClass === undefined
+              ? {}
+              : { failureClass: current.failureClass }),
+            ...(outcome === 'played' || current.errorCode === undefined
+              ? {}
+              : { errorCode: current.errorCode }),
+            ...(outcome === 'played' || current.httpStatus === undefined
+              ? {}
+              : { httpStatus: current.httpStatus }),
+            nextPlaybackAttemptId,
+          }),
+        this.logger,
+      )
       this.logger.info(
         {
           operation: 'playback.complete',
@@ -765,7 +788,7 @@ export class AudioPlayerManager implements PlaybackManager {
         current.item.id,
       )
       session.settling = false
-      if (result.nextItem) {
+      if (result.nextItem && this.sessions.get(guildId) === session && !session.current) {
         await this.playItem(
           guildId,
           session,
@@ -779,6 +802,17 @@ export class AudioPlayerManager implements PlaybackManager {
     } catch (error) {
       session.settling = false
       const classified = classifyPlaybackError(error)
+      await this.reportAttempt({
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        attempt: current.retries + 1,
+        outcome: 'failed',
+        terminal: true,
+        failureStage: 'sync',
+        failureClass: 'sync',
+        errorCode: 'PLAYBACK_SYNC_FAILED',
+        sourceProvider: current.provider,
+      })
       this.logger.error(
         {
           operation: 'playback.complete',
@@ -788,7 +822,6 @@ export class AudioPlayerManager implements PlaybackManager {
           outcome: 'sync_failed',
           errorCode: 'PLAYBACK_SYNC_FAILED',
           ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
-          err: error,
         },
         outcome === 'played' ? 'Playback completion sync failed' : 'Playback failure sync failed',
       )

@@ -29,7 +29,8 @@ interface BotShutdownResources {
   loops: readonly BackoffLoop[]
   healthState: BotHealthState
   healthServer: BotHealthServer
-  playbackManager: Pick<AudioPlayerManager, 'destroyAll'>
+  playbackManager: Pick<AudioPlayerManager, 'destroyAll'> &
+    Partial<Pick<AudioPlayerManager, 'flushTelemetry'>>
   voiceManager: Pick<DiscordVoiceManager, 'destroyAll'>
   client: Pick<Client, 'destroy'>
   logger: ReturnType<typeof createBotLogger>
@@ -81,6 +82,9 @@ export function createBotShutdown(
         )
       })
       await runStep('health.shutdown', () => resources.healthServer.close())
+      await runStep('telemetry.shutdown', () =>
+        withTimeout(resources.playbackManager.flushTelemetry?.() ?? Promise.resolve(), 10_000),
+      )
       resources.logger.info(
         { signal, operation: 'bot.shutdown', outcome: 'completed' },
         'Waves bot shutdown completed',

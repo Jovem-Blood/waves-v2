@@ -437,14 +437,16 @@ describe('AudioPlayerManager', () => {
         }),
       )
     })
-    expect(mocks.loggerInfo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: 'playback.complete',
-        queueItemId: item.id,
-        outcome: 'failed',
-        nextQueueItemId: nextItem.id,
-      }),
-      'Playback failure synchronized',
+    await vi.waitFor(() =>
+      expect(mocks.loggerInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'playback.complete',
+          queueItemId: item.id,
+          outcome: 'failed',
+          nextQueueItemId: nextItem.id,
+        }),
+        'Playback failure synchronized',
+      ),
     )
   })
 
