@@ -52,6 +52,11 @@ const playbackDiagnosticFields = {
   httpStatus: z.number().int().min(100).max(599).optional(),
   durationMs: z.number().int().nonnegative().optional(),
   playbackDurationMs: z.number().int().nonnegative().optional(),
+  resolutionDurationMs: z.number().int().nonnegative().optional(),
+  fetchLatencyMs: z.number().int().nonnegative().optional(),
+  timeToFirstAudioMs: z.number().int().nonnegative().optional(),
+  expectedDurationMs: z.number().int().nonnegative().optional(),
+  progressAtFailureMs: z.number().int().nonnegative().optional(),
 }
 
 export const playbackAttemptReportSchema = z

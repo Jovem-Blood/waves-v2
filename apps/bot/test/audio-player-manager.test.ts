@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 
-import type { QueueItem } from '@waves/shared'
+import { completePlaybackInputSchema, type QueueItem } from '@waves/shared'
 import {
   AudioPlayerStatus,
   PlayerSubscription,
@@ -214,6 +214,7 @@ function setup(connected = true) {
     mocks: {
       claimPlayback,
       completePlayback,
+      reportPlaybackAttempt,
       createResource,
       loggerError,
       loggerInfo,
@@ -241,6 +242,45 @@ describe('playback reconciliation', () => {
 })
 
 describe('AudioPlayerManager', () => {
+  it('retries completion with the same identity and measured durations', async () => {
+    const { manager, player, mocks } = setup()
+    mocks.completePlayback.mockRejectedValueOnce(new Error('temporary'))
+    await manager.start('guild-1')
+    player.finish()
+    await vi.waitFor(() =>
+      expect(mocks.loggerInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'playback.complete' }),
+        expect.any(String),
+      ),
+    )
+    expect(mocks.completePlayback).toHaveBeenCalledTimes(2)
+    const [initial, repeated] = mocks.completePlayback.mock.calls
+    expect(initial?.[0]).toEqual(repeated?.[0])
+    expect(initial?.[0]).toMatchObject({
+      expectedDurationMs: 120_000,
+      playbackDurationMs: 120_000,
+    })
+    const completion = completePlaybackInputSchema.parse(initial?.[0])
+    expect(typeof completion.resolutionDurationMs).toBe('number')
+    expect(typeof completion.fetchLatencyMs).toBe('number')
+    expect(typeof completion.timeToFirstAudioMs).toBe('number')
+  })
+  it.each([
+    ['VOICE_DISCONNECTED', 'failed', 'player'],
+    ['BOT_SHUTDOWN', 'cancelled', 'intentional'],
+    ['PLAYBACK_CANCELLED', 'cancelled', 'intentional'],
+  ] as const)(
+    'reports %s distinctly and drains terminal telemetry',
+    async (reason, outcome, failureClass) => {
+      const { manager, mocks } = setup()
+      await manager.start('guild-1')
+      manager.destroyGuild('guild-1', reason)
+      await manager.flushTelemetry()
+      expect(mocks.reportPlaybackAttempt).toHaveBeenCalledWith(
+        expect.objectContaining({ errorCode: reason, outcome, failureClass, terminal: true }),
+      )
+    },
+  )
   it('does not claim playback without a ready voice connection', async () => {
     const { manager, mocks } = setup(false)
 

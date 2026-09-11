@@ -287,7 +287,7 @@ export class PlayerStateService {
           queueItem: claimed,
           startedAt: timestamp,
         })
-      } catch {
+      } catch (error) {
         this.logger.error(
           {
             event: 'playback',
@@ -299,6 +299,7 @@ export class PlayerStateService {
           },
           'Playback telemetry start failed',
         )
+        throw error
       }
 
       return {
@@ -446,6 +447,11 @@ export class PlayerStateService {
               ...(parsed.errorCode === undefined ? {} : { errorCode: parsed.errorCode }),
               ...(parsed.httpStatus === undefined ? {} : { httpStatus: parsed.httpStatus }),
               ...(parsed.durationMs === undefined ? {} : { durationMs: parsed.durationMs }),
+              resolutionDurationMs: parsed.resolutionDurationMs,
+              fetchLatencyMs: parsed.fetchLatencyMs,
+              timeToFirstAudioMs: parsed.timeToFirstAudioMs,
+              expectedDurationMs: parsed.expectedDurationMs,
+              progressAtFailureMs: parsed.progressAtFailureMs,
               ...(parsed.playbackDurationMs === undefined
                 ? {}
                 : { playbackDurationMs: parsed.playbackDurationMs }),
@@ -613,6 +619,22 @@ export class PlayerStateService {
         const record = playbackAttempt.report(parsed, item, this.now().toISOString())
         return { item, record, shouldLog: parsed.terminal && !existing?.terminal }
       })
+      if (
+        parsed.terminal &&
+        parsed.errorCode === 'PLAYBACK_SYNC_FAILED' &&
+        this.get().currentQueueItemId === parsed.queueItemId
+      ) {
+        this.completePlayback({
+          queueItemId: parsed.queueItemId,
+          playbackAttemptId: parsed.playbackAttemptId,
+          attempt: parsed.attempt,
+          outcome: 'failed',
+          errorCode: 'PLAYBACK_SYNC_FAILED',
+          failureStage: 'sync',
+          failureClass: 'sync',
+          sourceProvider: parsed.sourceProvider,
+        })
+      }
       if (result.shouldLog) {
         this.logger[parsed.outcome === 'failed' ? 'error' : 'info'](
           {

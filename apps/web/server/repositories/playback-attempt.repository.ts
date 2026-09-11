@@ -1,5 +1,5 @@
 import type { PlaybackAttemptReport, QueueItem } from '@waves/shared'
-import { and, asc, eq, gte, lte, sql, inArray } from 'drizzle-orm'
+import { and, asc, eq, sql, inArray } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 
 import type { WavesDatabaseExecutor } from '../db/client'
@@ -29,6 +29,11 @@ export interface PlaybackAttemptRecord {
   finishedAt: string | null
   durationMs: number | null
   playbackDurationMs: number | null
+  resolutionDurationMs: number | null
+  fetchLatencyMs: number | null
+  timeToFirstAudioMs: number | null
+  expectedDurationMs: number | null
+  progressAtFailureMs: number | null
   createdAt: string
   updatedAt: string
 }
@@ -99,6 +104,7 @@ export class PlaybackAttemptRepository {
         providerTrackId: input.queueItem.track.providerTrackId,
         trackTitle: input.queueItem.track.title,
         trackArtistsJson: JSON.stringify(input.queueItem.track.artists),
+        expectedDurationMs: input.queueItem.track.durationMs,
         startedAt: timestamp,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -144,6 +150,11 @@ export class PlaybackAttemptRepository {
         finishedAt: finished ?? current.finishedAt,
         durationMs: input.durationMs ?? current.durationMs,
         playbackDurationMs: input.playbackDurationMs ?? current.playbackDurationMs,
+        resolutionDurationMs: input.resolutionDurationMs ?? current.resolutionDurationMs,
+        fetchLatencyMs: input.fetchLatencyMs ?? current.fetchLatencyMs,
+        timeToFirstAudioMs: input.timeToFirstAudioMs ?? current.timeToFirstAudioMs,
+        expectedDurationMs: input.expectedDurationMs ?? current.expectedDurationMs,
+        progressAtFailureMs: input.progressAtFailureMs ?? current.progressAtFailureMs,
         updatedAt: now,
       })
       .where(eq(playbackAttempts.id, current.id))
@@ -180,13 +191,41 @@ export class PlaybackAttemptRepository {
   }
 
   listSince(from: string, to: string): PlaybackAttemptRecord[] {
+    const records: PlaybackAttemptRecord[] = []
+    let cursor: PlaybackAttemptRecord | undefined
+    // Select whole logical executions by first start, then keyset-page physical attempts.
+    // This keeps retries crossing a period boundary together and never drops recent data.
+    for (;;) {
+      const rows = this.db
+        .select()
+        .from(playbackAttempts)
+        .where(
+          and(
+            sql`${playbackAttempts.playbackAttemptId} in (select playback_attempt_id from playback_attempts group by playback_attempt_id having min(started_at) >= ${from} and min(started_at) < ${to})`,
+            cursor
+              ? sql`(${playbackAttempts.playbackAttemptId} > ${cursor.playbackAttemptId} or (${playbackAttempts.playbackAttemptId} = ${cursor.playbackAttemptId} and ${playbackAttempts.attemptNumber} > ${cursor.attemptNumber}))`
+              : undefined,
+          ),
+        )
+        .orderBy(asc(playbackAttempts.playbackAttemptId), asc(playbackAttempts.attemptNumber))
+        .limit(1000)
+        .all()
+        .map(mapRow)
+      records.push(...rows)
+      if (rows.length < 1000) return records
+      cursor = rows.at(-1)
+    }
+  }
+
+  deleteCompletedBefore(cutoff: string): number {
+    // Delete complete logical groups only. Keep recent retries and incomplete groups intact.
     return this.db
-      .select()
-      .from(playbackAttempts)
-      .where(and(gte(playbackAttempts.startedAt, from), lte(playbackAttempts.startedAt, to)))
-      .orderBy(asc(playbackAttempts.startedAt))
-      .limit(10_000)
-      .all()
-      .map(mapRow)
+      .delete(playbackAttempts)
+      .where(
+        sql`${playbackAttempts.playbackAttemptId} in
+      (select playback_attempt_id from playback_attempts group by playback_attempt_id
+       having max(updated_at) < ${cutoff} and max(terminal) = 1)`,
+      )
+      .run().changes
   }
 }

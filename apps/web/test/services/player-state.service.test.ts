@@ -77,6 +77,26 @@ afterEach(() => {
 })
 
 describe('PlayerStateService', () => {
+  it('releases the queue when exhausted completion delivery is reported later', () => {
+    const { queueRepository, service } = setup()
+    queueRepository.insert(item('first', 0))
+    queueRepository.insert(item('second', 1))
+    service.voiceConnected('guild-1', 'Waves', 'voice-1', 'voice')
+    const claim = service.claimPlayback()
+    const report = {
+      queueItemId: 'first',
+      playbackAttemptId: claim.playbackAttemptId!,
+      attempt: 1,
+      outcome: 'failed' as const,
+      terminal: true,
+      errorCode: 'PLAYBACK_SYNC_FAILED',
+    }
+    service.reportPlaybackAttempt(report)
+    expect(service.get().currentQueueItemId).toBe('second')
+    service.updateProgress({ queueItemId: 'second', progressMs: 20_000 })
+    service.reportPlaybackAttempt(report)
+    expect(service.get().progressMs).toBe(20_000)
+  })
   it('does not reset the next track or create attempts on duplicate completion', () => {
     const { queueRepository, service, unitOfWork } = setup()
     queueRepository.insert(item('first', 0))

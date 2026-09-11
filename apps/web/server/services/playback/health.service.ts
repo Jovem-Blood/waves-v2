@@ -8,6 +8,7 @@ import type {
   PlaybackAttemptRecord,
   PlaybackAttemptRepository,
 } from '../../repositories/playback-attempt.repository'
+import { PLAYBACK_RETENTION_DAYS, PLAYBACK_STALE_AFTER_MS } from './maintenance.service'
 
 interface LogicalPlayback {
   attempts: PlaybackAttemptRecord[]
@@ -36,6 +37,23 @@ function increment(map: Map<string, number>, key: string, amount = 1): void {
   map.set(key, (map.get(key) ?? 0) + amount)
 }
 
+function percentiles(values: Array<number | null>) {
+  const samples = values.filter((value): value is number => value !== null).sort((a, b) => a - b)
+  return {
+    samples: samples.length,
+    p50: samples.length >= 5 ? samples[Math.ceil(samples.length * 0.5) - 1] : null,
+    p95: samples.length >= 20 ? samples[Math.ceil(samples.length * 0.95) - 1] : null,
+  }
+}
+
+function recovered(execution: LogicalPlayback): boolean {
+  return (
+    execution.final.terminal &&
+    execution.final.outcome === 'played' &&
+    execution.attempts.some((attempt) => attempt.outcome === 'failed')
+  )
+}
+
 export class PlaybackHealthService {
   constructor(
     private readonly repository: PlaybackAttemptRepository,
@@ -52,9 +70,15 @@ export class PlaybackHealthService {
     const fromIso = from.toISOString()
     const toIso = to.toISOString()
     const records = this.repository.listSince(fromIso, toIso)
-    const executions = groupByPlaybackAttempt(records).filter(({ final }) => {
+    const executions = groupByPlaybackAttempt(records).filter(({ final, attempts }) => {
       if (query.sourceProvider && final.sourceProvider !== query.sourceProvider) return false
-      if (query.errorCode && final.errorCode !== query.errorCode) return false
+      if (
+        query.errorCode &&
+        (query.errorScope === 'encountered'
+          ? !attempts.some((attempt) => attempt.errorCode === query.errorCode)
+          : !final.terminal || final.errorCode !== query.errorCode)
+      )
+        return false
       return true
     })
     const plays = executions.filter(
@@ -67,7 +91,16 @@ export class PlaybackHealthService {
     )
 
     const errors = new Map<string, { failures: number; lastOccurrence: string }>()
-    const providers = new Map<string, { failures: number; lastOccurrence: string }>()
+    const providers = new Map<
+      string,
+      {
+        executions: number
+        successes: number
+        failures: number
+        recoveredRetries: number
+        lastOccurrence: string
+      }
+    >()
     const tracks = new Map<
       string,
       {
@@ -93,18 +126,41 @@ export class PlaybackHealthService {
         lastOccurrence: lastOccurrence(final),
         playbackAttemptId: final.playbackAttemptId,
       }
-      track.executions += final.outcome === 'played' || final.outcome === 'failed' ? 1 : 0
-      track.failures += final.outcome === 'failed' ? 1 : 0
+      track.executions +=
+        final.terminal && (final.outcome === 'played' || final.outcome === 'failed') ? 1 : 0
+      track.failures += final.terminal && final.outcome === 'failed' ? 1 : 0
       track.retries += Math.max(0, attempts.length - 1)
-      if (lastOccurrence(final) > track.lastOccurrence) track.lastOccurrence = lastOccurrence(final)
-      track.playbackAttemptId = final.playbackAttemptId
-      for (const attempt of attempts) {
-        if (attempt.outcome === 'failed' && attempt.errorCode)
-          increment(track.errors, attempt.errorCode)
+      if (
+        final.terminal &&
+        final.outcome === 'failed' &&
+        (track.failures === 1 || lastOccurrence(final) >= track.lastOccurrence)
+      ) {
+        track.lastOccurrence = lastOccurrence(final)
+        track.playbackAttemptId = final.playbackAttemptId
       }
+      if (final.terminal && final.outcome === 'failed' && final.errorCode)
+        increment(track.errors, final.errorCode)
       tracks.set(trackKey, track)
 
-      if (final.outcome === 'failed') {
+      if (final.sourceProvider) {
+        const entry = providers.get(final.sourceProvider) ?? {
+          executions: 0,
+          successes: 0,
+          failures: 0,
+          recoveredRetries: 0,
+          lastOccurrence: lastOccurrence(final),
+        }
+        if (final.terminal && (final.outcome === 'played' || final.outcome === 'failed'))
+          entry.executions++
+        if (final.terminal && final.outcome === 'played') entry.successes++
+        if (final.terminal && final.outcome === 'failed') entry.failures++
+        if (recovered(execution)) entry.recoveredRetries++
+        if (lastOccurrence(final) > entry.lastOccurrence)
+          entry.lastOccurrence = lastOccurrence(final)
+        providers.set(final.sourceProvider, entry)
+      }
+
+      if (final.terminal && final.outcome === 'failed') {
         if (final.errorCode) {
           const entry = errors.get(final.errorCode) ?? {
             failures: 0,
@@ -114,16 +170,6 @@ export class PlaybackHealthService {
           if (lastOccurrence(final) > entry.lastOccurrence)
             entry.lastOccurrence = lastOccurrence(final)
           errors.set(final.errorCode, entry)
-        }
-        if (final.sourceProvider) {
-          const entry = providers.get(final.sourceProvider) ?? {
-            failures: 0,
-            lastOccurrence: lastOccurrence(final),
-          }
-          entry.failures += 1
-          if (lastOccurrence(final) > entry.lastOccurrence)
-            entry.lastOccurrence = lastOccurrence(final)
-          providers.set(final.sourceProvider, entry)
         }
       }
     }
@@ -163,16 +209,75 @@ export class PlaybackHealthService {
         failureStage: final.failureStage,
         failureClass: final.failureClass,
         httpStatus: final.httpStatus,
+        resolutionDurationMs: final.resolutionDurationMs,
+        fetchLatencyMs: final.fetchLatencyMs,
+        timeToFirstAudioMs: final.timeToFirstAudioMs,
+        playbackDurationMs: final.playbackDurationMs,
+        expectedDurationMs: final.expectedDurationMs,
+        progressAtFailureMs: final.progressAtFailureMs,
         occurredAt: lastOccurrence(final),
       }))
 
     return playbackHealthResponseSchema.parse({
       period: { from: fromIso, to: toIso },
+      availableProviders: [
+        ...new Set(
+          records.flatMap((record) => (record.sourceProvider ? [record.sourceProvider] : [])),
+        ),
+      ].sort(),
+      availableErrorCodes: [
+        ...new Set(
+          records.flatMap((record) =>
+            record.terminal && record.errorCode ? [record.errorCode] : [],
+          ),
+        ),
+      ].sort(),
+      dataCompleteness: {
+        truncated: false,
+        retentionDays: PLAYBACK_RETENTION_DAYS,
+        retentionMayApply:
+          from.getTime() < this.now().getTime() - PLAYBACK_RETENTION_DAYS * 86_400_000,
+        incompleteExecutions: executions.filter(({ final }) => !final.terminal).length,
+        telemetryFailures: executions.filter(({ final }) =>
+          [
+            'PLAYBACK_TELEMETRY_FAILED',
+            'PLAYBACK_SYNC_FAILED',
+            'PLAYBACK_ORPHANED',
+            'BOT_RESTARTED',
+          ].includes(final.errorCode ?? ''),
+        ).length,
+        diagnosticCode: executions.some(({ final }) =>
+          [
+            'PLAYBACK_TELEMETRY_FAILED',
+            'PLAYBACK_SYNC_FAILED',
+            'PLAYBACK_ORPHANED',
+            'BOT_RESTARTED',
+          ].includes(final.errorCode ?? ''),
+        )
+          ? 'PLAYBACK_TELEMETRY_FAILED'
+          : null,
+      },
+      latency: {
+        resolution: percentiles(
+          executions.flatMap(({ attempts }) =>
+            attempts.map((attempt) => attempt.resolutionDurationMs),
+          ),
+        ),
+        fetch: percentiles(
+          executions.flatMap(({ attempts }) => attempts.map((attempt) => attempt.fetchLatencyMs)),
+        ),
+        firstAudio: percentiles(
+          executions.flatMap(({ attempts }) =>
+            attempts.map((attempt) => attempt.timeToFirstAudioMs),
+          ),
+        ),
+      },
       summary: {
         plays: plays.length,
         successes: successes.length,
         failures: failures.length,
         cancelled: cancelled.length,
+        recoveredRetries: executions.filter(recovered).length,
         retries: executions.reduce(
           (total, execution) => total + Math.max(0, execution.attempts.length - 1),
           0,
@@ -181,7 +286,8 @@ export class PlaybackHealthService {
         incomplete: executions.filter(({ final }) => !final.terminal).length,
         stale: executions.filter(
           ({ final }) =>
-            !final.terminal && new Date(final.updatedAt).getTime() < this.now().getTime() - 120_000,
+            !final.terminal &&
+            new Date(final.updatedAt).getTime() < this.now().getTime() - PLAYBACK_STALE_AFTER_MS,
         ).length,
         orphaned: executions.filter(({ final }) =>
           ['PLAYBACK_ORPHANED', 'BOT_RESTARTED'].includes(final.errorCode ?? ''),
@@ -194,7 +300,11 @@ export class PlaybackHealthService {
         .map(([errorCode, value]) => ({ errorCode, ...value })),
       providers: [...providers.entries()]
         .sort((left, right) => right[1].failures - left[1].failures)
-        .map(([sourceProvider, value]) => ({ sourceProvider, ...value })),
+        .map(([sourceProvider, value]) => ({
+          sourceProvider,
+          ...value,
+          failureRate: value.executions ? value.failures / value.executions : 0,
+        })),
       problematicTracks,
       recentFailures,
     })

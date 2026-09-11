@@ -22,6 +22,10 @@ function percentage(value: number) {
   return `${Math.round(value * 100)}%`
 }
 
+function milliseconds(value: number | null | undefined) {
+  return value == null ? '—' : `${Math.round(value)} ms`
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
     new Date(value),
@@ -46,13 +50,14 @@ async function copyAttempt(id: string) {
           <span>Período</span>
           <select
             :value="days"
+            :disabled="loading"
             @change="emit('daysChange', ($event.target as HTMLSelectElement).value)"
           >
             <option value="7">Últimos 7 dias</option>
             <option value="30">Últimos 30 dias</option>
           </select>
         </label>
-        <button class="health-refresh" type="button" @click="emit('retry')">
+        <button class="health-refresh" type="button" :disabled="loading" @click="emit('retry')">
           <RotateCcw :size="16" aria-hidden="true" />
           Atualizar
         </button>
@@ -75,30 +80,36 @@ async function copyAttempt(id: string) {
     <template v-else-if="data">
       <div class="health-filters" aria-label="Filtros de playback">
         <label>
-          <span>Source provider</span>
+          <span>Provedor de áudio</span>
           <select
             :value="sourceProvider"
             @change="emit('sourceProviderChange', ($event.target as HTMLSelectElement).value)"
           >
             <option value="">Todos</option>
             <option
-              v-for="provider in data.providers"
-              :key="provider.sourceProvider"
-              :value="provider.sourceProvider"
+              v-for="provider in data.availableProviders ??
+              data.providers.map((entry) => entry.sourceProvider)"
+              :key="provider"
+              :value="provider"
             >
-              {{ provider.sourceProvider }}
+              {{ provider }}
             </option>
           </select>
         </label>
         <label>
-          <span>Error code</span>
+          <span>Erro terminal</span>
           <select
             :value="errorCode"
             @change="emit('errorCodeChange', ($event.target as HTMLSelectElement).value)"
           >
             <option value="">Todos</option>
-            <option v-for="entry in data.topErrors" :key="entry.errorCode" :value="entry.errorCode">
-              {{ entry.errorCode }}
+            <option
+              v-for="code in data.availableErrorCodes ??
+              data.topErrors.map((entry) => entry.errorCode)"
+              :key="code"
+              :value="code"
+            >
+              {{ code }}
             </option>
           </select>
         </label>
@@ -135,6 +146,58 @@ async function copyAttempt(id: string) {
         intencionais ficam fora dessa taxa. Tentativas sem heartbeat por 2 minutos são
         reconciliadas; reproduções pausadas mantêm heartbeat.
       </p>
+
+      <p v-if="data.dataCompleteness" class="health-count" role="status">
+        {{
+          data.dataCompleteness.truncated ? 'Consulta parcial.' : 'Consulta sem corte de registros.'
+        }}
+        {{ data.summary.recoveredRetries }} execuções recuperadas por retry. Retenção de telemetria:
+        {{ data.dataCompleteness.retentionDays }} dias.
+        <span v-if="data.dataCompleteness.retentionMayApply"
+          >O período inclui dados que podem já ter expirado.</span
+        >
+        <span v-if="data.dataCompleteness.diagnosticCode"
+          >Há lacunas de telemetria detectadas ({{
+            data.dataCompleteness.telemetryFailures
+          }}
+          execuções).</span
+        >
+      </p>
+
+      <section
+        v-if="data.providers.length"
+        class="recent-failures"
+        aria-labelledby="provider-health-title"
+      >
+        <h2 id="provider-health-title">Saúde por provedor</h2>
+        <ul>
+          <li v-for="provider in data.providers" :key="provider.sourceProvider">
+            <strong>{{ provider.sourceProvider }}</strong>
+            <span>{{ provider.successes }} sucessos / {{ provider.executions }} execuções</span>
+            <span>{{ provider.failures }} falhas ({{ percentage(provider.failureRate) }})</span>
+            <span>{{ provider.recoveredRetries }} recuperadas</span>
+          </li>
+        </ul>
+      </section>
+
+      <section v-if="data.latency" class="recent-failures" aria-labelledby="latency-title">
+        <h2 id="latency-title">Latência das tentativas</h2>
+        <ul>
+          <li v-for="(metric, key) in data.latency" :key="key">
+            <strong>{{
+              { resolution: 'Resolução', fetch: 'Preparo do áudio', firstAudio: 'Primeiro áudio' }[
+                key
+              ]
+            }}</strong>
+            <span>P50: {{ milliseconds(metric.p50) }}</span
+            ><span>P95: {{ milliseconds(metric.p95) }}</span>
+            <span>{{ metric.samples }} amostras</span>
+          </li>
+        </ul>
+        <p class="health-count">
+          P50 exige 5 amostras; P95 exige 20. “—” significa dado indisponível, não zero.
+        </p>
+      </section>
 
       <div v-if="!data.problematicTracks.length" class="state-message" aria-live="polite">
         <Activity :size="20" aria-hidden="true" />
@@ -210,6 +273,14 @@ async function copyAttempt(id: string) {
               {{ failure.failureStage ?? 'desconhecida' }} · Classe:
               {{ failure.failureClass ?? 'desconhecida' }} · HTTP: {{ failure.httpStatus ?? '—' }}
             </span>
+            <span class="failure-context">
+              Resolução: {{ milliseconds(failure.resolutionDurationMs) }} · Preparo:
+              {{ milliseconds(failure.fetchLatencyMs) }} · Primeiro áudio:
+              {{ milliseconds(failure.timeToFirstAudioMs) }} · Reprodução:
+              {{ milliseconds(failure.playbackDurationMs) }} /
+              {{ milliseconds(failure.expectedDurationMs) }} · Progresso na falha:
+              {{ milliseconds(failure.progressAtFailureMs) }}
+            </span>
             <time :datetime="failure.occurredAt">{{ formatDate(failure.occurredAt) }}</time>
             <button type="button" @click="copyAttempt(failure.playbackAttemptId)">
               <Clipboard :size="14" aria-hidden="true" />
@@ -276,7 +347,7 @@ async function copyAttempt(id: string) {
 }
 select,
 .health-refresh {
-  min-height: 42px;
+  min-height: 48px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
@@ -293,6 +364,19 @@ select,
 }
 .health-refresh:hover {
   border-color: var(--border-strong);
+}
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .health-filters {
   display: flex;
@@ -395,8 +479,8 @@ code {
 .attempt-copy,
 .recent-failures button {
   display: inline-flex;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 48px;
+  min-height: 48px;
   align-items: center;
   justify-content: center;
   gap: 5px;
@@ -425,6 +509,10 @@ code {
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 11px;
+}
+.recent-failures h2 {
+  font-size: 18px;
+  margin: 0;
 }
 .recent-failures li:first-child {
   border-top: 0;
@@ -455,7 +543,7 @@ code {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
-@media (max-width: 47.99rem) {
+@media (max-width: 63.99rem) {
   .health-table-head {
     display: none;
   }

@@ -46,6 +46,10 @@ export function classifyPlaybackError(error: unknown): {
   errorName?: string
 } {
   if (error instanceof SafePlaybackError) {
+    if (error.code === 'SOURCE_HTTP_STATUS') {
+      if (error.httpStatus === 429) return { errorCode: 'SOURCE_RATE_LIMITED', httpStatus: 429 }
+      if (error.httpStatus === 401) return { errorCode: 'SOURCE_AUTH_REQUIRED', httpStatus: 401 }
+    }
     return {
       errorCode: error.code,
       ...(error.httpStatus === undefined ? {} : { httpStatus: error.httpStatus }),

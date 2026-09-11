@@ -200,6 +200,9 @@ rotates five 10 MiB files per service. See
 [`docs/observability.md`](docs/observability.md) for fields and diagnostic
 queries.
 
+[Playback Health](docs/playback-health.md) documents retries, reconciliation,
+metric definitions and the 90-day telemetry retention policy.
+
 ## Local development
 
 Install dependencies and apply the migrations:

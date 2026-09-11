@@ -85,6 +85,13 @@
       "when": 1787696000000,
       "tag": "0011_remove_audius_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789159874814,
+      "tag": "0012_playback_timings",
+      "breakpoints": true
     }
   ]
 }

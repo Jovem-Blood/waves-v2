@@ -43,6 +43,12 @@ interface CurrentPlayback {
   failureClass?: PlaybackAttemptReport['failureClass']
   errorCode?: string
   httpStatus?: number
+  startedAt: number
+  resolutionDurationMs?: number
+  fetchLatencyMs?: number
+  timeToFirstAudioMs?: number
+  playbackDurationMs?: number
+  resource?: { playbackDuration: number }
 }
 
 interface PlaybackSession {
@@ -84,6 +90,21 @@ export class AudioPlayerManager implements PlaybackManager {
 
   async flushTelemetry(): Promise<void> {
     await Promise.all([...this.deliveries])
+  }
+
+  private timingFields(current: CurrentPlayback, failed: boolean) {
+    const playbackDurationMs = current.resource?.playbackDuration ?? current.playbackDurationMs
+    return {
+      durationMs: Math.max(0, Date.now() - current.startedAt),
+      resolutionDurationMs: current.resolutionDurationMs,
+      fetchLatencyMs: current.fetchLatencyMs,
+      timeToFirstAudioMs: current.timeToFirstAudioMs,
+      expectedDurationMs: current.item.track.durationMs,
+      playbackDurationMs,
+      ...(failed && playbackDurationMs !== undefined
+        ? { progressAtFailureMs: playbackDurationMs }
+        : {}),
+    }
   }
 
   async start(guildId: string): Promise<StartPlaybackResult> {
@@ -285,6 +306,7 @@ export class AudioPlayerManager implements PlaybackManager {
     if (current) {
       void this.reportAttempt({
         queueItemId: current.item.id,
+        ...this.timingFields(current, reason === 'VOICE_DISCONNECTED'),
         playbackAttemptId: current.playbackAttemptId,
         attempt: current.retries + 1,
         outcome: reason === 'VOICE_DISCONNECTED' ? 'failed' : 'cancelled',
@@ -324,6 +346,7 @@ export class AudioPlayerManager implements PlaybackManager {
     if (current) {
       void this.reportAttempt({
         queueItemId: current.item.id,
+        ...this.timingFields(current, false),
         playbackAttemptId: current.playbackAttemptId,
         attempt: current.retries + 1,
         outcome: 'skipped',
@@ -414,6 +437,7 @@ export class AudioPlayerManager implements PlaybackManager {
       playbackAttemptId,
       abortController,
       provider: 'youtube_music',
+      startedAt: Date.now(),
     }
     session.current = current
     const logger = playbackLogger(this.logger, {
@@ -479,7 +503,9 @@ export class AudioPlayerManager implements PlaybackManager {
         'Audio source resolution completed',
       )
       current.provider = resolved.source.provider
+      current.resolutionDurationMs = Date.now() - resolveStartedAt
       current.sourceIdentifier = resolved.source.sourceIdentifier
+      const fetchStartedAt = Date.now()
       const resource = await this.runtime.createResource(
         resolved.source.streamUrl,
         resolved.queueItemId,
@@ -492,6 +518,8 @@ export class AudioPlayerManager implements PlaybackManager {
           signal: abortController.signal,
         },
       )
+      current.fetchLatencyMs = Date.now() - fetchStartedAt
+      current.resource = resource
       if (abortController.signal.aborted || session.current !== current) {
         const error = new SafePlaybackError('SOURCE_FETCH_CANCELLED')
         logger.info(
@@ -534,6 +562,13 @@ export class AudioPlayerManager implements PlaybackManager {
         return
       }
       abortController.abort()
+      if (current.resolutionDurationMs === undefined)
+        current.resolutionDurationMs = Date.now() - current.startedAt
+      else
+        current.fetchLatencyMs ??= Math.max(
+          0,
+          Date.now() - current.startedAt - current.resolutionDurationMs,
+        )
       const classified = classifyPlaybackError(error)
       logger.warn(
         {
@@ -554,6 +589,7 @@ export class AudioPlayerManager implements PlaybackManager {
       else current.httpStatus = classified.httpStatus
       await this.reportAttempt({
         queueItemId: item.id,
+        ...this.timingFields(current, true),
         playbackAttemptId,
         attempt,
         outcome: 'failed',
@@ -565,6 +601,7 @@ export class AudioPlayerManager implements PlaybackManager {
         sourceProvider: current.provider,
         sourceIdentifier: current.sourceIdentifier,
       })
+      if (this.sessions.get(guildId) !== session || session.current !== current) return
       if (retries < 1) {
         await this.playItem(guildId, session, item, retries + 1, playbackAttemptId)
         return
@@ -586,6 +623,7 @@ export class AudioPlayerManager implements PlaybackManager {
         : nextState.status === AudioPlayerStatus.Playing
           ? nextState.resource.playbackDuration
           : undefined
+    if (current && playbackDurationMs !== undefined) current.playbackDurationMs = playbackDurationMs
     this.logger.debug(
       {
         operation: 'audio_player.state_change',
@@ -615,6 +653,16 @@ export class AudioPlayerManager implements PlaybackManager {
       previousState.status !== AudioPlayerStatus.Playing &&
       current
     ) {
+      current.timeToFirstAudioMs ??= Date.now() - current.startedAt
+      void this.reportAttempt({
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        attempt: current.retries + 1,
+        outcome: 'pending',
+        terminal: false,
+        sourceProvider: current.provider,
+        ...this.timingFields(current, false),
+      })
       this.logger.info(
         {
           operation: 'playback.lifecycle',
@@ -694,6 +742,9 @@ export class AudioPlayerManager implements PlaybackManager {
       return
     }
 
+    const classified = classifyPlaybackError(error)
+    const errorCode = classified.errorCode === 'UNKNOWN' ? 'PLAYER_ERROR' : classified.errorCode
+
     this.logger.warn(
       {
         operation: 'audio_player.error',
@@ -703,16 +754,17 @@ export class AudioPlayerManager implements PlaybackManager {
         attempt: current.retries + 1,
         outcome: current.retries < 1 ? 'refreshing' : 'failing',
         ...classifyPlaybackError(error),
-        errorCode: 'PLAYER_ERROR',
-        failureStage: 'player',
-        failureClass: 'player',
+        errorCode,
+        failureStage: playbackFailureStage(errorCode, 'player'),
+        failureClass: playbackFailureClass(errorCode),
         err: error,
       },
       'Audio player error',
     )
-    current.failureStage = 'player'
-    current.failureClass = 'player'
-    current.errorCode = 'PLAYER_ERROR'
+    current.failureStage = playbackFailureStage(errorCode, 'player')
+    current.failureClass = playbackFailureClass(errorCode)
+    current.errorCode = errorCode
+    if (classified.httpStatus !== undefined) current.httpStatus = classified.httpStatus
     await this.retryOrFail(guildId, session, current)
   }
 
@@ -726,6 +778,7 @@ export class AudioPlayerManager implements PlaybackManager {
     session.current = undefined
     await this.reportAttempt({
       queueItemId: current.item.id,
+      ...this.timingFields(current, true),
       playbackAttemptId: current.playbackAttemptId,
       attempt: current.retries + 1,
       outcome: 'failed',
@@ -735,6 +788,7 @@ export class AudioPlayerManager implements PlaybackManager {
       failureClass: current.failureClass,
       errorCode: current.errorCode,
     })
+    if (this.sessions.get(guildId) !== session || session.current) return
     if (current.retries < 1) {
       session.settling = false
       await this.playItem(
@@ -756,6 +810,7 @@ export class AudioPlayerManager implements PlaybackManager {
     outcome: 'played' | 'failed',
   ): Promise<void> {
     const nextPlaybackAttemptId = randomUUID()
+    const timings = this.timingFields(current, outcome === 'failed')
     session.settling = true
     session.current = undefined
     try {
@@ -769,6 +824,7 @@ export class AudioPlayerManager implements PlaybackManager {
         () =>
           this.api.completePlayback({
             queueItemId: current.item.id,
+            ...timings,
             outcome,
             playbackAttemptId: current.playbackAttemptId,
             attempt: current.retries + 1,

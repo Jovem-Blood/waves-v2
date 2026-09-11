@@ -2,9 +2,11 @@ import type { BotHeartbeatInput } from '@waves/shared'
 import type { UnitOfWork } from '../../repositories/unit-of-work'
 
 export const PLAYBACK_STALE_AFTER_MS = 120_000
+export const PLAYBACK_RETENTION_DAYS = 90
 
 /** Leases come from the bot's heartbeat, including paused/resolving playback. */
 export class PlaybackMaintenanceService {
+  private lastCleanupAt = 0
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly now: () => Date = () => new Date(),
@@ -15,7 +17,7 @@ export class PlaybackMaintenanceService {
     const timestamp = now.toISOString()
     const cutoff = new Date(now.getTime() - PLAYBACK_STALE_AFTER_MS).toISOString()
     const active = new Set(heartbeat?.activePlaybackAttemptIds ?? [])
-    return this.unitOfWork.run(({ playbackAttempt, queue, playerState }) => {
+    const count = this.unitOfWork.run(({ playbackAttempt, queue, playerState }) => {
       playbackAttempt.touchActive([...active], timestamp)
       let count = 0
       for (const record of playbackAttempt.listIncomplete()) {
@@ -64,5 +66,14 @@ export class PlaybackMaintenanceService {
       }
       return count
     })
+    if (now.getTime() - this.lastCleanupAt >= 3_600_000) {
+      this.unitOfWork.run(({ playbackAttempt }) =>
+        playbackAttempt.deleteCompletedBefore(
+          new Date(now.getTime() - PLAYBACK_RETENTION_DAYS * 86_400_000).toISOString(),
+        ),
+      )
+      this.lastCleanupAt = now.getTime()
+    }
+    return count
   }
 }

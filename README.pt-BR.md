@@ -202,6 +202,9 @@ o Docker rotaciona cinco arquivos de 10 MiB por serviço. Consulte
 [`docs/observability.md`](docs/observability.md) para ver os campos e queries de
 diagnóstico.
 
+[Playback Health](docs/playback-health.pt-BR.md) documenta retries, reconciliação,
+definição das métricas e retenção de telemetria por 90 dias.
+
 ## Desenvolvimento local
 
 Instale as dependências e aplique as migrações:

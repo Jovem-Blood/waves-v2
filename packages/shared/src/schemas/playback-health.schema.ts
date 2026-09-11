@@ -22,6 +22,18 @@ export const playbackHealthQuerySchema = z
     to: z.iso.datetime({ offset: true }).optional(),
     sourceProvider: z.string().trim().min(1).optional(),
     errorCode: z.string().trim().min(1).optional(),
+    errorScope: z.enum(['terminal', 'encountered']).optional(),
+  })
+  .strict()
+  .refine((query) => !query.from || !query.to || new Date(query.from) < new Date(query.to), {
+    message: 'from must precede to',
+  })
+
+const latencySchema = z
+  .object({
+    samples: z.number().int().nonnegative(),
+    p50: z.number().nonnegative().nullable(),
+    p95: z.number().nonnegative().nullable(),
   })
   .strict()
 
@@ -40,6 +52,7 @@ export const playbackHealthResponseSchema = z
         failures: z.number().int().nonnegative(),
         cancelled: z.number().int().nonnegative(),
         retries: z.number().int().nonnegative(),
+        recoveredRetries: z.number().int().nonnegative().default(0),
         successRate: z.number().min(0).max(1),
         incomplete: z.number().int().nonnegative().default(0),
         stale: z.number().int().nonnegative().default(0),
@@ -60,12 +73,33 @@ export const playbackHealthResponseSchema = z
       z
         .object({
           sourceProvider: z.string(),
+          executions: z.number().int().nonnegative().default(0),
+          successes: z.number().int().nonnegative().default(0),
+          recoveredRetries: z.number().int().nonnegative().default(0),
+          failureRate: z.number().min(0).max(1).default(0),
           failures: z.number().int().nonnegative(),
           lastOccurrence: z.string(),
         })
         .strict(),
     ),
     problematicTracks: z.array(playbackHealthTrackSchema),
+    availableProviders: z.array(z.string()).optional(),
+    availableErrorCodes: z.array(z.string()).optional(),
+    dataCompleteness: z
+      .object({
+        truncated: z.boolean(),
+        retentionDays: z.number().int().positive(),
+        retentionMayApply: z.boolean(),
+        incompleteExecutions: z.number().int().nonnegative(),
+        telemetryFailures: z.number().int().nonnegative(),
+        diagnosticCode: z.literal('PLAYBACK_TELEMETRY_FAILED').nullable(),
+      })
+      .strict()
+      .optional(),
+    latency: z
+      .object({ resolution: latencySchema, fetch: latencySchema, firstAudio: latencySchema })
+      .strict()
+      .optional(),
     recentFailures: z.array(
       z
         .object({
@@ -74,6 +108,12 @@ export const playbackHealthResponseSchema = z
           failureStage: z.string().nullable().default(null),
           failureClass: z.string().nullable().default(null),
           httpStatus: z.number().int().nullable().default(null),
+          resolutionDurationMs: z.number().nullable().default(null),
+          fetchLatencyMs: z.number().nullable().default(null),
+          timeToFirstAudioMs: z.number().nullable().default(null),
+          playbackDurationMs: z.number().nullable().default(null),
+          expectedDurationMs: z.number().nullable().default(null),
+          progressAtFailureMs: z.number().nullable().default(null),
           trackTitle: z.string(),
           trackArtists: z.string(),
           sourceProvider: z.string().nullable(),
