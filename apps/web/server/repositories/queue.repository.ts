@@ -147,6 +147,18 @@ export class QueueRepository {
       .map(mapJoinedRow)
   }
 
+  listRecentTerminal(limit: number): QueueItem[] {
+    return this.db
+      .select({ item: queueItems, user: users })
+      .from(queueItems)
+      .leftJoin(users, eq(queueItems.requestedByUserId, users.id))
+      .where(inArray(queueItems.status, ['played', 'failed']))
+      .orderBy(desc(queueItems.updatedAt))
+      .limit(limit)
+      .all()
+      .map(mapJoinedRow)
+  }
+
   listHistory({ cursor, limit }: { cursor?: HistoryCursor; limit: number }): QueueItem[] {
     const cursorPredicate = cursor
       ? or(

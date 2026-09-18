@@ -168,6 +168,7 @@ export const autoplaySuggestions = sqliteTable(
       enum: ['similar', 'adjacent', 'explore', 'fallback'],
     }).notNull(),
     sourceTag: text('source_tag'),
+    seedTrackKey: text('seed_track_key'),
   },
   (table) => [
     uniqueIndex('autoplay_suggestions_position_unique').on(table.position),
@@ -201,6 +202,35 @@ export const autoplayCandidates = sqliteTable(
     check('autoplay_candidates_position_range', sql`${table.position} between 0 and 29`),
     check('autoplay_candidates_score_range', sql`${table.score} between -1000 and 1000`),
     check('autoplay_candidates_base_score_range', sql`${table.baseScore} between -1000 and 1000`),
+  ],
+)
+
+export const trackPlaybackHealth = sqliteTable(
+  'track_playback_health',
+  {
+    trackKey: text('track_key').primaryKey(),
+    provider: text('provider').notNull(),
+    providerTrackId: text('provider_track_id').notNull(),
+    trackId: text('track_id').notNull(),
+    title: text('title').notNull(),
+    artistsJson: text('artists_json').notNull(),
+    successes: integer('successes').notNull().default(0),
+    failures: integer('failures').notNull().default(0),
+    contentFailures: integer('content_failures').notNull().default(0),
+    lastErrorCode: text('last_error_code'),
+    lastFailureClass: text('last_failure_class'),
+    lastFailureStage: text('last_failure_stage'),
+    lastFailedAt: text('last_failed_at'),
+    lastPlayedAt: text('last_played_at'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('track_playback_health_identity_unique').on(table.provider, table.providerTrackId),
+    index('track_playback_health_failures_idx').on(table.failures, table.lastFailedAt),
+    check(
+      'track_playback_health_counts_nonnegative',
+      sql`${table.successes} >= 0 and ${table.failures} >= 0 and ${table.contentFailures} >= 0`,
+    ),
   ],
 )
 

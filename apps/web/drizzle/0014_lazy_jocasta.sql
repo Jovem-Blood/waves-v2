@@ -1,0 +1,1 @@
+ALTER TABLE `autoplay_suggestions` ADD `seed_track_key` text;

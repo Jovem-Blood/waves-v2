@@ -138,6 +138,9 @@ describe('PlayerStateService', () => {
     expect(
       unitOfWork.run(({ playbackAttempt }) => playbackAttempt.find('duplicate', 1)),
     ).toBeUndefined()
+    expect(
+      unitOfWork.run(({ trackPlaybackHealth }) => trackPlaybackHealth.get('spotify:first')),
+    ).toMatchObject({ successes: 1, failures: 0 })
   })
   it('returns the initial logical player state', () => {
     const { service } = setup()

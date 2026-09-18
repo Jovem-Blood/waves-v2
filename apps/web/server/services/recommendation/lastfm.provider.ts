@@ -44,7 +44,7 @@ export class LastFmRecommendationProvider implements RecommendationProvider {
     const failures: unknown[] = []
     let successfulCalls = 0
 
-    const weights = selectedSeeds.length === 1 ? [1] : [0.6, 0.4]
+    const weights = selectedSeeds.length === 1 ? [1] : [0.35, 0.65]
     const directResults = await Promise.allSettled(
       selectedSeeds.map((seed) => this.client.getSimilarTracks(seed, 20)),
     )

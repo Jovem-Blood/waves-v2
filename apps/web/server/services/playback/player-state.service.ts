@@ -407,77 +407,146 @@ export class PlayerStateService {
     const queueItemId = parsed.queueItemId
     const outcome = parsed.outcome
     let transitioned = false
-    const result = this.unitOfWork.run(({ playerState, queue, playbackAttempt }) => {
-      const timestamp = this.now().toISOString()
-      const player = playerState.get()
-      const current = queue.findById(queueItemId)
+    const result = this.unitOfWork.run(
+      ({ playerState, queue, playbackAttempt, trackPlaybackHealth }) => {
+        const timestamp = this.now().toISOString()
+        const player = playerState.get()
+        const current = queue.findById(queueItemId)
 
-      if (!current) {
-        throw new QueueItemNotFoundError(queueItemId)
-      }
-
-      if (current.status === 'played' || current.status === 'failed') {
-        const nextItem = player.currentQueueItemId
-          ? queue.findById(player.currentQueueItemId)
-          : undefined
-        const nextAttempt = nextItem
-          ? playbackAttempt.findLatestForQueueItem(nextItem.id)
-          : undefined
-        return {
-          completedQueueItemId: queueItemId,
-          player,
-          queue: queue.listActive(),
-          ...(nextItem ? { nextItem } : {}),
-          ...(nextAttempt ? { nextPlaybackAttemptId: nextAttempt.playbackAttemptId } : {}),
+        if (!current) {
+          throw new QueueItemNotFoundError(queueItemId)
         }
-      }
 
-      if (player.currentQueueItemId !== queueItemId) {
-        throw new PlaybackConflictError()
-      }
+        if (current.status === 'played' || current.status === 'failed') {
+          const nextItem = player.currentQueueItemId
+            ? queue.findById(player.currentQueueItemId)
+            : undefined
+          const nextAttempt = nextItem
+            ? playbackAttempt.findLatestForQueueItem(nextItem.id)
+            : undefined
+          return {
+            completedQueueItemId: queueItemId,
+            player,
+            queue: queue.listActive(),
+            ...(nextItem ? { nextItem } : {}),
+            ...(nextAttempt ? { nextPlaybackAttemptId: nextAttempt.playbackAttemptId } : {}),
+          }
+        }
 
-      if (current?.status === 'playing') {
-        transitioned = true
-        if (parsed.playbackAttemptId && parsed.attempt) {
-          try {
-            const attemptReport = {
-              queueItemId,
-              playbackAttemptId: parsed.playbackAttemptId,
-              attempt: parsed.attempt,
-              outcome: parsed.outcome,
-              terminal: true,
-              ...(parsed.retryCount === undefined ? {} : { retryCount: parsed.retryCount }),
-              ...(parsed.trackId === undefined ? {} : { trackId: parsed.trackId }),
-              ...(parsed.trackTitle === undefined ? {} : { trackTitle: parsed.trackTitle }),
-              ...(parsed.trackArtists === undefined ? {} : { trackArtists: parsed.trackArtists }),
-              ...(parsed.trackProvider === undefined
-                ? {}
-                : { trackProvider: parsed.trackProvider }),
-              ...(parsed.sourceProvider === undefined
-                ? {}
-                : { sourceProvider: parsed.sourceProvider }),
-              ...(parsed.sourceIdentifier === undefined
-                ? {}
-                : { sourceIdentifier: parsed.sourceIdentifier }),
-              ...(parsed.failureStage === undefined ? {} : { failureStage: parsed.failureStage }),
-              ...(parsed.failureClass === undefined ? {} : { failureClass: parsed.failureClass }),
-              ...(parsed.errorCode === undefined ? {} : { errorCode: parsed.errorCode }),
-              ...(parsed.httpStatus === undefined ? {} : { httpStatus: parsed.httpStatus }),
-              ...(parsed.durationMs === undefined ? {} : { durationMs: parsed.durationMs }),
-              resolutionDurationMs: parsed.resolutionDurationMs,
-              fetchLatencyMs: parsed.fetchLatencyMs,
-              timeToFirstAudioMs: parsed.timeToFirstAudioMs,
-              expectedDurationMs: parsed.expectedDurationMs,
-              progressAtFailureMs: parsed.progressAtFailureMs,
-              ...(parsed.playbackDurationMs === undefined
-                ? {}
-                : { playbackDurationMs: parsed.playbackDurationMs }),
+        if (player.currentQueueItemId !== queueItemId) {
+          throw new PlaybackConflictError()
+        }
+
+        if (current?.status === 'playing') {
+          transitioned = true
+          if (parsed.playbackAttemptId && parsed.attempt) {
+            try {
+              const attemptReport = {
+                queueItemId,
+                playbackAttemptId: parsed.playbackAttemptId,
+                attempt: parsed.attempt,
+                outcome: parsed.outcome,
+                terminal: true,
+                ...(parsed.retryCount === undefined ? {} : { retryCount: parsed.retryCount }),
+                ...(parsed.trackId === undefined ? {} : { trackId: parsed.trackId }),
+                ...(parsed.trackTitle === undefined ? {} : { trackTitle: parsed.trackTitle }),
+                ...(parsed.trackArtists === undefined ? {} : { trackArtists: parsed.trackArtists }),
+                ...(parsed.trackProvider === undefined
+                  ? {}
+                  : { trackProvider: parsed.trackProvider }),
+                ...(parsed.sourceProvider === undefined
+                  ? {}
+                  : { sourceProvider: parsed.sourceProvider }),
+                ...(parsed.sourceIdentifier === undefined
+                  ? {}
+                  : { sourceIdentifier: parsed.sourceIdentifier }),
+                ...(parsed.failureStage === undefined ? {} : { failureStage: parsed.failureStage }),
+                ...(parsed.failureClass === undefined ? {} : { failureClass: parsed.failureClass }),
+                ...(parsed.errorCode === undefined ? {} : { errorCode: parsed.errorCode }),
+                ...(parsed.httpStatus === undefined ? {} : { httpStatus: parsed.httpStatus }),
+                ...(parsed.durationMs === undefined ? {} : { durationMs: parsed.durationMs }),
+                resolutionDurationMs: parsed.resolutionDurationMs,
+                fetchLatencyMs: parsed.fetchLatencyMs,
+                timeToFirstAudioMs: parsed.timeToFirstAudioMs,
+                expectedDurationMs: parsed.expectedDurationMs,
+                progressAtFailureMs: parsed.progressAtFailureMs,
+                ...(parsed.playbackDurationMs === undefined
+                  ? {}
+                  : { playbackDurationMs: parsed.playbackDurationMs }),
+              }
+              playbackAttempt.report(
+                playbackAttemptReportSchema.parse(attemptReport),
+                current,
+                timestamp,
+              )
+            } catch (error) {
+              this.logger.error(
+                {
+                  event: 'playback',
+                  operation: 'telemetry.attempt',
+                  outcome: 'failed',
+                  failureClass: 'internal',
+                  errorCode: 'PLAYBACK_TELEMETRY_FAILED',
+                  queueItemId,
+                  playbackAttemptId: parsed.playbackAttemptId,
+                  attempt: parsed.attempt,
+                },
+                'Playback telemetry result failed',
+              )
+              throw error
             }
-            playbackAttempt.report(
-              playbackAttemptReportSchema.parse(attemptReport),
-              current,
-              timestamp,
-            )
+          }
+          const latestAttempt = playbackAttempt.findLatestForQueueItem(current.id)
+          trackPlaybackHealth.record({
+            track: current.track,
+            outcome,
+            errorCode: parsed.errorCode ?? latestAttempt?.errorCode ?? null,
+            failureClass: parsed.failureClass ?? latestAttempt?.failureClass ?? null,
+            failureStage: parsed.failureStage ?? latestAttempt?.failureStage ?? null,
+            occurredAt: timestamp,
+          })
+          queue.updateStatusAndPosition(current.id, {
+            status: outcome,
+            position: current.position,
+            updatedAt: timestamp,
+          })
+        }
+
+        const remainingItems = queue.listForRecalculation()
+        queue.updatePositions(
+          remainingItems.map((item, position) => ({
+            id: item.id,
+            position,
+            updatedAt: timestamp,
+          })),
+        )
+
+        const nextCandidate = queue.listActive()[0]
+        const nextItem = nextCandidate
+          ? queue.updateStatusAndPosition(nextCandidate.id, {
+              status: 'playing',
+              position: nextCandidate.position,
+              updatedAt: timestamp,
+            })
+          : undefined
+        const nextPlayer = playerState.update({
+          status: nextItem ? 'playing' : 'idle',
+          currentQueueItemId: nextItem?.id ?? null,
+          progressMs: 0,
+          updatedAt: timestamp,
+        })
+
+        const nextPlaybackAttemptId = nextItem
+          ? (parsed.nextPlaybackAttemptId ?? this.generateId())
+          : undefined
+        if (nextItem && nextPlaybackAttemptId) {
+          try {
+            playbackAttempt.start({
+              playbackAttemptId: nextPlaybackAttemptId,
+              attemptNumber: 1,
+              queueItem: nextItem,
+              startedAt: timestamp,
+            })
           } catch (error) {
             this.logger.error(
               {
@@ -486,83 +555,25 @@ export class PlayerStateService {
                 outcome: 'failed',
                 failureClass: 'internal',
                 errorCode: 'PLAYBACK_TELEMETRY_FAILED',
-                queueItemId,
-                playbackAttemptId: parsed.playbackAttemptId,
-                attempt: parsed.attempt,
+                queueItemId: nextItem.id,
+                playbackAttemptId: nextPlaybackAttemptId,
+                attempt: 1,
               },
-              'Playback telemetry result failed',
+              'Next playback telemetry start failed',
             )
             throw error
           }
         }
-        queue.updateStatusAndPosition(current.id, {
-          status: outcome,
-          position: current.position,
-          updatedAt: timestamp,
-        })
-      }
 
-      const remainingItems = queue.listForRecalculation()
-      queue.updatePositions(
-        remainingItems.map((item, position) => ({
-          id: item.id,
-          position,
-          updatedAt: timestamp,
-        })),
-      )
-
-      const nextCandidate = queue.listActive()[0]
-      const nextItem = nextCandidate
-        ? queue.updateStatusAndPosition(nextCandidate.id, {
-            status: 'playing',
-            position: nextCandidate.position,
-            updatedAt: timestamp,
-          })
-        : undefined
-      const nextPlayer = playerState.update({
-        status: nextItem ? 'playing' : 'idle',
-        currentQueueItemId: nextItem?.id ?? null,
-        progressMs: 0,
-        updatedAt: timestamp,
-      })
-
-      const nextPlaybackAttemptId = nextItem
-        ? (parsed.nextPlaybackAttemptId ?? this.generateId())
-        : undefined
-      if (nextItem && nextPlaybackAttemptId) {
-        try {
-          playbackAttempt.start({
-            playbackAttemptId: nextPlaybackAttemptId,
-            attemptNumber: 1,
-            queueItem: nextItem,
-            startedAt: timestamp,
-          })
-        } catch (error) {
-          this.logger.error(
-            {
-              event: 'playback',
-              operation: 'telemetry.attempt',
-              outcome: 'failed',
-              failureClass: 'internal',
-              errorCode: 'PLAYBACK_TELEMETRY_FAILED',
-              queueItemId: nextItem.id,
-              playbackAttemptId: nextPlaybackAttemptId,
-              attempt: 1,
-            },
-            'Next playback telemetry start failed',
-          )
-          throw error
+        return {
+          completedQueueItemId: queueItemId,
+          player: nextPlayer,
+          queue: queue.listActive(),
+          ...(nextItem === undefined ? {} : { nextItem }),
+          ...(nextPlaybackAttemptId === undefined ? {} : { nextPlaybackAttemptId }),
         }
-      }
-
-      return {
-        completedQueueItemId: queueItemId,
-        player: nextPlayer,
-        queue: queue.listActive(),
-        ...(nextItem === undefined ? {} : { nextItem }),
-        ...(nextPlaybackAttemptId === undefined ? {} : { nextPlaybackAttemptId }),
-      }
-    })
+      },
+    )
     if (!transitioned) return result
     this.logger.info(
       {

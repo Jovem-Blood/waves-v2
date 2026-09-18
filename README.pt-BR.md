@@ -30,7 +30,13 @@ apenas da voz e de outros recursos efêmeros de runtime.
 - Sessões de convidado e vinculação única da conta Discord por link privado e QR
   code.
 - Avanço automático da fila e sugestões de autoplay vindas do Last.fm e YouTube
-  Music, resolvidas novamente para metadados do Spotify.
+  Music, resolvidas novamente para metadados do Spotify. As sugestões permanecem
+  quando alguém pede uma música ou mantém uma sugestão; um estilo novo ganha
+  espaço gradualmente. O catálogo de candidatos é reabastecido pelo histórico
+  recente e há novas tentativas após falhas temporárias de recomendação.
+- Catálogo persistente de músicas com falhas no Playback Health, incluindo o
+  último motivo. Falhas repetidas de conteúdo suspendem temporariamente a
+  música do autoplay.
 - Sincronização do navegador em tempo real, histórico e diagnósticos de reprodução.
 - Relatórios separados do estado da web, bot e voz, logs estruturados, health
   checks e backups do SQLite.
@@ -203,7 +209,7 @@ o Docker rotaciona cinco arquivos de 10 MiB por serviço. Consulte
 diagnóstico.
 
 [Playback Health](docs/playback-health.pt-BR.md) documenta retries, reconciliação,
-definição das métricas e retenção de telemetria por 90 dias.
+definição das métricas, catálogo de falhas e retenção de telemetria por 90 dias.
 
 ## Desenvolvimento local
 

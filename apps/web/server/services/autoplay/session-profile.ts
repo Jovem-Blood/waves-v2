@@ -32,6 +32,8 @@ export class AutoplaySessionProfile {
     string,
     { strategy: AutoplaySuggestionStrategy; sourceTag?: string }
   >()
+  private readonly driftSeedKeys = new Set<string>()
+  private driftSlots = 0
   private humanAnchor: TrackMetadata | undefined
   private completions = 0
 
@@ -54,6 +56,8 @@ export class AutoplaySessionProfile {
     this.completedArtists.clear()
     this.observedHumanTracks.clear()
     this.promotedMetadata.clear()
+    this.driftSeedKeys.clear()
+    this.driftSlots = 0
     this.humanAnchor = undefined
     this.completions = 0
   }
@@ -66,6 +70,34 @@ export class AutoplaySessionProfile {
     this.increment(this.humanArtistCounts, normalizeMusicText(track.artists[0] ?? ''))
   }
 
+  observeHumanDirection(
+    track: TrackMetadata,
+    input: { relatedToCurrent: boolean; relatedToDrift: boolean },
+  ): void {
+    const trackKey = `${track.provider}:${track.providerTrackId}`
+    if (!this.humanAnchor) return
+    if (identity(this.humanAnchor) === identity(track)) return
+    if (input.relatedToDrift) {
+      this.driftSeedKeys.add(trackKey)
+      this.driftSlots = 4
+    } else if (!input.relatedToCurrent) {
+      this.driftSeedKeys.clear()
+      this.driftSeedKeys.add(trackKey)
+      this.driftSlots = 2
+    } else {
+      this.driftSeedKeys.clear()
+      this.driftSlots = 0
+    }
+  }
+
+  driftSuggestionSlots(): number {
+    return this.driftSlots
+  }
+
+  isDriftSeed(seedTrackKey: string | undefined): boolean {
+    return seedTrackKey !== undefined && this.driftSeedKeys.has(seedTrackKey)
+  }
+
   latestHumanAnchor(): TrackMetadata | undefined {
     return this.humanAnchor
   }
@@ -75,7 +107,12 @@ export class AutoplaySessionProfile {
     const artist = normalizeMusicText(item.track.artists[0] ?? '')
     if (artist) this.completedArtists.add(artist)
     this.increment(this.completionArtistCounts, artist)
-    if (item.origin !== 'autoplay') return
+    if (item.origin !== 'autoplay') {
+      if (this.driftSeedKeys.has(`${item.track.provider}:${item.track.providerTrackId}`)) {
+        this.driftSlots = Math.max(this.driftSlots, 3)
+      }
+      return
+    }
     const promoted = this.promotedMetadata.get(identity(item.track))
     this.adjust(this.trackScores, identity(item.track), 0.1)
     this.adjust(this.artistScores, artist, 0.05)
@@ -91,6 +128,9 @@ export class AutoplaySessionProfile {
   }
 
   recordPromotion(suggestion: StoredAutoplaySuggestion): void {
+    if (this.isDriftSeed(suggestion.seedTrackKey)) {
+      this.driftSeedKeys.add(`${suggestion.track.provider}:${suggestion.track.providerTrackId}`)
+    }
     this.promotedMetadata.set(identity(suggestion.track), {
       strategy: suggestion.strategy,
       ...(suggestion.sourceTag === undefined ? {} : { sourceTag: suggestion.sourceTag }),
@@ -98,6 +138,13 @@ export class AutoplaySessionProfile {
   }
 
   recordSkip(item: QueueItem): void {
+    if (
+      item.origin === 'human' &&
+      this.driftSeedKeys.has(`${item.track.provider}:${item.track.providerTrackId}`)
+    ) {
+      this.driftSeedKeys.clear()
+      this.driftSlots = 0
+    }
     if (item.origin !== 'autoplay') return
     this.adjust(this.trackScores, identity(item.track), -0.35)
     this.adjust(this.artistScores, normalizeMusicText(item.track.artists[0] ?? ''), -0.08)

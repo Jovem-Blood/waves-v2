@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('database migrations', () => {
-  it('creates all twelve tables', () => {
+  it('creates all thirteen tables', () => {
     const { sqlite } = createMigratedDatabase()
     const tables = sqlite
       .prepare(
@@ -48,6 +48,7 @@ describe('database migrations', () => {
       'queue_items',
       'resolved_sources',
       'sessions',
+      'track_playback_health',
       'users',
     ])
 

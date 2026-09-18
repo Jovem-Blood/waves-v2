@@ -13,6 +13,9 @@ export function createInternalHeartbeatHandler(
 ) {
   return defineInternalApiHandler(async (event) => {
     const input = botHeartbeatInputSchema.parse(await readBody(event))
+    void getDependencies()
+      .autoplayOrchestrator.retryIfNeeded()
+      .catch(() => undefined)
     return operationalStatusSchema.parse(
       getDependencies().operationalStatusService.heartbeat(input),
     )

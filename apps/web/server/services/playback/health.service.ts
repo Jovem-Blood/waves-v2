@@ -8,6 +8,7 @@ import type {
   PlaybackAttemptRecord,
   PlaybackAttemptRepository,
 } from '../../repositories/playback-attempt.repository'
+import type { TrackPlaybackHealthRepository } from '../../repositories/track-playback-health.repository'
 import { PLAYBACK_RETENTION_DAYS, PLAYBACK_STALE_AFTER_MS } from './maintenance.service'
 
 interface LogicalPlayback {
@@ -57,6 +58,7 @@ function recovered(execution: LogicalPlayback): boolean {
 export class PlaybackHealthService {
   constructor(
     private readonly repository: PlaybackAttemptRepository,
+    private readonly trackHealthRepository: TrackPlaybackHealthRepository,
     private readonly now: () => Date = () => new Date(),
     private readonly reconcile: () => void = () => {},
   ) {}
@@ -70,6 +72,27 @@ export class PlaybackHealthService {
     const fromIso = from.toISOString()
     const toIso = to.toISOString()
     const records = this.repository.listSince(fromIso, toIso)
+    const suppressedIds = new Set(
+      this.trackHealthRepository.suppressedTracks(this.now()).map((track) => track.providerTrackId),
+    )
+    const failureCatalog = this.trackHealthRepository.listProblematic().map((track) => ({
+      trackId: track.trackId,
+      trackTitle: track.title,
+      trackArtists: track.artists.join(', '),
+      trackProvider: track.provider,
+      successes: track.successes,
+      failures: track.failures,
+      contentFailures: track.contentFailures,
+      lastErrorCode: track.lastErrorCode,
+      lastFailureClass: track.lastFailureClass,
+      lastFailureStage: track.lastFailureStage,
+      lastFailedAt: track.lastFailedAt,
+      lastPlayedAt: track.lastPlayedAt,
+      suppressedUntil:
+        suppressedIds.has(track.providerTrackId) && track.lastFailedAt
+          ? new Date(new Date(track.lastFailedAt).getTime() + 7 * 86_400_000).toISOString()
+          : null,
+    }))
     const executions = groupByPlaybackAttempt(records).filter(({ final, attempts }) => {
       if (query.sourceProvider && final.sourceProvider !== query.sourceProvider) return false
       if (
@@ -306,6 +329,7 @@ export class PlaybackHealthService {
           failureRate: value.executions ? value.failures / value.executions : 0,
         })),
       problematicTracks,
+      failureCatalog,
       recentFailures,
     })
   }

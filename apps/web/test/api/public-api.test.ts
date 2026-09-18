@@ -158,6 +158,8 @@ async function startTestApi(): Promise<TestContext> {
     autoplayOrchestrator: {
       completePlayback: (input) => Promise.resolve(playerStateService.completePlayback(input)),
       queueChanged: () => Promise.resolve(),
+      refresh: () => Promise.resolve(),
+      retryIfNeeded: () => Promise.resolve(),
       skip: () => Promise.resolve(playerStateService.skip()),
       rejectSuggestion: (providerTrackId) => {
         if (autoplaySuggestionRepository.removeByProviderTrackId(providerTrackId)) {

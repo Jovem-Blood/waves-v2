@@ -8,6 +8,7 @@ import { createDatabaseConnection, type DatabaseConnection } from '../../server/
 import { AutoplayCandidateRepository } from '../../server/repositories/autoplay-candidate.repository'
 import { AutoplayRepository } from '../../server/repositories/autoplay.repository'
 import { AutoplaySuggestionRepository } from '../../server/repositories/autoplay-suggestion.repository'
+import { TrackPlaybackHealthRepository } from '../../server/repositories/track-playback-health.repository'
 import { PlayerStateRepository } from '../../server/repositories/player-state.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { DatabaseUnitOfWork } from '../../server/repositories/unit-of-work'
@@ -44,6 +45,7 @@ function track(index: number, artist = `Artist ${index}`): TrackMetadata {
 function candidate(
   value: TrackMetadata,
   strategy: RecommendationCandidate['strategy'] = 'similar',
+  seedTrackKey = 'spotify:first',
 ) {
   return {
     provider: 'lastfm' as const,
@@ -52,7 +54,7 @@ function candidate(
     artists: value.artists,
     score: 0.95,
     strategy,
-    seedTrackKey: 'spotify:first',
+    seedTrackKey,
   }
 }
 
@@ -70,6 +72,7 @@ function createHarness(candidateBatches: RecommendationCandidate[][] = []) {
   )
   const suggestionRepository = new AutoplaySuggestionRepository(connection.db)
   const candidateRepository = new AutoplayCandidateRepository(connection.db)
+  const trackHealthRepository = new TrackPlaybackHealthRepository(connection.db)
   const autoplayService = new AutoplayService(
     new AutoplayRepository(connection.db, now),
     suggestionRepository,
@@ -102,6 +105,7 @@ function createHarness(candidateBatches: RecommendationCandidate[][] = []) {
     queueRepository,
     suggestionRepository,
     candidateRepository,
+    trackHealthRepository,
     playerService,
     { getCandidates, resolveCandidate },
     now,
@@ -111,6 +115,7 @@ function createHarness(candidateBatches: RecommendationCandidate[][] = []) {
   return {
     autoplayService,
     candidateRepository,
+    trackHealthRepository,
     getCandidates,
     orchestrator,
     playerService,
@@ -259,6 +264,90 @@ describe('AutoplayOrchestrator', () => {
     )
   })
 
+  it('keeps the remaining suggestions when a listener keeps one in the queue', async () => {
+    const harness = createHarness([
+      Array.from({ length: 20 }, (_, index) => candidate(track(index + 1))),
+    ])
+    startTrack(harness)
+    await harness.orchestrator.queueChanged()
+    const before = harness.suggestionRepository.list()
+
+    harness.queueService.add({ track: before[0]!.track })
+    await harness.orchestrator.queueChanged()
+
+    const after = harness.suggestionRepository.list().map((entry) => entry.track.providerTrackId)
+    expect(after).not.toContain(before[0]!.track.providerTrackId)
+    for (const suggestion of before.slice(1)) {
+      expect(after).toContain(suggestion.track.providerTrackId)
+    }
+    expect(after).toHaveLength(6)
+  })
+
+  it('preserves established suggestions after a related listener request', async () => {
+    const harness = createHarness([
+      Array.from({ length: 20 }, (_, index) => candidate(track(index + 1))),
+    ])
+    startTrack(harness)
+    await harness.orchestrator.queueChanged()
+    const before = harness.suggestionRepository.list().map((entry) => entry.track.providerTrackId)
+
+    harness.queueService.add({
+      track: { ...firstTrack, id: 'spotify:related', providerTrackId: 'related', title: 'Related' },
+    })
+    await harness.orchestrator.queueChanged()
+
+    expect(harness.suggestionRepository.list().map((entry) => entry.track.providerTrackId)).toEqual(
+      before,
+    )
+  })
+
+  it('reserves two drift slots and expands to four after related listener input', async () => {
+    const outlier: TrackMetadata = {
+      ...firstTrack,
+      id: 'spotify:outlier',
+      providerTrackId: 'outlier',
+      title: 'Outlier',
+      artists: ['New Genre Artist'],
+    }
+    const harness = createHarness([
+      Array.from({ length: 20 }, (_, index) => candidate(track(index + 1))),
+      Array.from({ length: 12 }, (_, index) =>
+        candidate(track(index + 21), 'similar', 'spotify:outlier'),
+      ),
+      Array.from({ length: 12 }, (_, index) =>
+        candidate(track(index + 41), 'similar', 'spotify:outlier-2'),
+      ),
+    ])
+    startTrack(harness)
+    await harness.orchestrator.queueChanged()
+    const established = harness.suggestionRepository.list().slice(0, 4)
+
+    harness.queueService.add({ track: outlier })
+    await harness.orchestrator.queueChanged()
+    const afterOutlier = harness.suggestionRepository.list()
+    expect(afterOutlier.filter((entry) => entry.seedTrackKey === 'spotify:outlier')).toHaveLength(2)
+    for (const suggestion of established) {
+      expect(afterOutlier.map((entry) => entry.track.providerTrackId)).toContain(
+        suggestion.track.providerTrackId,
+      )
+    }
+
+    harness.queueService.add({
+      track: {
+        ...outlier,
+        id: 'spotify:outlier-2',
+        providerTrackId: 'outlier-2',
+        title: 'Second Outlier',
+      },
+    })
+    await harness.orchestrator.queueChanged()
+    const afterSecond = harness.suggestionRepository.list()
+    expect(
+      afterSecond.filter((entry) => entry.seedTrackKey?.startsWith('spotify:outlier')),
+    ).toHaveLength(4)
+    expect(afterSecond.filter((entry) => entry.seedTrackKey === 'spotify:first')).toHaveLength(2)
+  })
+
   it('clears session candidates and ghosts when voice disconnects', async () => {
     const harness = createHarness([
       Array.from({ length: 20 }, (_, index) => candidate(track(index + 1))),
@@ -270,6 +359,57 @@ describe('AutoplayOrchestrator', () => {
 
     expect(harness.suggestionRepository.list()).toEqual([])
     expect(harness.candidateRepository.list()).toEqual([])
+  })
+
+  it('persists tagged suggestions and excludes tracks with repeated content failures', async () => {
+    const tagged = { ...candidate(track(1)), sourceTag: 'dream pop' }
+    const harness = createHarness([
+      [tagged, ...Array.from({ length: 19 }, (_, index) => candidate(track(index + 2)))],
+    ])
+    harness.trackHealthRepository.record({
+      track: track(2),
+      outcome: 'failed',
+      errorCode: 'SOURCE_NOT_FOUND',
+      occurredAt: timestamp,
+    })
+    harness.trackHealthRepository.record({
+      track: track(2),
+      outcome: 'failed',
+      errorCode: 'SOURCE_GEO_BLOCKED',
+      occurredAt: timestamp,
+    })
+    startTrack(harness)
+
+    await harness.orchestrator.queueChanged()
+
+    expect(
+      harness.suggestionRepository.list().map((entry) => entry.track.providerTrackId),
+    ).not.toContain('recommended-2')
+    expect(
+      harness.suggestionRepository.list().find((entry) => entry.sourceTag === 'dream pop'),
+    ).toBeDefined()
+  })
+
+  it('tries a recently played seed when the current seed provider fails', async () => {
+    const harness = createHarness()
+    harness.getCandidates
+      .mockRejectedValueOnce(new RecommendationUnavailableError())
+      .mockResolvedValueOnce(Array.from({ length: 12 }, (_, index) => candidate(track(index + 1))))
+    const first = harness.queueService.add({ track: firstTrack })
+    harness.playerService.voiceConnected('guild', 'Waves', 'voice', 'Music')
+    harness.playerService.claimPlayback()
+    harness.playerService.completePlayback({ queueItemId: first.id, outcome: 'played' })
+    harness.queueService.add({
+      track: { ...firstTrack, id: 'spotify:second', providerTrackId: 'second', title: 'Second' },
+    })
+    harness.playerService.claimPlayback()
+    harness.autoplayService.update({ enabled: true })
+
+    await harness.orchestrator.queueChanged()
+
+    expect(harness.getCandidates).toHaveBeenCalledTimes(2)
+    expect(harness.getCandidates.mock.calls[1]?.[0]).toEqual([firstTrack])
+    expect(harness.suggestionRepository.list()).toHaveLength(6)
   })
 
   it('keeps playback completion successful when every provider is unavailable', async () => {
@@ -284,5 +424,41 @@ describe('AutoplayOrchestrator', () => {
 
     expect(result.player.status).toBe('idle')
     expect(harness.autoplayService.get().failureCode).toBe('recommendation_unavailable')
+  })
+
+  it('recovers from empty recommendations after the only requested song fails', async () => {
+    const harness = createHarness([
+      [],
+      Array.from({ length: 12 }, (_, index) => candidate(track(index + 1))),
+    ])
+    const initial = startTrack(harness)
+
+    const completed = await harness.orchestrator.completePlayback({
+      queueItemId: initial.id,
+      outcome: 'failed',
+      errorCode: 'SOURCE_NOT_FOUND',
+    })
+    expect(completed.nextItem).toBeUndefined()
+    expect(harness.autoplayService.get().failureCode).toBe('no_candidates')
+
+    await harness.orchestrator.retryIfNeeded()
+
+    expect(harness.queueService.list()[0]?.origin).toBe('autoplay')
+    expect(harness.suggestionRepository.list().length).toBeGreaterThan(0)
+    expect(harness.autoplayService.get().failureCode).toBeNull()
+  })
+
+  it('restores a pending recovery after recreating the orchestrator', async () => {
+    const harness = createHarness()
+    const initial = startTrack(harness)
+    await harness.orchestrator.completePlayback({ queueItemId: initial.id, outcome: 'played' })
+    expect(harness.autoplayService.get().failureCode).toBe('no_candidates')
+
+    const restarted = createHarness([
+      Array.from({ length: 12 }, (_, index) => candidate(track(index + 1))),
+    ])
+    await restarted.orchestrator.retryIfNeeded()
+
+    expect(restarted.queueService.list()[0]?.origin).toBe('autoplay')
   })
 })

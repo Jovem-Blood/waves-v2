@@ -20,7 +20,9 @@ export function createAutoplayUpdateHandler(
     if (!session) throw new UnauthorizedError()
     if (token && session.renewed) writeSessionCookie(event, token, { expiresAt: session.expiresAt })
 
-    return autoplayStateSchema.parse(dependencies.autoplayService.update(input))
+    dependencies.autoplayService.update(input)
+    await dependencies.autoplayOrchestrator.refresh()
+    return autoplayStateSchema.parse(dependencies.autoplayService.get())
   })
 }
 

@@ -199,6 +199,49 @@ async function copyAttempt(id: string) {
         </p>
       </section>
 
+      <section
+        v-if="data.failureCatalog?.length"
+        class="recent-failures"
+        aria-labelledby="failure-catalog-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Histórico persistente</p>
+            <h2 id="failure-catalog-title">Catálogo de falhas</h2>
+          </div>
+          <span class="health-count">
+            {{ data.failureCatalog.length }}
+            {{ data.failureCatalog.length === 1 ? 'faixa' : 'faixas' }}
+          </span>
+        </div>
+        <p class="health-count">
+          Este histórico permanece após a limpeza da telemetria. Duas falhas de conteúdo desde o
+          último sucesso suspendem a sugestão por sete dias.
+        </p>
+        <ul>
+          <li v-for="track in data.failureCatalog" :key="track.trackId" class="catalog-entry">
+            <span class="catalog-track">
+              <strong>{{ track.trackTitle }}</strong>
+              <span>{{ track.trackArtists }}</span>
+            </span>
+            <span :class="track.suppressedUntil ? 'health-danger' : 'health-count'">
+              {{
+                track.suppressedUntil
+                  ? `Fora do autoplay até ${formatDate(track.suppressedUntil)}`
+                  : 'Monitorando'
+              }}
+            </span>
+            <span class="failure-context">
+              {{ track.failures }} falhas · {{ track.successes }} sucessos ·
+              {{ track.contentFailures }} falhas de conteúdo desde o último sucesso · Motivo:
+              {{ track.lastErrorCode ?? 'desconhecido' }} · Classe:
+              {{ track.lastFailureClass ?? 'desconhecida' }} · Etapa:
+              {{ track.lastFailureStage ?? 'desconhecida' }}
+            </span>
+          </li>
+        </ul>
+      </section>
+
       <div v-if="!data.problematicTracks.length" class="state-message" aria-live="polite">
         <Activity :size="20" aria-hidden="true" />
         Nenhuma falha terminal no período.
@@ -528,6 +571,19 @@ code {
   grid-column: 1 / -1;
   overflow-wrap: anywhere;
 }
+.recent-failures .catalog-entry {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.catalog-track {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.catalog-track > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @media (max-width: 71.99rem) {
   .health-heading {
     flex-direction: column;
@@ -581,6 +637,9 @@ code {
   }
   .recent-failures li {
     grid-template-columns: 1fr auto;
+  }
+  .recent-failures .catalog-entry {
+    grid-template-columns: 1fr;
   }
   .recent-failures time {
     grid-column: 1;
