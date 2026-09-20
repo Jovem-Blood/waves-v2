@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AutoplaySuggestion } from '@waves/shared'
-import { LoaderCircle, Plus, Sparkles, X } from '@lucide/vue'
+import { LoaderCircle, Sparkles, X } from '@lucide/vue'
 
 defineProps<{ suggestion: AutoplaySuggestion; rejecting?: boolean; committing?: boolean }>()
 defineEmits<{ commit: []; reject: [] }>()
@@ -30,7 +30,6 @@ function duration(durationMs: number) {
       @click="$emit('commit')"
     >
       <LoaderCircle v-if="committing" class="spinner" :size="17" aria-hidden="true" />
-      <Plus v-else :size="17" aria-hidden="true" />
       <span>Manter</span>
     </button>
     <button
@@ -105,8 +104,7 @@ function duration(durationMs: number) {
 }
 
 .commit-button {
-  grid-template-columns: auto auto;
-  gap: 5px;
+  justify-content: center;
   border-color: color-mix(in srgb, var(--accent-primary) 24%, transparent);
   color: var(--accent-primary);
   font-family: 'Geist Mono Variable', monospace;
