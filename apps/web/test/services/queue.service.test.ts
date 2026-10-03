@@ -69,6 +69,80 @@ afterEach(() => {
 })
 
 describe('QueueService', () => {
+  it('appends playlist tracks after existing items and reports every duplicate', () => {
+    const { service, repository } = setup()
+    const current = service.add(input)
+    repository.updateStatusAndPosition(current.id, {
+      status: 'playing',
+      position: 0,
+      updatedAt: now().toISOString(),
+    })
+    const upcoming = service.add({
+      track: { ...input.track, id: 'second', providerTrackId: 'second' },
+    })
+    const before = service.list()
+    const third = { ...input.track, id: 'third', providerTrackId: 'third' }
+    const result = service.appendPlaylist(
+      [
+        { position: 1, track: input.track },
+        { position: 2, track: third },
+        { position: 3, track: upcoming.track },
+        { position: 4, track: third },
+      ],
+      { requestedByDisplayName: 'Importer' },
+      [{ position: 5, title: 'Local', reason: 'local' }],
+    )
+    expect(result.queue.slice(0, 2)).toEqual(before)
+    expect(result.queue[2]).toMatchObject({
+      track: third,
+      position: 2,
+      requestedByDisplayName: 'Importer',
+      origin: 'human',
+    })
+    expect(result.imported).toBe(1)
+    expect(result.skipped.map(({ position, reason }) => ({ position, reason }))).toEqual([
+      { position: 1, reason: 'duplicate' },
+      { position: 3, reason: 'duplicate' },
+      { position: 4, reason: 'duplicate' },
+      { position: 5, reason: 'local' },
+    ])
+  })
+
+  it('clears upcoming tracks atomically without changing the playing track or creating undo entries', () => {
+    const { service, repository } = setup()
+    const current = service.add(input)
+    repository.updateStatusAndPosition(current.id, {
+      status: 'playing',
+      position: 0,
+      updatedAt: now().toISOString(),
+    })
+    const upcoming = service.add({
+      track: { ...input.track, id: 'second', providerTrackId: 'second' },
+    })
+    const playing = repository.findById(current.id)
+    expect(service.clearUpcoming()).toEqual({ queue: [playing], cleared: 1 })
+    expect(repository.findById(upcoming.id)?.status).toBe('removed')
+    expect(repository.getRemovedAt(upcoming.id)).toBeUndefined()
+    expect(service.clearUpcoming()).toEqual({ queue: [playing], cleared: 0 })
+  })
+
+  it('rolls back playlist inserts if persistence fails', () => {
+    const { connection, service } = setup()
+    service.add(input)
+    connection.sqlite.exec(
+      `CREATE TRIGGER reject_import BEFORE INSERT ON queue_items WHEN NEW.provider_track_id = 'reject' BEGIN SELECT RAISE(ABORT, 'test failure'); END;`,
+    )
+    expect(() =>
+      service.appendPlaylist(
+        [
+          { position: 1, track: { ...input.track, id: 'second', providerTrackId: 'second' } },
+          { position: 2, track: { ...input.track, id: 'reject', providerTrackId: 'reject' } },
+        ],
+        {},
+      ),
+    ).toThrow('test failure')
+    expect(service.list()).toHaveLength(1)
+  })
   it('generates item ids without depending on global crypto', () => {
     vi.stubGlobal('crypto', {})
     const connection = createDatabaseConnection({ url: ':memory:' })

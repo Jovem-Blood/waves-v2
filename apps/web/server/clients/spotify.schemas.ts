@@ -44,3 +44,33 @@ export const spotifySearchResponseSchema = z.object({
 })
 
 export type SpotifyTrack = z.infer<typeof spotifyTrackSchema>
+
+export const spotifyPlaylistPageSchema = z.object({
+  items: z.array(z.unknown()),
+  total: z.number().int().nonnegative().max(10000),
+  next: z.string().nullable(),
+})
+
+export const spotifyPlaylistSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  owner: z.object({ display_name: z.string().nullable().optional(), id: z.string() }),
+  images: z.array(spotifyImageSchema).nullish(),
+  items: spotifyPlaylistPageSchema.optional(),
+  tracks: spotifyPlaylistPageSchema.optional(),
+})
+
+export type SpotifyPlaylist = z.infer<typeof spotifyPlaylistSchema>
+
+export const spotifyPlaylistEntrySchema = z.object({
+  is_local: z.boolean().optional(),
+  track: z.unknown().optional(),
+  item: z.unknown().optional(),
+})
+
+export const spotifyPlaylistItemSummarySchema = z.object({
+  name: z.string().optional(),
+  type: z.string().optional(),
+  is_local: z.boolean().optional(),
+  is_playable: z.boolean().optional(),
+})

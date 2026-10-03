@@ -22,6 +22,11 @@ other ephemeral runtime resources.
 
 - Persistent, mobile-first collaborative queue backed by SQLite.
 - Spotify track search and metadata.
+- Spotify playlist import with a five-track preview, appending in playlist order
+  after existing tracks. Duplicate, local, unavailable, and invalid entries are
+  explicitly listed as skipped. Audio is resolved when playback starts.
+- Confirmed clearing of upcoming tracks without interrupting the current track
+  or changing the autoplay setting.
 - YouTube Music audio resolution and playback through Discord voice.
 - Web controls for play state, pause, resume, skip, volume, queue ordering, and
   removal/restoration.
@@ -91,6 +96,13 @@ for the configured server at startup, so updates normally appear immediately.
 Create an application in the Spotify Developer Dashboard and copy its client ID
 and client secret. Waves uses the client-credentials flow on the server; these
 values must never be exposed to the browser or committed to Git.
+
+Playlist import requires Spotify to expose playlist contents to these credentials.
+Development Mode restrictions introduced in 2026 limit contents to playlists owned
+by or collaborative with an authorized user; client credentials do not authorize
+a user. Waves reports an access error when contents are unavailable (including
+private playlists), rather than treating them as empty. Extended Quota Mode apps
+retain their existing access. Spotify user OAuth is not currently implemented.
 
 ### Last.fm
 

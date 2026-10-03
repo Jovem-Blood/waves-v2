@@ -4,10 +4,14 @@ import {
   SpotifyAuthenticationError,
   SpotifyInvalidResponseError,
   SpotifyUnavailableError,
+  SpotifyPlaylistInaccessibleError,
 } from './spotify.errors'
 import {
   spotifySearchResponseSchema,
   spotifyTokenResponseSchema,
+  spotifyPlaylistSchema,
+  spotifyPlaylistPageSchema,
+  type SpotifyPlaylist,
   type SpotifyTrack,
 } from './spotify.schemas'
 
@@ -24,11 +28,12 @@ export interface SpotifyAccessToken {
 export interface SpotifyClientPort {
   requestAccessToken(): Promise<SpotifyAccessToken>
   searchTracks(query: string, accessToken: string, limit?: number): Promise<SpotifyTrack[]>
+  getPlaylist(id: string, accessToken: string, full: boolean): Promise<SpotifyPlaylist>
 }
 
 async function readJson(
   response: Response,
-  operation: 'authenticate' | 'search',
+  operation: 'authenticate' | 'search' | 'playlist',
 ): Promise<unknown> {
   try {
     return await response.json()
@@ -43,6 +48,46 @@ export class SpotifyClient implements SpotifyClientPort {
     private readonly request: SpotifyFetch = fetch,
     private readonly timeoutMs: number = parseExternalHttpTimeout(),
   ) {}
+
+  async getPlaylist(id: string, accessToken: string, full: boolean): Promise<SpotifyPlaylist> {
+    const base = `https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`
+    const read = async (url: string) => {
+      let response: Response
+      try {
+        response = await this.request(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(this.timeoutMs),
+        })
+      } catch {
+        throw new SpotifyUnavailableError('playlist')
+      }
+      if (response.status === 403 || response.status === 404)
+        throw new SpotifyPlaylistInaccessibleError()
+      if (!response.ok) throw new SpotifyUnavailableError('playlist')
+      return readJson(response, 'playlist')
+    }
+    const result = spotifyPlaylistSchema.safeParse(await read(base))
+    if (!result.success) throw new SpotifyInvalidResponseError('playlist')
+    const playlist = result.data
+    const page = playlist.items ?? playlist.tracks
+    if (!page) throw new SpotifyPlaylistInaccessibleError()
+    if (full) {
+      const endpoint = playlist.items ? 'items' : 'tracks'
+      let next = page.next
+      while (next && page.items.length < page.total) {
+        const offset = page.items.length
+        const parsed = spotifyPlaylistPageSchema.safeParse(
+          await read(`${base}/${endpoint}?offset=${offset}&limit=50`),
+        )
+        if (!parsed.success || parsed.data.items.length === 0)
+          throw new SpotifyInvalidResponseError('playlist')
+        page.items.push(...parsed.data.items)
+        next = parsed.data.next
+      }
+      if (page.items.length !== page.total) throw new SpotifyInvalidResponseError('playlist')
+    }
+    return playlist
+  }
 
   async requestAccessToken(): Promise<SpotifyAccessToken> {
     const credentials = Buffer.from(

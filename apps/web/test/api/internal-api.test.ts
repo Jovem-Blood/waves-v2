@@ -80,7 +80,7 @@ async function startTestApi(): Promise<TestContext> {
   const spotifySearch = vi
     .fn<(query: string) => Promise<TrackMetadata[]>>()
     .mockResolvedValue([firstTrack, secondTrack])
-  const spotifyService: PublicSpotifyService = { searchTracks: spotifySearch }
+  const spotifyService: PublicSpotifyService = { searchTracks: spotifySearch, getPlaylist: vi.fn() }
   const sourceResolve = vi.fn().mockResolvedValue({
     queueItemId: 'queue-1',
     source: {

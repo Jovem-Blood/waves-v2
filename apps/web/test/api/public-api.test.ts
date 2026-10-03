@@ -28,6 +28,9 @@ import { createQueueMoveHandler } from '../../server/api/queue/[id]/move.post'
 import { createQueueRestoreHandler } from '../../server/api/queue/[id]/restore.post'
 import { createQueueListHandler } from '../../server/api/queue/index.get'
 import { createQueueAddHandler } from '../../server/api/queue/index.post'
+import { createPlaylistPreviewHandler } from '../../server/api/spotify/playlist.post'
+import { createPlaylistImportHandler } from '../../server/api/queue/import.post'
+import { createQueueClearHandler } from '../../server/api/queue/clear.post'
 import { createHistoryListHandler } from '../../server/api/history/index.get'
 import { createSpotifySearchHandler } from '../../server/api/spotify/search.get'
 import { createOperationalStatusHandler } from '../../server/api/status.get'
@@ -126,6 +129,7 @@ async function startTestApi(): Promise<TestContext> {
     .mockResolvedValue([firstTrack])
   const spotifyService: PublicSpotifyService = {
     searchTracks: spotifySearch,
+    getPlaylist: vi.fn(),
   }
   const realtimeBus = createRealtimeEventBus()
   const queueService = new QueueService(queueRepository, unitOfWork, now, () => `queue-${++nextId}`)
@@ -201,6 +205,9 @@ async function startTestApi(): Promise<TestContext> {
   router.get('/api/queue', createQueueListHandler(getDependencies))
   router.get('/api/history', createHistoryListHandler(getDependencies))
   router.post('/api/queue', createQueueAddHandler(getDependencies))
+  router.post('/api/spotify/playlist', createPlaylistPreviewHandler(getDependencies))
+  router.post('/api/queue/import', createPlaylistImportHandler(getDependencies))
+  router.post('/api/queue/clear', createQueueClearHandler(getDependencies))
   router.delete('/api/queue/:id', createQueueRemoveHandler(getDependencies))
   router.post('/api/queue/:id/move', createQueueMoveHandler(getDependencies))
   router.post('/api/queue/:id/restore', createQueueRestoreHandler(getDependencies))
@@ -482,6 +489,63 @@ describe('public API', () => {
       }),
       expect.objectContaining({ id: 'queue-2', position: 1, track: secondTrack }),
     ])
+  })
+
+  it('previews without mutation, imports with session attribution, and clears only upcoming tracks', async () => {
+    if (!context) throw new Error('Missing context')
+    const url = 'https://open.spotify.com/playlist/1234567890123456789012'
+    const preview = {
+      id: '1234567890123456789012',
+      name: 'Playlist',
+      owner: 'Owner',
+      total: 2,
+      tracks: [firstTrack, secondTrack],
+      skipped: [],
+    }
+    vi.mocked(context.dependencies.spotifyService.getPlaylist).mockResolvedValue({
+      preview,
+      tracks: [
+        { position: 1, track: firstTrack },
+        { position: 2, track: secondTrack },
+      ],
+      skipped: [],
+    })
+    expect((await postJson('/api/spotify/playlist', { url })).body).toEqual(preview)
+    expect(context.dependencies.queueService.list()).toEqual([])
+    expect((await postJson('/api/queue/import', { url })).response.status).toBe(401)
+    await addTrack(firstTrack)
+    const beforePlayer = context.dependencies.playerStateService.get()
+    const result = await postJson('/api/queue/import', { url })
+    expect(result.response.status).toBe(200)
+    expect(result.body).toMatchObject({
+      imported: 1,
+      skipped: [{ position: 1, title: firstTrack.title, reason: 'duplicate' }],
+      queue: [
+        { track: firstTrack, position: 0 },
+        {
+          track: secondTrack,
+          position: 1,
+          requestedByUserId: 'user-1',
+          requestedByDisplayName: 'Luis',
+        },
+      ],
+    })
+    expect(context.dependencies.playerStateService.get()).toEqual(beforePlayer)
+    expect((await postJson('/api/queue/clear', {})).body).toEqual({ queue: [], cleared: 2 })
+    expect(context.dependencies.playerStateService.get()).toEqual(beforePlayer)
+  })
+
+  it('leaves the queue intact when playlist loading fails', async () => {
+    await addTrack(firstTrack)
+    const before = context?.dependencies.queueService.list()
+    vi.mocked(context!.dependencies.spotifyService.getPlaylist).mockRejectedValue(
+      new SpotifyUnavailableError('playlist'),
+    )
+    const result = await postJson('/api/queue/import', {
+      url: 'https://open.spotify.com/playlist/1234567890123456789012',
+    })
+    expect(result.response.status).toBe(503)
+    expect(context?.dependencies.queueService.list()).toEqual(before)
   })
 
   it('opens realtime SSE with an initial state snapshot', async () => {

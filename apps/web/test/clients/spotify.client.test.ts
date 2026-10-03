@@ -5,6 +5,7 @@ import {
   SpotifyAuthenticationError,
   SpotifyInvalidResponseError,
   SpotifyUnavailableError,
+  SpotifyPlaylistInaccessibleError,
 } from '../../server/clients/spotify.errors'
 
 const config = {
@@ -20,6 +21,53 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 describe('SpotifyClient', () => {
+  it.each(['items', 'tracks'] as const)(
+    'paginates %s without following arbitrary URLs',
+    async (field) => {
+      const request = vi
+        .fn<SpotifyFetch>()
+        .mockResolvedValueOnce(
+          jsonResponse({
+            id: 'playlist',
+            name: 'Playlist',
+            owner: { id: 'owner' },
+            [field]: { items: [{ track: null }], total: 2, next: 'https://untrusted.test/' },
+          }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ items: [{ track: null }], total: 2, next: null }))
+      const result = await new SpotifyClient(config, request).getPlaylist('playlist', 'token', true)
+      expect(result[field]?.items).toHaveLength(2)
+      expect(request.mock.calls[1]?.[0]).toBe(
+        `https://api.spotify.com/v1/playlists/playlist/${field}?offset=1&limit=50`,
+      )
+    },
+  )
+
+  it('does not mistake inaccessible contents for an empty playlist', async () => {
+    const request = vi
+      .fn<SpotifyFetch>()
+      .mockResolvedValue(jsonResponse({ id: 'playlist', name: 'Playlist', owner: { id: 'owner' } }))
+    await expect(
+      new SpotifyClient(config, request).getPlaylist('playlist', 'token', false),
+    ).rejects.toBeInstanceOf(SpotifyPlaylistInaccessibleError)
+  })
+
+  it('rejects incomplete pagination instead of silently importing a partial playlist', async () => {
+    const request = vi
+      .fn<SpotifyFetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'playlist',
+          name: 'Playlist',
+          owner: { id: 'owner' },
+          tracks: { items: [{ track: null }], total: 2, next: 'next' },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ items: [], total: 2, next: null }))
+    await expect(
+      new SpotifyClient(config, request).getPlaylist('playlist', 'token', true),
+    ).rejects.toBeInstanceOf(SpotifyInvalidResponseError)
+  })
   it('requests a token using Basic authorization and form encoding', async () => {
     const request = vi.fn<SpotifyFetch>().mockResolvedValue(
       jsonResponse({

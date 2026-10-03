@@ -22,6 +22,12 @@ apenas da voz e de outros recursos efêmeros de runtime.
 
 - Fila colaborativa persistente, mobile-first e baseada em SQLite.
 - Busca de faixas e metadados no Spotify.
+- Importação de playlists do Spotify com prévia de cinco faixas, adicionadas na
+  ordem da playlist após as músicas existentes. Duplicatas, arquivos locais e
+  entradas indisponíveis ou inválidas são listados como ignorados. O áudio é
+  resolvido no início da reprodução.
+- Limpeza confirmada das próximas músicas sem interromper a faixa atual nem
+  alterar a configuração do autoplay.
 - Resolução de áudio no YouTube Music e reprodução na voz do Discord.
 - Controles web de reprodução, pausa, retomada, skip, volume, ordenação da fila e
   remoção/restauração.
@@ -93,6 +99,14 @@ as atualizações normalmente aparecem imediatamente.
 Crie uma aplicação no Spotify Developer Dashboard e copie seu client ID e client
 secret. O Waves usa o fluxo client credentials no servidor; esses valores nunca
 devem ser expostos ao navegador nem commitados no Git.
+
+A importação depende de o Spotify disponibilizar o conteúdo da playlist para
+essas credenciais. As restrições do Development Mode de 2026 limitam o conteúdo
+a playlists do usuário autorizado ou em que ele colabora; client credentials não
+autoriza um usuário. O Waves informa erro de acesso quando o conteúdo não está
+disponível (inclusive em playlists privadas), sem tratá-lo como vazio. Aplicações
+em Extended Quota Mode mantêm seu acesso anterior. OAuth de usuário Spotify ainda
+não está implementado.
 
 ### Last.fm
 

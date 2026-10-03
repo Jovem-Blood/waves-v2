@@ -14,6 +14,7 @@ import {
   SpotifyInvalidQueryError,
   SpotifyInvalidResponseError,
   SpotifyUnavailableError,
+  SpotifyPlaylistInaccessibleError,
 } from '../clients/spotify.errors'
 import {
   AudioSourceNotFoundError,
@@ -34,6 +35,13 @@ import { useLogger } from './logger'
 import { PublicAppConfigurationError } from './public-app-config'
 
 function toApiError(error: unknown): ApiError {
+  if (error instanceof SpotifyPlaylistInaccessibleError) {
+    return apiErrorSchema.parse({
+      statusCode: 403,
+      statusMessage: 'Spotify playlist inaccessible',
+      data: { code: 'SPOTIFY_PLAYLIST_INACCESSIBLE' },
+    })
+  }
   if (error instanceof ZodError || error instanceof SpotifyInvalidQueryError) {
     return apiErrorSchema.parse({
       statusCode: 400,

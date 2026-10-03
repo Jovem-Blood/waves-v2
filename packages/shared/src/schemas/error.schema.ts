@@ -15,6 +15,7 @@ export const apiErrorCodeSchema = z.enum([
   ...sourceErrorCodeSchema.options,
   'PLAYBACK_CONFLICT',
   'SPOTIFY_UNAVAILABLE',
+  'SPOTIFY_PLAYLIST_INACCESSIBLE',
   'INTERNAL_ERROR',
 ])
 

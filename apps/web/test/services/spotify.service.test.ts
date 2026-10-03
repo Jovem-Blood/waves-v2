@@ -51,13 +51,61 @@ function createClient(tracks: SpotifyTrack[] = [completeTrack]): {
     .fn<(query: string, accessToken: string, limit?: number) => Promise<SpotifyTrack[]>>()
     .mockResolvedValue(tracks)
   return {
-    client: { requestAccessToken, searchTracks },
+    client: { requestAccessToken, searchTracks, getPlaylist: vi.fn() },
     requestAccessToken,
     searchTracks,
   }
 }
 
 describe('SpotifyService', () => {
+  it('normalizes playlist entries and reports skipped positions and reasons', async () => {
+    const { client } = createClient()
+    client.getPlaylist = vi.fn().mockResolvedValue({
+      id: '1234567890123456789012',
+      name: 'Playlist',
+      owner: { id: 'owner' },
+      items: {
+        total: 7,
+        next: null,
+        items: [
+          { item: completeTrack },
+          { item: null },
+          { is_local: true, item: completeTrack },
+          { item: { name: 'Podcast', type: 'episode' } },
+          { item: { ...completeTrack, is_playable: false } },
+          { item: { name: 'Broken' } },
+          { item: completeTrack },
+        ],
+      },
+    })
+    const service = new SpotifyService(client)
+    const url = 'https://open.spotify.com/intl-pt/playlist/1234567890123456789012?si=test'
+    const result = await service.getPlaylist(url, true)
+    expect(result.tracks.map(({ position }) => position)).toEqual([1, 7])
+    expect(result.skipped.map(({ reason }) => reason)).toEqual([
+      'unavailable',
+      'local',
+      'unsupported',
+      'unavailable',
+      'invalid',
+    ])
+    expect(result.preview).toMatchObject({ name: 'Playlist', owner: 'owner', total: 7 })
+    const preview = await service.getPlaylist(url)
+    expect(preview.tracks.map(({ position }) => position)).toEqual([1])
+  })
+
+  it('rejects non-playlist URLs before contacting Spotify', async () => {
+    const { client, requestAccessToken } = createClient()
+    const service = new SpotifyService(client)
+    for (const url of [
+      'https://example.com/playlist/1234567890123456789012',
+      'https://open.spotify.com/track/1234567890123456789012',
+      'https://open.spotify.com@evil.test/playlist/1234567890123456789012',
+    ]) {
+      await expect(service.getPlaylist(url)).rejects.toThrow()
+    }
+    expect(requestAccessToken).not.toHaveBeenCalled()
+  })
   it('requests a token on the first search and normalizes tracks', async () => {
     const { client, requestAccessToken, searchTracks } = createClient()
     const service = new SpotifyService(client, () => 1_000_000)

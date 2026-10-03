@@ -20,7 +20,7 @@ export class SpotifyUnavailableError extends Error {
   readonly code = 'SPOTIFY_UNAVAILABLE'
 
   constructor(
-    readonly operation: 'authenticate' | 'search',
+    readonly operation: 'authenticate' | 'search' | 'playlist',
     options?: ErrorOptions,
   ) {
     super(`Spotify is unavailable during ${operation}`, options)
@@ -32,7 +32,7 @@ export class SpotifyInvalidResponseError extends Error {
   readonly code = 'SPOTIFY_INVALID_RESPONSE'
 
   constructor(
-    readonly operation: 'authenticate' | 'search',
+    readonly operation: 'authenticate' | 'search' | 'playlist',
     options?: ErrorOptions,
   ) {
     super(`Spotify returned an invalid ${operation} response`, options)
@@ -46,5 +46,12 @@ export class SpotifyInvalidQueryError extends Error {
   constructor() {
     super('Spotify search query must not be empty')
     this.name = 'SpotifyInvalidQueryError'
+  }
+}
+
+export class SpotifyPlaylistInaccessibleError extends Error {
+  constructor() {
+    super('Spotify playlist contents are not accessible with these credentials')
+    this.name = 'SpotifyPlaylistInaccessibleError'
   }
 }

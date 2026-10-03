@@ -31,7 +31,10 @@ import { parseLastFmConfig } from './lastfm-config'
 import { parseSpotifyConfig } from './spotify-config'
 import { getRealtimeEventBus } from './realtime-events'
 
-type PublicQueueService = Pick<QueueService, 'list' | 'add' | 'remove' | 'restore' | 'move'>
+type PublicQueueService = Pick<
+  QueueService,
+  'list' | 'add' | 'remove' | 'restore' | 'move' | 'appendPlaylist' | 'clearUpcoming'
+>
 type PublicHistoryService = Pick<HistoryService, 'list'>
 type PublicPlaybackHealthService = Pick<PlaybackHealthService, 'get'>
 export type PublicOperationalStatusService = Pick<
@@ -52,7 +55,7 @@ export type PublicPlayerStateService = Pick<
   | 'completePlayback'
   | 'reportPlaybackAttempt'
 >
-export type PublicSpotifyService = Pick<SpotifyService, 'searchTracks'>
+export type PublicSpotifyService = Pick<SpotifyService, 'searchTracks' | 'getPlaylist'>
 type PublicAutoplayService = Pick<AutoplayService, 'get' | 'update'>
 export type PublicAutoplayOrchestrator = Pick<
   AutoplayOrchestrator,
@@ -172,6 +175,9 @@ export function usePublicApiDependencies(): PublicApiDependencies {
       queueRepository,
     ),
     spotifyService: {
+      getPlaylist(url, full) {
+        return getSpotifyService().getPlaylist(url, full)
+      },
       searchTracks(query) {
         return getSpotifyService().searchTracks(query)
       },

@@ -8,6 +8,8 @@ import {
   type QueueItem,
   type RemoveQueueItemResult,
   type RestoreQueueItemResult,
+  type TrackMetadata,
+  type PlaylistSkippedItem,
 } from '@waves/shared'
 
 import type { QueueRepository } from '../../repositories/queue.repository'
@@ -44,6 +46,63 @@ export class QueueService {
 
   list(): QueueItem[] {
     return this.queueRepository.listActive()
+  }
+
+  appendPlaylist(
+    tracks: readonly { position: number; track: TrackMetadata }[],
+    requester: Pick<AddQueueItemInput, 'requestedByUserId' | 'requestedByDisplayName'>,
+    skipped: readonly PlaylistSkippedItem[] = [],
+  ) {
+    const result = this.unitOfWork.run(({ queue }) => {
+      const active = queue.listActive()
+      const seen = new Set(active.map(({ track }) => `${track.provider}:${track.providerTrackId}`))
+      const failures = [...skipped]
+      const timestamp = this.now().toISOString()
+      let imported = 0
+      for (const { position, track } of tracks) {
+        const key = `${track.provider}:${track.providerTrackId}`
+        if (seen.has(key)) {
+          failures.push({ position, title: track.title, reason: 'duplicate' })
+          continue
+        }
+        const parsed = addQueueItemInputSchema.parse({ track, ...requester })
+        queue.insert({
+          ...parsed,
+          id: this.generateId(),
+          origin: 'human',
+          status: 'queued',
+          position: active.length + imported,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        seen.add(key)
+        imported++
+      }
+      return {
+        queue: queue.listActive(),
+        imported,
+        skipped: failures.sort((a, b) => a.position - b.position),
+      }
+    })
+    this.publishRealtime({ type: 'queue.updated', queue: result.queue, reason: 'added' })
+    return result
+  }
+
+  clearUpcoming() {
+    const result = this.unitOfWork.run(({ queue }) => {
+      const upcoming = queue.listActive().filter((item) => item.status === 'queued')
+      const timestamp = this.now().toISOString()
+      for (const item of upcoming) {
+        queue.updateStatusAndPosition(item.id, {
+          status: 'removed',
+          position: item.position,
+          updatedAt: timestamp,
+        })
+      }
+      return { queue: queue.listActive(), cleared: upcoming.length }
+    })
+    this.publishRealtime({ type: 'queue.updated', queue: result.queue, reason: 'removed' })
+    return result
   }
 
   add(input: AddQueueItemInput): QueueItem {
