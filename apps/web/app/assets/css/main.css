@@ -3,6 +3,34 @@
 @import '@fontsource-variable/inter';
 @import 'tailwindcss';
 
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 180ms ease;
+}
+.modal-enter-active > *,
+.modal-leave-active > * {
+  transition: transform 180ms ease;
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-from > *,
+.modal-leave-to > * {
+  transform: translateY(8px) scale(0.98);
+}
+.modal-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-enter-active,
+  .modal-leave-active,
+  .modal-enter-active > *,
+  .modal-leave-active > * {
+    transition: none;
+  }
+}
+
 :root,
 [data-theme='waves'] {
   color-scheme: dark;

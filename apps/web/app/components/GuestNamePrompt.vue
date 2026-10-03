@@ -35,40 +35,42 @@ function submit() {
 </script>
 
 <template>
-  <div v-if="open" class="guest-gate" role="presentation">
-    <form class="guest-dialog" aria-labelledby="guest-title" @submit.prevent="submit">
-      <span class="guest-icon" aria-hidden="true"><UserRound :size="22" /></span>
-      <div>
-        <span class="eyebrow">IDENTIDADE DA FILA</span>
-        <h2 id="guest-title">Como devemos te chamar?</h2>
-        <p>Esse nome vai aparecer na fila quando você pedir músicas.</p>
-      </div>
+  <Transition name="modal" appear>
+    <div v-if="open" class="guest-gate" role="presentation">
+      <form class="guest-dialog" aria-labelledby="guest-title" @submit.prevent="submit">
+        <span class="guest-icon" aria-hidden="true"><UserRound :size="22" /></span>
+        <div>
+          <span class="eyebrow">IDENTIDADE DA FILA</span>
+          <h2 id="guest-title">Como devemos te chamar?</h2>
+          <p>Esse nome vai aparecer na fila quando você pedir músicas.</p>
+        </div>
 
-      <label>
-        <span>Nome</span>
-        <input
-          v-model="displayName"
-          type="text"
-          maxlength="40"
-          autocomplete="nickname"
-          :disabled="submitting"
-          required
-          autofocus
-        />
-      </label>
+        <label>
+          <span>Nome</span>
+          <input
+            v-model="displayName"
+            type="text"
+            maxlength="40"
+            autocomplete="nickname"
+            :disabled="submitting"
+            required
+            autofocus
+          />
+        </label>
 
-      <p v-if="localError" class="guest-error error-message" role="alert">{{ localError }}</p>
+        <p v-if="localError" class="guest-error error-message" role="alert">{{ localError }}</p>
 
-      <button
-        class="action-button"
-        type="submit"
-        :disabled="submitting || trimmedName.length === 0"
-      >
-        <LoaderCircle v-if="submitting" class="spinner" :size="18" aria-hidden="true" />
-        {{ submitting ? 'Entrando...' : 'Entrar na fila' }}
-      </button>
-    </form>
-  </div>
+        <button
+          class="action-button"
+          type="submit"
+          :disabled="submitting || trimmedName.length === 0"
+        >
+          <LoaderCircle v-if="submitting" class="spinner" :size="18" aria-hidden="true" />
+          {{ submitting ? 'Entrando...' : 'Entrar na fila' }}
+        </button>
+      </form>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>

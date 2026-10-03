@@ -94,7 +94,7 @@ describe('Queue Social components', () => {
     expect(filled.emitted('remove')).toEqual([[queuedItem.id]])
   })
 
-  it('renders an accessible autoplay switch and reports recommendation failures', async () => {
+  it('offers the current autoplay action in the options menu and reports recommendation failures', async () => {
     const wrapper = mount(QueuePanel, {
       props: {
         items: [],
@@ -109,9 +109,9 @@ describe('Queue Social components', () => {
       },
     })
 
-    const toggle = wrapper.get('[role="switch"]')
-    expect(toggle.attributes('aria-checked')).toBe('true')
-    expect(toggle.attributes('aria-label')).toBe('Desativar autoplay')
+    await wrapper.get('[aria-label="Opções da fila"]').trigger('click')
+    const toggle = wrapper.get('[role="menuitem"]')
+    expect(toggle.text()).toBe('Desativar autoplay')
     expect(wrapper.text()).toContain('não encontrou uma recomendação')
     await toggle.trigger('click')
     expect(wrapper.emitted('autoplayChange')).toEqual([[false]])

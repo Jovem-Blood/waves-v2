@@ -35,59 +35,66 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
     </button>
 
     <Teleport to="body">
-      <div v-if="open" class="modal-backdrop" @click.self="open = false">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-label="Configurações">
-          <div class="modal-header">
-            <h2 class="modal-title">Configurações</h2>
-            <button class="modal-close" type="button" aria-label="Fechar" @click="open = false">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-
-          <div class="modal-body">
-            <span class="settings-label">Status</span>
-            <div class="status-card" :data-online="webAvailable">
-              <span class="status-dot" aria-hidden="true" />
-              <span>{{ webAvailable ? 'Web disponível' : 'Web indisponível' }}</span>
-            </div>
-            <div class="status-card" :data-online="status?.bot.status === 'online'">
-              <span class="status-dot" aria-hidden="true" />
-              <span>Bot {{ status?.bot.status === 'online' ? 'online' : 'offline' }}</span>
-            </div>
-            <div class="status-card" :data-online="status?.voice.status === 'connected'">
-              <span class="status-dot" aria-hidden="true" />
-              <span>
-                {{
-                  status?.voice.status === 'connected'
-                    ? `${status.voice.guildName} · ${status.voice.voiceChannelName}`
-                    : status?.voice.status === 'reconnecting'
-                      ? 'Canal reconectando'
-                      : 'Canal desconectado'
-                }}
-              </span>
-            </div>
-
-            <span class="settings-label">Tema</span>
-            <div class="theme-grid" role="listbox" aria-label="Selecionar tema">
-              <button
-                v-for="t in themes"
-                :key="t.id"
-                class="theme-card"
-                :class="{ active: current === t.id }"
-                role="option"
-                :aria-selected="current === t.id"
-                @click="select(t.id)"
-              >
-                <span class="swatches">
-                  <span v-for="c in t.colors" :key="c" class="swatch" :style="{ background: c }" />
-                </span>
-                <span class="theme-name">{{ t.name }}</span>
-                <span v-if="current === t.id" class="theme-check" aria-hidden="true">✓</span>
+      <Transition name="modal">
+        <div v-if="open" class="modal-backdrop" @click.self="open = false">
+          <div class="modal-card" role="dialog" aria-modal="true" aria-label="Configurações">
+            <div class="modal-header">
+              <h2 class="modal-title">Configurações</h2>
+              <button class="modal-close" type="button" aria-label="Fechar" @click="open = false">
+                <span aria-hidden="true">&times;</span>
               </button>
+            </div>
+
+            <div class="modal-body">
+              <span class="settings-label">Status</span>
+              <div class="status-card" :data-online="webAvailable">
+                <span class="status-dot" aria-hidden="true" />
+                <span>{{ webAvailable ? 'Web disponível' : 'Web indisponível' }}</span>
+              </div>
+              <div class="status-card" :data-online="status?.bot.status === 'online'">
+                <span class="status-dot" aria-hidden="true" />
+                <span>Bot {{ status?.bot.status === 'online' ? 'online' : 'offline' }}</span>
+              </div>
+              <div class="status-card" :data-online="status?.voice.status === 'connected'">
+                <span class="status-dot" aria-hidden="true" />
+                <span>
+                  {{
+                    status?.voice.status === 'connected'
+                      ? `${status.voice.guildName} · ${status.voice.voiceChannelName}`
+                      : status?.voice.status === 'reconnecting'
+                        ? 'Canal reconectando'
+                        : 'Canal desconectado'
+                  }}
+                </span>
+              </div>
+
+              <span class="settings-label">Tema</span>
+              <div class="theme-grid" role="listbox" aria-label="Selecionar tema">
+                <button
+                  v-for="t in themes"
+                  :key="t.id"
+                  class="theme-card"
+                  :class="{ active: current === t.id }"
+                  role="option"
+                  :aria-selected="current === t.id"
+                  @click="select(t.id)"
+                >
+                  <span class="swatches">
+                    <span
+                      v-for="c in t.colors"
+                      :key="c"
+                      class="swatch"
+                      :style="{ background: c }"
+                    />
+                  </span>
+                  <span class="theme-name">{{ t.name }}</span>
+                  <span v-if="current === t.id" class="theme-check" aria-hidden="true">✓</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

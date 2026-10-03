@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from '#imports'
 import { Activity, AudioWaveform, Headphones, History } from '@lucide/vue'
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import CurrentUserMenu from '../components/CurrentUserMenu.vue'
 import GuestNamePrompt from '../components/GuestNamePrompt.vue'
 import PlayerBar from '../components/PlayerBar.vue'
 import HeaderConnectionStatus from '../components/HeaderConnectionStatus.vue'
 import QueuePanel from '../components/QueuePanel.vue'
+import QueuePlaylistActions from '../components/QueuePlaylistActions.vue'
 import SpotifySearch from '../components/SpotifySearch.vue'
 import SettingsModal from '../components/SettingsModal.vue'
 import ToastViewport from '../components/ToastViewport.vue'
@@ -24,6 +25,7 @@ const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
 
 const queue = useQueue(apiBase)
+const playlistActions = ref<InstanceType<typeof QueuePlaylistActions>>()
 const player = usePlayerState(apiBase)
 const operational = useOperationalStatus(apiBase)
 const auth = useAuth(apiBase)
@@ -169,6 +171,9 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         :autoplay-error="autoplay.error.value"
         :autoplay-rejecting-id="autoplay.rejectingId.value"
         :autoplay-committing-track-id="queue.addingTrackId.value"
+        :actions-disabled="!!queue.addingTrackId.value || !!playlistActions?.busy"
+        @import-playlist="playlistActions?.show('import')"
+        @clear-queue="playlistActions?.show('clear')"
         @refresh="queue.refresh"
         @remove="queue.remove"
         @move="queue.move"
@@ -203,5 +208,12 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
       @submit="auth.createGuest"
     />
     <ToastViewport />
+    <QueuePlaylistActions
+      ref="playlistActions"
+      :api-base="apiBase"
+      :items="queue.items.value"
+      :disabled="queue.loading.value || !!queue.mutatingId.value || !!queue.addingTrackId.value"
+      @updated="(items) => queue.replace(items, { notifyFailures: false })"
+    />
   </div>
 </template>
