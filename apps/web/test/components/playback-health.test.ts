@@ -71,4 +71,35 @@ describe('Playback Health panel', () => {
     const error = mount(PlaybackHealthPanel, { props: { ...props, error: 'Falha temporária' } })
     expect(error.get('[role="alert"]').text()).toContain('Falha temporária')
   })
+  it('shows persistent failure reasons and autoplay suspension', () => {
+    const wrapper = mount(PlaybackHealthPanel, {
+      props: {
+        ...props,
+        data: {
+          ...data,
+          failureCatalog: [
+            {
+              trackId: 'spotify:unavailable',
+              trackTitle: 'Unavailable',
+              trackArtists: 'Artist',
+              trackProvider: 'spotify',
+              successes: 1,
+              failures: 2,
+              contentFailures: 2,
+              lastErrorCode: 'SOURCE_NOT_FOUND',
+              lastFailureClass: 'content',
+              lastFailureStage: 'resolve',
+              lastFailedAt: '2026-09-01T01:00:00.000Z',
+              lastPlayedAt: null,
+              suppressedUntil: '2026-09-08T01:00:00.000Z',
+            },
+          ],
+        },
+      },
+    })
+    const catalog = wrapper.get('[aria-labelledby="failure-catalog-title"]')
+    expect(catalog.text()).toContain('Unavailable')
+    expect(catalog.text()).toContain('SOURCE_NOT_FOUND')
+    expect(catalog.text()).toContain('Fora do autoplay até')
+  })
 })

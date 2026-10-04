@@ -83,6 +83,27 @@ export const playbackHealthResponseSchema = z
         .strict(),
     ),
     problematicTracks: z.array(playbackHealthTrackSchema),
+    failureCatalog: z
+      .array(
+        z
+          .object({
+            trackId: z.string(),
+            trackTitle: z.string(),
+            trackArtists: z.string(),
+            trackProvider: z.string(),
+            successes: z.number().int().nonnegative(),
+            failures: z.number().int().nonnegative(),
+            contentFailures: z.number().int().nonnegative(),
+            lastErrorCode: z.string().nullable(),
+            lastFailureClass: z.string().nullable(),
+            lastFailureStage: z.string().nullable(),
+            lastFailedAt: z.iso.datetime({ offset: true }).nullable(),
+            lastPlayedAt: z.iso.datetime({ offset: true }).nullable(),
+            suppressedUntil: z.iso.datetime({ offset: true }).nullable(),
+          })
+          .strict(),
+      )
+      .default([]),
     availableProviders: z.array(z.string()).optional(),
     availableErrorCodes: z.array(z.string()).optional(),
     dataCompleteness: z

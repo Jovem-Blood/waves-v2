@@ -24,6 +24,15 @@ do SQLite antes das migrações. Remover linhas libera páginas reutilizáveis, 
 não reduz imediatamente o arquivo. Monitore espaço do banco/WAL e leituras longas;
 planeje compactação offline separadamente, se necessária.
 
+O catálogo de músicas com falhas permanece após a retenção da telemetria. Ele
+guarda contagens de sucessos e falhas terminais e o último código, classe e etapa
+da falha; a migração importa a telemetria histórica ainda disponível. O Playback
+Health mostra as 50 faixas com mais falhas. Após duas falhas terminais
+`SOURCE_NOT_FOUND` ou `SOURCE_GEO_BLOCKED` desde o último sucesso, a faixa do
+Spotify fica fora das sugestões do autoplay por sete dias após a última falha.
+Falhas operacionais não causam essa suspensão. Um sucesso zera a sequência de
+falhas de conteúdo. A música ainda pode ser pedida manualmente.
+
 Os tempos medem resolução da fonte, preparo do recurso (`fetchLatencyMs`, incluindo
 fetch/demux), primeiro estado `Playing` e duração reproduzida pelo recurso.
 Primeiro áudio é estimativa do player, não medição nos ouvintes do Discord.

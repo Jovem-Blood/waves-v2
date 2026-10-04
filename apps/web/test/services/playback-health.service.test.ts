@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 
 import { createDatabaseConnection, type DatabaseConnection } from '../../server/db/client'
 import { PlaybackAttemptRepository } from '../../server/repositories/playback-attempt.repository'
+import { TrackPlaybackHealthRepository } from '../../server/repositories/track-playback-health.repository'
 import { QueueRepository } from '../../server/repositories/queue.repository'
 import { PlaybackHealthService } from '../../server/services/playback/health.service'
 
@@ -48,7 +49,7 @@ describe('PlaybackHealthService', () => {
     const journal = JSON.parse(readFileSync(`${migrationsFolder}/meta/_journal.json`, 'utf8')) as {
       entries: Array<{ tag: string }>
     }
-    for (const entry of journal.entries.filter((entry) => !entry.tag.startsWith('0012_'))) {
+    for (const entry of journal.entries.filter((entry) => Number(entry.tag.slice(0, 4)) < 12)) {
       connection.sqlite.exec(readFileSync(`${migrationsFolder}/${entry.tag}.sql`, 'utf8'))
     }
     new QueueRepository(connection.db).insert(first)
@@ -73,7 +74,11 @@ describe('PlaybackHealthService', () => {
     return {
       connection,
       attempts,
-      service: new PlaybackHealthService(attempts, () => new Date('2026-08-21T00:00:00.000Z')),
+      service: new PlaybackHealthService(
+        attempts,
+        new TrackPlaybackHealthRepository(connection.db),
+        () => new Date('2026-08-21T00:00:00.000Z'),
+      ),
     }
   }
 
@@ -317,6 +322,7 @@ describe('PlaybackHealthService', () => {
 
     const result = new PlaybackHealthService(
       attempts,
+      new TrackPlaybackHealthRepository(connection.db),
       () => new Date('2026-08-21T00:00:00.000Z'),
     ).get({ from: '2026-08-01T00:00:00.000Z', to: '2026-08-31T00:00:00.000Z' })
 

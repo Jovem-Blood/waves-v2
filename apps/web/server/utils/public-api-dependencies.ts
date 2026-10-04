@@ -4,6 +4,7 @@ import { YouTubeMusicClient } from '../clients/youtube-music.client'
 import { AutoplayRepository } from '../repositories/autoplay.repository'
 import { AutoplaySuggestionRepository } from '../repositories/autoplay-suggestion.repository'
 import { AutoplayCandidateRepository } from '../repositories/autoplay-candidate.repository'
+import { TrackPlaybackHealthRepository } from '../repositories/track-playback-health.repository'
 import { PlaybackAttemptRepository } from '../repositories/playback-attempt.repository'
 import { useDatabase } from '../db/client'
 import { PlayerStateRepository } from '../repositories/player-state.repository'
@@ -59,7 +60,13 @@ export type PublicSpotifyService = Pick<SpotifyService, 'searchTracks' | 'getPla
 type PublicAutoplayService = Pick<AutoplayService, 'get' | 'update'>
 export type PublicAutoplayOrchestrator = Pick<
   AutoplayOrchestrator,
-  'completePlayback' | 'queueChanged' | 'skip' | 'rejectSuggestion' | 'voiceDisconnected'
+  | 'completePlayback'
+  | 'queueChanged'
+  | 'refresh'
+  | 'retryIfNeeded'
+  | 'skip'
+  | 'rejectSuggestion'
+  | 'voiceDisconnected'
 >
 
 export interface PublicApiDependencies {
@@ -91,6 +98,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   const autoplayRepository = new AutoplayRepository(db)
   const autoplaySuggestionRepository = new AutoplaySuggestionRepository(db)
   const autoplayCandidateRepository = new AutoplayCandidateRepository(db)
+  const trackPlaybackHealthRepository = new TrackPlaybackHealthRepository(db)
   const playbackAttemptRepository = new PlaybackAttemptRepository(db)
   const unitOfWork = new DatabaseUnitOfWork(db)
   const playbackMaintenance = new PlaybackMaintenanceService(unitOfWork)
@@ -145,8 +153,11 @@ export function usePublicApiDependencies(): PublicApiDependencies {
   runtimeDependencies = {
     queueService: runtimeQueueService,
     historyService: new HistoryService(queueRepository),
-    playbackHealthService: new PlaybackHealthService(playbackAttemptRepository, undefined, () =>
-      playbackMaintenance.reconcile(),
+    playbackHealthService: new PlaybackHealthService(
+      playbackAttemptRepository,
+      trackPlaybackHealthRepository,
+      undefined,
+      () => playbackMaintenance.reconcile(),
     ),
     playerStateService: runtimePlayerStateService,
     autoplayService: runtimeAutoplayService,
@@ -156,6 +167,7 @@ export function usePublicApiDependencies(): PublicApiDependencies {
       queueRepository,
       autoplaySuggestionRepository,
       autoplayCandidateRepository,
+      trackPlaybackHealthRepository,
       runtimePlayerStateService,
       recommendationService,
     ),

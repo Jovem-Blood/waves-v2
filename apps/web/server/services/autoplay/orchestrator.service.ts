@@ -19,6 +19,7 @@ import type {
   StoredAutoplaySuggestion,
 } from '../../repositories/autoplay-suggestion.repository'
 import type { QueueRepository } from '../../repositories/queue.repository'
+import type { TrackPlaybackHealthRepository } from '../../repositories/track-playback-health.repository'
 import type { WavesLogger } from '../../utils/logger'
 import { useLogger } from '../../utils/logger'
 import { normalizeMusicText } from '../audio-source/matching'
@@ -69,6 +70,9 @@ export class AutoplayOrchestrator {
     | Promise<ReturnType<PlayerStateService['promoteAutoplaySuggestion']>>
     | undefined
   private readonly profile = new AutoplaySessionProfile()
+  private recoveryPending = false
+  private nextRetryAt = 0
+  private retryCount = 0
 
   constructor(
     private readonly autoplayService: AutoplayService,
@@ -76,6 +80,7 @@ export class AutoplayOrchestrator {
     private readonly queueRepository: QueueRepository,
     private readonly suggestionRepository: AutoplaySuggestionRepository,
     private readonly candidateRepository: AutoplayCandidateRepository,
+    private readonly trackHealthRepository: TrackPlaybackHealthRepository,
     private readonly playerStateService: PlayerStateService,
     private readonly recommendationEngine: RecommendationEngine,
     private readonly now: () => Date = () => new Date(),
@@ -88,6 +93,47 @@ export class AutoplayOrchestrator {
       this.generationInFlight = undefined
     })
     await this.generationInFlight
+  }
+
+  async refresh(): Promise<void> {
+    await this.safeQueueChanged()
+  }
+
+  async retryIfNeeded(): Promise<void> {
+    const state = this.autoplayService.get()
+    if (
+      state.enabled &&
+      !this.recoveryPending &&
+      state.failureCode &&
+      this.queueService.list().length === 0 &&
+      this.queueRepository.listRecentTerminal(1).length > 0
+    ) {
+      this.recoveryPending = true
+    }
+    if (
+      !state.enabled ||
+      (!this.recoveryPending && state.suggestions.length >= TARGET_SUGGESTIONS)
+    ) {
+      return
+    }
+    if (!this.recoveryPending && this.queueService.list().length === 0) return
+    const now = this.now().getTime()
+    if (now < this.nextRetryAt) return
+    this.nextRetryAt = now + 30_000
+    await this.safeQueueChanged()
+    const refreshed = this.autoplayService.get()
+    if (this.recoveryPending && refreshed.suggestions.length > 0) {
+      const context = this.context(this.queueService.list())
+      if (context) {
+        const promoted = await this.promote(context.fingerprint)
+        if (promoted.item) {
+          this.recoveryPending = false
+          await this.safeQueueChanged()
+        }
+      }
+    }
+    this.retryCount = refreshed.suggestions.length > 0 ? 0 : Math.min(this.retryCount + 1, 4)
+    this.nextRetryAt = now + Math.min(600_000, 30_000 * 2 ** this.retryCount)
   }
 
   async completePlayback(input: CompletePlaybackInput): Promise<PlaybackTransitionResult> {
@@ -108,13 +154,18 @@ export class AutoplayOrchestrator {
     const completed = this.playerStateService.completePlayback(input)
     if (input.outcome === 'played' && current) this.profile.recordCompleted(current)
     if (completed.nextItem) {
+      this.recoveryPending = false
       await this.safeQueueChanged()
       return completed
     }
     if (!wasEnabled || !this.autoplayService.get().enabled || !contextBefore) return completed
 
     const promoted = await this.promote(contextBefore.fingerprint)
-    if (!promoted.item) return completed
+    if (!promoted.item) {
+      this.recoveryPending = true
+      return completed
+    }
+    this.recoveryPending = false
     this.autoplayService.clearFailure()
     await this.safeQueueChanged()
     return {
@@ -141,7 +192,11 @@ export class AutoplayOrchestrator {
     }
 
     const promoted = await this.promote(contextBefore.fingerprint)
-    if (!promoted.item) return skipped
+    if (!promoted.item) {
+      this.recoveryPending = true
+      return skipped
+    }
+    this.recoveryPending = false
     await this.safeQueueChanged()
     return { player: promoted.player, queue: this.queueService.list() }
   }
@@ -164,6 +219,8 @@ export class AutoplayOrchestrator {
       this.profile.reset()
       this.suggestionRepository.clear()
       this.candidateRepository.clear()
+      this.recoveryPending = false
+      this.retryCount = 0
     }
     return player
   }
@@ -206,49 +263,132 @@ export class AutoplayOrchestrator {
     const state = this.autoplayService.get()
     if (!state.enabled) {
       this.suggestionRepository.clear()
+      this.candidateRepository.clear()
+      this.recoveryPending = false
       return
     }
 
     const active = this.queueService.list()
+    if (active.some((item) => item.origin === 'human')) this.recoveryPending = false
     const context = this.context(active)
     if (!context) {
       this.suggestionRepository.clear()
       if (active.length > 0) this.autoplayService.recordFailure('no_seeds')
       return
     }
-    if (context.humanAnchor) this.profile.observeHumanInput(context.humanAnchor)
+    const storedSuggestions = this.suggestionRepository.list()
+    const storedCandidates = this.candidateRepository.list()
+    if (context.humanAnchor) {
+      const humanAnchor = context.humanAnchor
+      const previousHuman = this.profile.latestHumanAnchor()
+      const newIdentity = this.trackIdentityKey(humanAnchor)
+      const matchingCandidates = storedCandidates.filter(
+        (candidate) => candidate.identityKey === newIdentity,
+      )
+      const samePreviousArtist = Boolean(
+        previousHuman &&
+        normalizeMusicText(previousHuman.artists[0] ?? '') ===
+          normalizeMusicText(humanAnchor.artists[0] ?? ''),
+      )
+      this.profile.observeHumanDirection(humanAnchor, {
+        relatedToCurrent:
+          samePreviousArtist ||
+          storedSuggestions.some((suggestion) => this.isSameTrack(suggestion.track, humanAnchor)) ||
+          matchingCandidates.length > 0,
+        relatedToDrift:
+          (samePreviousArtist &&
+            previousHuman !== undefined &&
+            this.profile.isDriftSeed(
+              `${previousHuman.provider}:${previousHuman.providerTrackId}`,
+            )) ||
+          storedSuggestions.some(
+            (suggestion) =>
+              this.isSameTrack(suggestion.track, humanAnchor) &&
+              this.profile.isDriftSeed(suggestion.seedTrackKey),
+          ) ||
+          matchingCandidates.some((candidate) => this.profile.isDriftSeed(candidate.seedTrackKey)),
+      })
+      this.profile.observeHumanInput(humanAnchor)
+    }
 
     const recent = this.queueRepository.listRecentPlayed(RECENT_PLAYED_LIMIT)
     const blockedTracks = [...active, ...recent].map((item) => item.track)
-    const storedSuggestions = this.suggestionRepository.list()
-    const existing = this.validSuggestions(storedSuggestions, context.fingerprint, blockedTracks)
+    const suppressedTracks = this.trackHealthRepository.suppressedTracks(this.now())
+    const suppressedIds = new Set(suppressedTracks.map((track) => track.providerTrackId))
+    const suppressedIdentities = new Set(
+      suppressedTracks.map((track) =>
+        this.trackIdentityKey({ title: track.title, artists: track.artists }),
+      ),
+    )
+    const existing = this.validSuggestions(
+      storedSuggestions,
+      context.fingerprint,
+      blockedTracks,
+      suppressedIds,
+    )
     if (this.suggestionsChanged(storedSuggestions, existing)) {
       this.suggestionRepository.replaceAll(existing)
     }
 
-    let bank = this.candidateRepository
-      .list()
-      .filter(
-        (candidate) =>
-          candidate.seedFingerprint === context.fingerprint &&
-          !this.candidateBlocked(candidate, blockedTracks, existing),
-      )
+    let bank = storedCandidates.filter(
+      (candidate) =>
+        candidate.seedFingerprint === context.fingerprint &&
+        !this.candidateBlocked(candidate, blockedTracks, existing, suppressedIdentities),
+    )
     const continuityKey = `${context.continuitySeed.provider}:${context.continuitySeed.providerTrackId}`
     const needsEnrichment =
       bank.length < REFILL_THRESHOLD ||
       !bank.some((candidate) => candidate.seedTrackKey === continuityKey)
 
     if (needsEnrichment) {
+      let primaryError: Error | undefined
       try {
         const fresh = await this.recommendationEngine.getCandidates(context.seeds)
-        bank = this.mergeAndRankCandidates(bank, fresh, context, recent, blockedTracks, existing)
+        bank = this.mergeAndRankCandidates(
+          bank,
+          fresh,
+          context,
+          recent,
+          blockedTracks,
+          existing,
+          suppressedIdentities,
+        )
       } catch (error) {
-        if (bank.length === 0 && existing.length === 0) throw error
+        primaryError =
+          error instanceof Error
+            ? error
+            : new Error('Recommendation provider failed', { cause: error })
+      }
+      if (bank.length < REFILL_THRESHOLD) {
+        const alternateSeeds = recent
+          .map((item) => item.track)
+          .filter((track) => !context.seeds.some((seed) => this.isSameTrack(seed, track)))
+          .slice(0, 3)
+        for (const seed of alternateSeeds) {
+          try {
+            const alternatives = await this.recommendationEngine.getCandidates([seed])
+            bank = this.mergeAndRankCandidates(
+              bank,
+              alternatives,
+              context,
+              recent,
+              blockedTracks,
+              existing,
+              suppressedIdentities,
+            )
+            if (bank.length >= REFILL_THRESHOLD) break
+          } catch {
+            // A failed alternate seed does not discard candidates already found.
+          }
+        }
+      }
+      if (primaryError) {
+        if (bank.length === 0 && existing.length === 0) throw primaryError
         this.logger.warn(
           {
             operation: 'autoplay.candidates',
             outcome: 'retained_existing',
-            errorName: error instanceof Error ? error.name : 'UnknownError',
+            errorName: primaryError.name,
           },
           'Candidate enrichment failed; retaining current reservoir',
         )
@@ -258,11 +398,25 @@ export class AutoplayOrchestrator {
     }
     this.candidateRepository.replaceAll(bank.slice(0, TARGET_CANDIDATES))
 
-    if (existing.length >= TARGET_SUGGESTIONS) {
+    const retained = this.retainedSuggestions(existing)
+    if (retained.length >= TARGET_SUGGESTIONS) {
       this.autoplayService.clearFailure()
       return
     }
-    const filled = await this.fillSuggestions(existing, bank, context, active, recent)
+    const filled = await this.fillSuggestions(
+      retained,
+      bank,
+      context,
+      active,
+      recent,
+      suppressedIds,
+    )
+    for (const suggestion of existing) {
+      if (filled.suggestions.length >= TARGET_SUGGESTIONS) break
+      if (filled.suggestions.some((item) => this.isSameTrack(item.track, suggestion.track)))
+        continue
+      filled.suggestions.push(suggestion)
+    }
     this.suggestionRepository.replaceAll(filled.suggestions)
     this.candidateRepository.replaceAll(filled.remainingCandidates)
     if (filled.suggestions.length === 0) {
@@ -273,7 +427,6 @@ export class AutoplayOrchestrator {
   }
 
   private context(active: readonly QueueItem[]): RecommendationContext | undefined {
-    if (active.length === 0) return undefined
     const player = this.playerStateService.get()
     if (!player.guildId) return undefined
     this.profile.begin(player.guildId)
@@ -281,22 +434,26 @@ export class AutoplayOrchestrator {
     const humanAnchor =
       [...active, ...recent]
         .filter((item) => item.origin === 'human')
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]?.track ??
-      this.profile.latestHumanAnchor()
-    const continuitySeed = active.at(-1)?.track
+        .sort(
+          (left, right) =>
+            right.createdAt.localeCompare(left.createdAt) || right.position - left.position,
+        )[0]?.track ?? this.profile.latestHumanAnchor()
+    const continuitySeed =
+      active.at(-1)?.track ??
+      this.queueRepository.listRecentTerminal(1)[0]?.track ??
+      recent[0]?.track
     if (!continuitySeed) return undefined
     const seeds = [humanAnchor, continuitySeed]
       .filter((track): track is TrackMetadata => Boolean(track))
       .filter(
         (track, index, all) => all.findIndex((other) => this.isSameTrack(track, other)) === index,
       )
-    const stableAnchor = humanAnchor ?? continuitySeed
     return {
       ...(humanAnchor === undefined ? {} : { humanAnchor }),
       continuitySeed,
       seeds,
       fingerprint: createHash('sha256')
-        .update(`${player.guildId}|${this.trackIdentityKey(stableAnchor)}`)
+        .update(`${player.guildId}|${player.voiceChannelId ?? ''}`)
         .digest('hex'),
     }
   }
@@ -305,16 +462,32 @@ export class AutoplayOrchestrator {
     suggestions: readonly StoredAutoplaySuggestion[],
     fingerprint: string,
     blockedTracks: readonly TrackMetadata[],
+    suppressedIds: ReadonlySet<string>,
   ): StoredAutoplaySuggestion[] {
     const valid: StoredAutoplaySuggestion[] = []
     for (const suggestion of suggestions) {
       if (suggestion.seedFingerprint !== fingerprint) continue
       if (this.profile.isRejected(suggestion.track)) continue
+      if (suppressedIds.has(suggestion.track.providerTrackId)) continue
       if (blockedTracks.some((track) => this.isSameTrack(track, suggestion.track))) continue
       if (valid.some((item) => this.isSameTrack(item.track, suggestion.track))) continue
       valid.push(suggestion)
     }
     return valid
+  }
+
+  private retainedSuggestions(
+    suggestions: readonly StoredAutoplaySuggestion[],
+  ): StoredAutoplaySuggestion[] {
+    const driftSlots = this.profile.driftSuggestionSlots()
+    if (driftSlots === 0) return [...suggestions]
+    const established = suggestions.filter(
+      (suggestion) => !this.profile.isDriftSeed(suggestion.seedTrackKey),
+    )
+    const drift = suggestions.filter((suggestion) =>
+      this.profile.isDriftSeed(suggestion.seedTrackKey),
+    )
+    return [...established.slice(0, TARGET_SUGGESTIONS - driftSlots), ...drift.slice(0, driftSlots)]
   }
 
   private mergeAndRankCandidates(
@@ -324,11 +497,12 @@ export class AutoplayOrchestrator {
     recent: readonly QueueItem[],
     blockedTracks: readonly TrackMetadata[],
     suggestions: readonly StoredAutoplaySuggestion[],
+    suppressedIdentities: ReadonlySet<string>,
   ): StoredRecommendationCandidate[] {
     const merged = new Map<string, StoredRecommendationCandidate>()
     current.forEach((candidate) => merged.set(candidate.identityKey, candidate))
     fresh.forEach((candidate) => {
-      if (this.candidateBlocked(candidate, blockedTracks, suggestions)) return
+      if (this.candidateBlocked(candidate, blockedTracks, suggestions, suppressedIdentities)) return
       const existing = merged.get(candidate.identityKey)
       const stored: StoredRecommendationCandidate = {
         ...candidate,
@@ -366,7 +540,8 @@ export class AutoplayOrchestrator {
             Math.min(
               1,
               candidate.baseScore +
-                this.profile.score(candidate) -
+                this.profile.score(candidate) +
+                (this.profile.isDriftSeed(candidate.seedTrackKey) ? 0.08 : 0) -
                 sameArtistPenalty -
                 recentPenalty,
             ),
@@ -382,6 +557,7 @@ export class AutoplayOrchestrator {
     context: RecommendationContext,
     active: readonly QueueItem[],
     recent: readonly QueueItem[],
+    suppressedIds: ReadonlySet<string>,
   ): Promise<{
     suggestions: StoredAutoplaySuggestion[]
     remainingCandidates: StoredRecommendationCandidate[]
@@ -395,6 +571,7 @@ export class AutoplayOrchestrator {
       rejected: this.profile.rejectedIds(),
       seeds: context.seeds,
     })
+    suppressedIds.forEach((id) => excluded.add(id))
     const slots = this.remainingSlots(suggestions)
     let attempts = 0
 
@@ -405,12 +582,20 @@ export class AutoplayOrchestrator {
     ) {
       const batch: StoredRecommendationCandidate[] = []
       while (
-        batch.length < RESOLUTION_CONCURRENCY &&
+        batch.length < Math.min(RESOLUTION_CONCURRENCY, TARGET_SUGGESTIONS - suggestions.length) &&
         remaining.length > 0 &&
         attempts < RESOLUTION_BUDGET
       ) {
+        const needsDrift =
+          this.profile.driftSuggestionSlots() >
+          suggestions.filter((suggestion) => this.profile.isDriftSeed(suggestion.seedTrackKey))
+            .length
+        const pool = needsDrift
+          ? remaining.filter((candidate) => this.profile.isDriftSeed(candidate.seedTrackKey))
+          : remaining
+        if (pool.length === 0) break
         const slot = slots.shift()
-        const picked = this.pickCandidate(remaining, slot)
+        const picked = this.pickCandidate(pool, slot)
         if (!picked) break
         remaining.splice(remaining.indexOf(picked), 1)
         batch.push(picked)
@@ -429,6 +614,7 @@ export class AutoplayOrchestrator {
         const track = result.value
         if (
           this.profile.isRejected(track) ||
+          suppressedIds.has(track.providerTrackId) ||
           context.seeds.some((seed) => this.isSameTrack(seed, track)) ||
           [...active, ...recent].some((item) => this.isSameTrack(item.track, track)) ||
           suggestions.some((suggestion) => this.isSameTrack(suggestion.track, track))
@@ -441,6 +627,7 @@ export class AutoplayOrchestrator {
           generatedAt: this.now().toISOString(),
           seedFingerprint: context.fingerprint,
           strategy: candidate.strategy,
+          seedTrackKey: candidate.seedTrackKey,
           ...(candidate.sourceTag === undefined ? {} : { sourceTag: candidate.sourceTag }),
         })
         excluded.add(track.providerTrackId)
@@ -495,8 +682,10 @@ export class AutoplayOrchestrator {
     candidate: RecommendationCandidate,
     blockedTracks: readonly TrackMetadata[],
     suggestions: readonly StoredAutoplaySuggestion[],
+    suppressedIdentities: ReadonlySet<string>,
   ): boolean {
     if (this.profile.rejectedIds().has(candidate.identityKey)) return true
+    if (suppressedIdentities.has(candidate.identityKey)) return true
     const candidateTrack = { title: candidate.title, artists: candidate.artists }
     return (
       blockedTracks.some((track) => this.trackIdentityKey(track) === candidate.identityKey) ||

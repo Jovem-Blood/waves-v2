@@ -12,7 +12,7 @@ export class YouTubeMusicRecommendationProvider implements RecommendationProvide
   constructor(private readonly client: YouTubeMusicClientPort) {}
 
   async getCandidates(seeds: readonly TrackMetadata[]): Promise<RecommendationCandidate[]> {
-    const seed = seeds[0]
+    const seed = seeds.at(-1)
     if (!seed) return []
     try {
       const searchResults = await this.client.searchSongs(

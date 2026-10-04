@@ -35,7 +35,12 @@ other ephemeral runtime resources.
 - Guest sessions plus one-time Discord account linking by private link and QR
   code.
 - Automatic queue progression and autoplay suggestions from Last.fm and YouTube
-  Music, resolved back to Spotify metadata.
+  Music, resolved back to Spotify metadata. Suggestions are retained when a
+  listener adds a song or keeps a suggestion; a new style receives gradual
+  space in the list. The reservoir refills from recent playback and retries
+  after temporary recommendation failures.
+- A durable failed-track catalog in Playback Health, including the last failure
+  reason. Repeated content failures temporarily exclude a track from autoplay.
 - Real-time browser synchronization, listening history, and playback diagnostics.
 - Separate web, bot, and voice status reporting, structured logs, health checks,
   and SQLite backups.
@@ -213,7 +218,8 @@ rotates five 10 MiB files per service. See
 queries.
 
 [Playback Health](docs/playback-health.md) documents retries, reconciliation,
-metric definitions and the 90-day telemetry retention policy.
+metric definitions, the failed-track catalog, and the 90-day telemetry retention
+policy.
 
 ## Local development
 

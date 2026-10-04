@@ -43,7 +43,7 @@ describe('recommendation providers', () => {
 
     expect(candidates).toHaveLength(1)
     expect(candidates[0]).toMatchObject({ title: 'Result', strategy: 'similar' })
-    expect(candidates[0]?.score).toBeCloseTo(0.84)
+    expect(candidates[0]?.score).toBeCloseTo(0.865)
     expect(getSimilarTracks).toHaveBeenCalledTimes(2)
   })
 

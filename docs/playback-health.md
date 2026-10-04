@@ -24,6 +24,15 @@ deploying migrations. Deleted rows free reusable pages; they do not immediately
 shrink the database file. Monitor database/WAL disk usage and long-running readers;
 plan offline compaction separately if necessary.
 
+The failed-track catalog survives telemetry retention. It stores terminal
+success/failure counts and the latest structured failure code, class, and stage;
+the migration backfills available historical telemetry. Playback Health displays
+the 50 most frequently failed tracks. After two `SOURCE_NOT_FOUND` or
+`SOURCE_GEO_BLOCKED` terminal failures since the last success, a Spotify track is
+excluded from autoplay suggestions for seven days after its latest failure.
+Operational failures do not trigger this exclusion. A successful play resets the
+content-failure streak. Listeners can still request an excluded track manually.
+
 Timings measure source resolution, resource preparation (`fetchLatencyMs`, including
 fetch/demux), first player `Playing` state, and resource playback duration.
 First audio is a player-side estimate, not a measurement at Discord listeners.

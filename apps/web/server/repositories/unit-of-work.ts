@@ -6,6 +6,7 @@ import { AutoplayRepository } from './autoplay.repository'
 import { AutoplaySuggestionRepository } from './autoplay-suggestion.repository'
 import { AutoplayCandidateRepository } from './autoplay-candidate.repository'
 import { PlaybackAttemptRepository } from './playback-attempt.repository'
+import { TrackPlaybackHealthRepository } from './track-playback-health.repository'
 
 export interface RepositoryContext {
   playerState: PlayerStateRepository
@@ -15,6 +16,7 @@ export interface RepositoryContext {
   autoplaySuggestion: AutoplaySuggestionRepository
   autoplayCandidate: AutoplayCandidateRepository
   playbackAttempt: PlaybackAttemptRepository
+  trackPlaybackHealth: TrackPlaybackHealthRepository
 }
 
 export interface UnitOfWork {
@@ -37,6 +39,7 @@ export class DatabaseUnitOfWork implements UnitOfWork {
         autoplaySuggestion: new AutoplaySuggestionRepository(transaction),
         autoplayCandidate: new AutoplayCandidateRepository(transaction),
         playbackAttempt: new PlaybackAttemptRepository(transaction),
+        trackPlaybackHealth: new TrackPlaybackHealthRepository(transaction),
       }),
     )
   }

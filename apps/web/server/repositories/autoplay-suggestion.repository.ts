@@ -12,6 +12,7 @@ const MAX_AUTOPLAY_SUGGESTIONS = 6
 
 export interface StoredAutoplaySuggestion extends AutoplaySuggestion {
   sourceTag?: string
+  seedTrackKey?: string
 }
 
 type SuggestionRow = typeof autoplaySuggestions.$inferSelect
@@ -37,10 +38,14 @@ export class AutoplaySuggestionRepository {
   }
 
   replaceAll(suggestions: StoredAutoplaySuggestion[]): StoredAutoplaySuggestion[] {
-    const parsed = suggestions.slice(0, MAX_AUTOPLAY_SUGGESTIONS).map((suggestion) => ({
-      ...autoplaySuggestionSchema.parse(suggestion),
-      ...(suggestion.sourceTag === undefined ? {} : { sourceTag: suggestion.sourceTag }),
-    }))
+    const parsed = suggestions.slice(0, MAX_AUTOPLAY_SUGGESTIONS).map((suggestion) => {
+      const { sourceTag, seedTrackKey, ...publicSuggestion } = suggestion
+      return {
+        ...autoplaySuggestionSchema.parse(publicSuggestion),
+        ...(sourceTag === undefined ? {} : { sourceTag }),
+        ...(seedTrackKey === undefined ? {} : { seedTrackKey }),
+      }
+    })
 
     this.clear()
     parsed.forEach((suggestion, position) => {
@@ -64,6 +69,7 @@ export class AutoplaySuggestionRepository {
           seedFingerprint: suggestion.seedFingerprint,
           strategy: suggestion.strategy,
           sourceTag: suggestion.sourceTag ?? null,
+          seedTrackKey: suggestion.seedTrackKey ?? null,
         })
         .run()
     })
@@ -111,6 +117,10 @@ export class AutoplaySuggestionRepository {
       seedFingerprint: row.seedFingerprint,
       strategy: row.strategy,
     })
-    return { ...suggestion, ...(row.sourceTag === null ? {} : { sourceTag: row.sourceTag }) }
+    return {
+      ...suggestion,
+      ...(row.sourceTag === null ? {} : { sourceTag: row.sourceTag }),
+      ...(row.seedTrackKey === null ? {} : { seedTrackKey: row.seedTrackKey }),
+    }
   }
 }
