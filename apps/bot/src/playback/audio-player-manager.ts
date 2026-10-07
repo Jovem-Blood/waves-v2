@@ -70,6 +70,7 @@ interface PlaybackSession {
   preparing: Promise<void> | undefined
   crossfadeTransition: Promise<void> | undefined
   fadingOut: CurrentPlayback | undefined
+  crossfadeEnabled: boolean
 }
 
 export interface CrossfadeOptions {
@@ -78,7 +79,7 @@ export interface CrossfadeOptions {
 }
 
 const MIN_SUCCESSFUL_PLAYBACK_MS = 1_000
-const DEFAULT_CROSSFADE_OPTIONS: CrossfadeOptions = { durationMs: 0, preloadMs: 12_000 }
+const DEFAULT_CROSSFADE_OPTIONS: CrossfadeOptions = { durationMs: 5_000, preloadMs: 12_000 }
 
 export class AudioPlayerManager implements PlaybackManager {
   private readonly sessions = new Map<string, PlaybackSession>()
@@ -265,6 +266,7 @@ export class AudioPlayerManager implements PlaybackManager {
     const desired = await this.api.getPlayer()
     const session = this.sessions.get(guildId)
     if (!session?.current) return
+    this.applyCrossfadeSetting(session, desired.crossfadeEnabled)
 
     if (desired.currentQueueItemId !== session.current.item.id) {
       const currentItem = session.current
@@ -424,6 +426,7 @@ export class AudioPlayerManager implements PlaybackManager {
       preparing: undefined,
       crossfadeTransition: undefined,
       fadingOut: undefined,
+      crossfadeEnabled: false,
     }
     player.on('stateChange', (previousState, nextState) => {
       this.handleStateChange(guildId, session, previousState, nextState)
@@ -545,8 +548,10 @@ export class AudioPlayerManager implements PlaybackManager {
       current.provider = resolved.source.provider
       current.resolutionDurationMs = Date.now() - resolveStartedAt
       current.sourceIdentifier = resolved.source.sourceIdentifier
+      const desiredPlayer = await this.api.getPlayer()
+      this.applyCrossfadeSetting(session, desiredPlayer.crossfadeEnabled)
       const fetchStartedAt = Date.now()
-      if (this.canCrossfade(item)) {
+      if (this.canCrossfade(item, session.crossfadeEnabled)) {
         const decoded = await this.runtime.createDecodedStream!(resolved.source.streamUrl, {
           logger,
           playbackAttemptId,
@@ -570,7 +575,7 @@ export class AudioPlayerManager implements PlaybackManager {
           )
           return
         }
-        await this.startCrossfadeResource(guildId, session, current, decoded)
+        this.startCrossfadeResource(guildId, session, current, decoded, desiredPlayer.volume)
         return
       }
       const resource = await this.runtime.createResource(
@@ -610,7 +615,7 @@ export class AudioPlayerManager implements PlaybackManager {
         'Audio resource submitted to player',
       )
       session.player.play(resource)
-      resource.volume?.setVolume((await this.api.getPlayer()).volume / 100)
+      resource.volume?.setVolume(desiredPlayer.volume / 100)
       this.updateActivity(guildId, item)
     } catch (error) {
       if (
@@ -677,21 +682,22 @@ export class AudioPlayerManager implements PlaybackManager {
     }
   }
 
-  private canCrossfade(item: QueueItem): boolean {
+  private canCrossfade(item: QueueItem, enabled: boolean): boolean {
     return (
-      this.crossfadeOptions.durationMs > 0 &&
+      enabled &&
       item.track.durationMs > this.crossfadeOptions.durationMs * 2 &&
       this.runtime.createDecodedStream !== undefined &&
       this.runtime.createPcmResource !== undefined
     )
   }
 
-  private async startCrossfadeResource(
+  private startCrossfadeResource(
     guildId: string,
     session: PlaybackSession,
     current: CurrentPlayback,
     decoded: DecodedAudioStream,
-  ): Promise<void> {
+    volume: number,
+  ): void {
     const source = this.toPcmSource(current, decoded)
     const mixer = new CrossfadeMixer(source, {
       crossfadeDurationMs: this.crossfadeOptions.durationMs,
@@ -724,7 +730,7 @@ export class AudioPlayerManager implements PlaybackManager {
       'Crossfade audio resource submitted to player',
     )
     session.player.play(resource)
-    resource.volume?.setVolume((await this.api.getPlayer()).volume / 100)
+    resource.volume?.setVolume(volume / 100)
     this.updateActivity(guildId, current.item)
   }
 
@@ -744,6 +750,7 @@ export class AudioPlayerManager implements PlaybackManager {
   ): void {
     if (
       session.current?.item.id !== outgoingTrackId ||
+      !session.crossfadeEnabled ||
       session.prepared ||
       session.preparing ||
       !session.crossfade
@@ -769,7 +776,7 @@ export class AudioPlayerManager implements PlaybackManager {
       const nextItem = queue.find((queueItem) => queueItem.status === 'queued')
       if (
         !nextItem ||
-        !this.canCrossfade(nextItem) ||
+        !this.canCrossfade(nextItem, session.crossfadeEnabled) ||
         session.current?.item.id !== outgoingTrackId ||
         session.crossfade?.currentTrackId !== outgoingTrackId
       ) {
@@ -816,6 +823,7 @@ export class AudioPlayerManager implements PlaybackManager {
 
       if (
         abortController.signal.aborted ||
+        !session.crossfadeEnabled ||
         session.current?.item.id !== outgoingTrackId ||
         session.crossfade?.currentTrackId !== outgoingTrackId
       ) {
@@ -865,6 +873,7 @@ export class AudioPlayerManager implements PlaybackManager {
   ): void {
     if (
       session.current?.item.id !== outgoingTrackId ||
+      !session.crossfadeEnabled ||
       !session.prepared ||
       session.crossfadeTransition ||
       !session.crossfade
@@ -887,7 +896,14 @@ export class AudioPlayerManager implements PlaybackManager {
     const outgoing = session.current
     const prepared = session.prepared
     const mixer = session.crossfade
-    if (!outgoing || outgoing.item.id !== outgoingTrackId || !prepared || !mixer) return
+    if (
+      !outgoing ||
+      outgoing.item.id !== outgoingTrackId ||
+      !prepared ||
+      !mixer ||
+      !session.crossfadeEnabled
+    )
+      return
 
     outgoing.playbackDurationMs = Math.min(
       outgoing.item.track.durationMs,
@@ -1068,6 +1084,16 @@ export class AudioPlayerManager implements PlaybackManager {
     session.crossfade = undefined
     session.prepared = undefined
     session.fadingOut = undefined
+  }
+
+  private applyCrossfadeSetting(session: PlaybackSession, enabled: boolean): void {
+    if (session.crossfadeEnabled === enabled) return
+    session.crossfadeEnabled = enabled
+    if (!enabled) {
+      session.prepared?.abortController.abort()
+      session.prepared = undefined
+    }
+    session.crossfade?.setEnabled(enabled)
   }
 
   private handleStateChange(

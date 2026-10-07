@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import { Download, EllipsisVertical, LoaderCircle, RefreshCw, Sparkles, Trash2 } from '@lucide/vue'
+import {
+  AudioWaveform,
+  Download,
+  EllipsisVertical,
+  LoaderCircle,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+} from '@lucide/vue'
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
 defineProps<{
   autoplayEnabled: boolean
   autoplayBusy?: boolean
+  crossfadeEnabled: boolean
+  crossfadeBusy?: boolean
   refreshing: boolean
   actionsDisabled?: boolean
   canClear: boolean
 }>()
-const emit = defineEmits<{ select: [action: 'autoplay' | 'import' | 'refresh' | 'clear'] }>()
+type QueueOption = 'autoplay' | 'crossfade' | 'import' | 'refresh' | 'clear'
+
+const emit = defineEmits<{ select: [action: QueueOption] }>()
 const open = ref(false)
 const root = ref<HTMLElement>()
 const trigger = ref<HTMLButtonElement>()
@@ -33,7 +45,7 @@ function show(last = false) {
   })
 }
 
-function select(action: 'autoplay' | 'import' | 'refresh' | 'clear') {
+function select(action: QueueOption) {
   close(true)
   emit('select', action)
 }
@@ -108,6 +120,17 @@ onBeforeUnmount(() => {
           <span>{{ autoplayEnabled ? 'Desativar autoplay' : 'Ativar autoplay' }}</span>
           <LoaderCircle v-if="autoplayBusy" class="spinner" :size="18" aria-hidden="true" />
           <Sparkles v-else :size="18" :stroke-width="1.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          :disabled="crossfadeBusy"
+          @click="select('crossfade')"
+        >
+          <span>{{ crossfadeEnabled ? 'Desativar crossfade' : 'Ativar crossfade' }}</span>
+          <LoaderCircle v-if="crossfadeBusy" class="spinner" :size="18" aria-hidden="true" />
+          <AudioWaveform v-else :size="18" :stroke-width="1.5" aria-hidden="true" />
         </button>
         <button
           type="button"

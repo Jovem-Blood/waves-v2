@@ -106,6 +106,7 @@ describe('Queue Social components', () => {
           suggestions: [],
           updatedAt: '2026-06-18T12:00:00.000Z',
         },
+        crossfadeEnabled: true,
       },
     })
 
@@ -115,6 +116,12 @@ describe('Queue Social components', () => {
     expect(wrapper.text()).toContain('não encontrou uma recomendação')
     await toggle.trigger('click')
     expect(wrapper.emitted('autoplayChange')).toEqual([[false]])
+
+    await wrapper.get('[aria-label="Opções da fila"]').trigger('click')
+    const crossfadeToggle = wrapper.findAll('[role="menuitem"]')[1]!
+    expect(crossfadeToggle.text()).toBe('Desativar crossfade')
+    await crossfadeToggle.trigger('click')
+    expect(wrapper.emitted('crossfadeChange')).toEqual([[false]])
   })
 
   it('renders six autoplay ghosts after human tracks and commits or rejects one target accessibly', async () => {

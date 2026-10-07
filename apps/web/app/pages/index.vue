@@ -171,6 +171,8 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         :autoplay-error="autoplay.error.value"
         :autoplay-rejecting-id="autoplay.rejectingId.value"
         :autoplay-committing-track-id="queue.addingTrackId.value"
+        :crossfade-enabled="player.state.value?.crossfadeEnabled ?? false"
+        :crossfade-updating="player.loading.value || player.crossfadeUpdating.value"
         :actions-disabled="!!queue.addingTrackId.value || !!playlistActions?.busy"
         @import-playlist="playlistActions?.show('import')"
         @clear-queue="playlistActions?.show('clear')"
@@ -182,6 +184,7 @@ const guestPromptOpen = computed(() => !auth.loading.value && !auth.user.value)
         @autoplay-change="autoplay.setEnabled"
         @autoplay-commit="handleAutoplayCommit"
         @autoplay-reject="autoplay.rejectSuggestion"
+        @crossfade-change="player.setCrossfadeEnabled"
       />
 
       <SpotifySearch

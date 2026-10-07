@@ -28,7 +28,7 @@ other ephemeral runtime resources.
 - Confirmed clearing of upcoming tracks without interrupting the current track
   or changing the autoplay setting.
 - YouTube Music audio resolution and playback through Discord voice.
-- Configurable equal-power crossfade between naturally consecutive tracks.
+- Persistent web toggle for equal-power crossfade between naturally consecutive tracks.
 - Web controls for play state, pause, resume, skip, volume, queue ordering, and
   removal/restoration.
 - Discord commands: `/play`, `/queue`, `/login`, `/join`, `/leave`, `/pause`,
@@ -147,7 +147,7 @@ The minimum values to review are:
 | `SESSION_COOKIE_SECURE`     | Deployment  | Use `true` behind HTTPS; local HTTP uses `false`.                         |
 | `WAVES_BIND_ADDRESS`        | No          | Published Docker address; defaults to loopback (`127.0.0.1`).             |
 | `LOG_LEVEL`                 | No          | `debug`, `info`, `warn`, or `error`.                                      |
-| `BOT_CROSSFADE_DURATION_MS` | No          | Crossfade duration; defaults to `5000`. Set `0` to disable it.            |
+| `BOT_CROSSFADE_DURATION_MS` | No          | Crossfade duration when enabled in the web UI; defaults to `5000`.        |
 | `BOT_CROSSFADE_PRELOAD_MS`  | No          | How early the bot prepares the next source; defaults to `12000`.          |
 
 Generate `BOT_INTERNAL_SECRET` with a password manager or a cryptographically

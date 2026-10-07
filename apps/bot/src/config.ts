@@ -17,7 +17,7 @@ const botConfigSchema = z.strictObject({
   healthHost: z.string().trim().min(1).default('127.0.0.1'),
   healthPort: z.coerce.number().int().min(1).max(65_535).default(3_002),
   heartbeatMaxAgeMs: z.coerce.number().int().min(1_000).max(300_000).default(120_000),
-  crossfadeDurationMs: z.coerce.number().int().min(0).max(15_000).default(5_000),
+  crossfadeDurationMs: z.coerce.number().int().min(1_000).max(15_000).default(5_000),
   crossfadePreloadMs: z.coerce.number().int().min(1_000).max(30_000).default(12_000),
 })
 

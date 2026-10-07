@@ -246,6 +246,7 @@ export const playerState = sqliteTable(
     guildName: text('guild_name'),
     volume: integer('volume').notNull().default(100),
     progressMs: integer('progress_ms').notNull().default(0),
+    crossfadeEnabled: integer('crossfade_enabled', { mode: 'boolean' }).notNull().default(false),
     updatedAt: text('updated_at').notNull(),
   },
   (table) => [

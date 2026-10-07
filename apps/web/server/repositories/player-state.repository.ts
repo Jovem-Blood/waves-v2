@@ -15,6 +15,7 @@ export interface PlayerStateUpdate {
   guildName?: string | null
   volume?: number
   progressMs?: number
+  crossfadeEnabled?: boolean
   updatedAt?: string
 }
 
@@ -28,6 +29,7 @@ function mapRow(row: PlayerStateRow): PlayerState {
     ...(row.guildName === null ? {} : { guildName: row.guildName }),
     volume: row.volume,
     progressMs: row.progressMs,
+    crossfadeEnabled: row.crossfadeEnabled,
     updatedAt: row.updatedAt,
   })
 }
@@ -46,6 +48,7 @@ export class PlayerStateRepository {
         status: 'idle',
         volume: 100,
         progressMs: 0,
+        crossfadeEnabled: false,
         updatedAt: this.now().toISOString(),
       })
       .onConflictDoNothing({ target: playerState.id })

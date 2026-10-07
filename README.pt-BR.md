@@ -29,7 +29,7 @@ apenas da voz e de outros recursos efêmeros de runtime.
 - Limpeza confirmada das próximas músicas sem interromper a faixa atual nem
   alterar a configuração do autoplay.
 - Resolução de áudio no YouTube Music e reprodução na voz do Discord.
-- Crossfade equal-power configurável entre faixas consecutivas da fila.
+- Crossfade equal-power entre faixas consecutivas, ativado ou desativado pela interface web.
 - Controles web de reprodução, pausa, retomada, skip, volume, ordenação da fila e
   remoção/restauração.
 - Comandos Discord: `/play`, `/queue`, `/login`, `/join`, `/leave`, `/pause`,
@@ -152,7 +152,7 @@ Os valores mínimos a revisar são:
 | `SESSION_COOKIE_SECURE`     | Implantação     | Use `true` atrás de HTTPS; HTTP local usa `false`.                                      |
 | `WAVES_BIND_ADDRESS`        | Não             | Endereço publicado pelo Docker; o padrão é loopback (`127.0.0.1`).                      |
 | `LOG_LEVEL`                 | Não             | `debug`, `info`, `warn` ou `error`.                                                     |
-| `BOT_CROSSFADE_DURATION_MS` | Não             | Duração do crossfade; padrão `5000`. Use `0` para desabilitar.                          |
+| `BOT_CROSSFADE_DURATION_MS` | Não             | Duração do crossfade quando ativado na interface; padrão `5000`.                        |
 | `BOT_CROSSFADE_PRELOAD_MS`  | Não             | Antecedência para preparar a próxima fonte; padrão `12000`.                             |
 
 Gere `BOT_INTERNAL_SECRET` com um gerenciador de senhas ou gerador

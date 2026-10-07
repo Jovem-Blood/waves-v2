@@ -16,11 +16,13 @@ export const playerStateSchema = z
     guildName: optionalTextSchema,
     volume: playerVolumeSchema.default(100),
     progressMs: playerProgressSchema.default(0),
+    crossfadeEnabled: z.boolean().default(false),
     updatedAt: z.iso.datetime({ offset: true }),
   })
   .strict()
 
 export const setPlayerVolumeInputSchema = z.strictObject({ volume: playerVolumeSchema })
+export const setPlayerCrossfadeInputSchema = z.strictObject({ enabled: z.boolean() })
 export const updatePlayerProgressInputSchema = z.strictObject({
   queueItemId: z.string().trim().min(1),
   progressMs: playerProgressSchema,

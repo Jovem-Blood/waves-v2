@@ -1,0 +1,1 @@
+ALTER TABLE `player_state` ADD `crossfade_enabled` integer DEFAULT false NOT NULL;

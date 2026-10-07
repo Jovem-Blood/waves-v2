@@ -22,6 +22,7 @@ import { createDiscordLinkConsumeHandler } from '../../server/routes/auth/discor
 import { createDiscordLinkConfirmHandler } from '../../server/routes/auth/discord-link.post'
 import { createMeHandler } from '../../server/api/me.get'
 import { createPlayerGetHandler } from '../../server/api/player/index.get'
+import { createPlayerCrossfadeUpdateHandler } from '../../server/api/player/crossfade.put'
 import { createPlayerSkipHandler } from '../../server/api/player/skip.post'
 import { createQueueRemoveHandler } from '../../server/api/queue/[id].delete'
 import { createQueueMoveHandler } from '../../server/api/queue/[id]/move.post'
@@ -214,6 +215,7 @@ async function startTestApi(): Promise<TestContext> {
   router.post('/api/queue/:id/move', createQueueMoveHandler(getDependencies))
   router.post('/api/queue/:id/restore', createQueueRestoreHandler(getDependencies))
   router.get('/api/player', createPlayerGetHandler(getDependencies))
+  router.put('/api/player/crossfade', createPlayerCrossfadeUpdateHandler(getDependencies))
   router.post('/api/player/skip', createPlayerSkipHandler(getDependencies))
   router.get('/api/status', createOperationalStatusHandler(getDependencies))
   router.get(
@@ -655,6 +657,27 @@ describe('public API', () => {
     expect(updated.response.status).toBe(200)
     expect(updated.body).toMatchObject({ enabled: true, failureCode: null })
     expect((await request('/api/autoplay')).body).toMatchObject({ enabled: true })
+  })
+
+  it('persists crossfade globally and requires a session to update it', async () => {
+    expect((await request('/api/player')).body).toMatchObject({ crossfadeEnabled: false })
+
+    const unauthorized = await request('/api/player/crossfade', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(unauthorized.response.status).toBe(401)
+
+    await createGuest()
+    const updated = await request('/api/player/crossfade', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(updated.response.status).toBe(200)
+    expect(updated.body).toMatchObject({ crossfadeEnabled: true })
+    expect((await request('/api/player')).body).toMatchObject({ crossfadeEnabled: true })
   })
 
   it('requires authentication to reject an autoplay suggestion', async () => {

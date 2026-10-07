@@ -49,6 +49,7 @@ export type PublicPlayerStateService = Pick<
   | 'pause'
   | 'resume'
   | 'setVolume'
+  | 'setCrossfade'
   | 'updateProgress'
   | 'voiceConnected'
   | 'voiceDisconnected'

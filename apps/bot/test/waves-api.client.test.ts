@@ -55,6 +55,23 @@ describe('WavesApiClient', () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 
+  it('reads the persisted crossfade setting with player state', async () => {
+    const request = vi.fn<WavesFetch>().mockResolvedValue(
+      jsonResponse({
+        status: 'idle',
+        crossfadeEnabled: true,
+        updatedAt: item.updatedAt,
+      }),
+    )
+    const client = new WavesApiClient(config, request)
+
+    await expect(client.getPlayer()).resolves.toMatchObject({
+      status: 'idle',
+      crossfadeEnabled: true,
+    })
+    expect(request.mock.calls[0]?.[0]).toBe('http://localhost:3000/api/internal/bot/player')
+  })
+
   it('validates play, skip, source, playback and event responses', async () => {
     const request = vi
       .fn<WavesFetch>()

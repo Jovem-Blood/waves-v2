@@ -85,6 +85,7 @@ export class CrossfadeMixer extends Readable {
   private incoming: ActiveSource | undefined
   private pumping = false
   private readRequested = false
+  private enabled = true
   private waitingForAdvance = false
   private preloadRequested = false
   private crossfadeRequested = false
@@ -121,8 +122,23 @@ export class CrossfadeMixer extends Readable {
     return this.current.source.id === trackId && this.crossfadeRequested
   }
 
+  setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled || this.destroyed) return
+    this.enabled = enabled
+    this.preloadRequested = false
+    this.crossfadeRequested = false
+
+    if (!enabled) {
+      this.prepared?.source.dispose()
+      this.prepared = undefined
+      return
+    }
+
+    this.requestUpcomingWork()
+  }
+
   prepare(source: PcmPlaybackSource): boolean {
-    if (this.destroyed || this.incoming || source.id === this.current.source.id) {
+    if (!this.enabled || this.destroyed || this.incoming || source.id === this.current.source.id) {
       source.dispose()
       return false
     }
@@ -140,6 +156,7 @@ export class CrossfadeMixer extends Readable {
   beginCrossfade(outgoingTrackId: string, incomingTrackId: string): boolean {
     if (
       this.destroyed ||
+      !this.enabled ||
       this.incoming ||
       this.current.source.id !== outgoingTrackId ||
       this.prepared?.source.id !== incomingTrackId
@@ -260,7 +277,7 @@ export class CrossfadeMixer extends Readable {
   }
 
   private requestUpcomingWork(): void {
-    if (this.incoming) return
+    if (!this.enabled || this.incoming) return
     const playbackDurationMs = framesToMilliseconds(this.current.framesRead)
     const preloadAtMs = Math.max(0, this.current.source.expectedDurationMs - this.options.preloadMs)
     const crossfadeAtMs = Math.max(
@@ -272,6 +289,7 @@ export class CrossfadeMixer extends Readable {
       this.preloadRequested = true
       this.options.onPreloadRequired(this.current.source.id)
     }
+    if (!this.enabled) return
     if (!this.crossfadeRequested && playbackDurationMs >= crossfadeAtMs) {
       this.crossfadeRequested = true
       this.options.onCrossfadeRequired(this.current.source.id, playbackDurationMs)

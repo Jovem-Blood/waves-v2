@@ -17,6 +17,7 @@ import {
   playerStateSchema,
   queueItemSchema,
   rejectAutoplaySuggestionInputSchema,
+  setPlayerCrossfadeInputSchema,
   playbackTransitionResultSchema,
   realtimeEventSchema,
   removeQueueItemResultSchema,
@@ -242,11 +243,12 @@ describe('player, event and error contracts', () => {
 
   it('accepts logical player state', () => {
     expect(
-      playerStateSchema.safeParse({
+      playerStateSchema.parse({
         status: 'idle',
         updatedAt: '2026-06-18T12:00:00.000Z',
-      }).success,
-    ).toBe(true)
+      }),
+    ).toMatchObject({ crossfadeEnabled: false })
+    expect(setPlayerCrossfadeInputSchema.parse({ enabled: true })).toEqual({ enabled: true })
   })
 
   it('accepts validated event envelopes', () => {
@@ -283,9 +285,11 @@ describe('player, event and error contracts', () => {
         queue: [],
       }),
     ).toMatchObject({ type: 'queue.item_failed' })
-    expect(realtimeEventSchema.parse({ type: 'player.updated', player: realtimePlayer })).toEqual({
+    expect(
+      realtimeEventSchema.parse({ type: 'player.updated', player: realtimePlayer }),
+    ).toMatchObject({
       type: 'player.updated',
-      player: realtimePlayer,
+      player: { ...realtimePlayer, crossfadeEnabled: false },
     })
     expect(realtimeEventSchema.parse({ type: 'status.changed', status: realtimeStatus })).toEqual({
       type: 'status.changed',

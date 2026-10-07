@@ -1,6 +1,7 @@
 import {
   completePlaybackInputSchema,
   playbackAttemptReportSchema,
+  setPlayerCrossfadeInputSchema,
   setPlayerVolumeInputSchema,
   updatePlayerProgressInputSchema,
   type CompletePlaybackInput,
@@ -71,6 +72,16 @@ export class PlayerStateService {
     const parsed = setPlayerVolumeInputSchema.parse(input)
     const next = this.playerStateRepository.update({
       volume: parsed.volume,
+      updatedAt: this.now().toISOString(),
+    })
+    this.publishPlayerUpdated(next)
+    return next
+  }
+
+  setCrossfade(input: { enabled: boolean }): PlayerState {
+    const parsed = setPlayerCrossfadeInputSchema.parse(input)
+    const next = this.playerStateRepository.update({
+      crossfadeEnabled: parsed.enabled,
       updatedAt: this.now().toISOString(),
     })
     this.publishPlayerUpdated(next)

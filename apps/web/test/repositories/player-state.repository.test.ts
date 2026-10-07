@@ -35,6 +35,7 @@ describe('PlayerStateRepository', () => {
 
     expect(repository.get()).toMatchObject({
       status: 'idle',
+      crossfadeEnabled: false,
       updatedAt: '2026-06-18T12:00:00.000Z',
     })
     expect(repository.get()).toMatchObject({
@@ -58,6 +59,7 @@ describe('PlayerStateRepository', () => {
         voiceChannelName: 'ondas-da-noite',
         guildId: 'guild-1',
         guildName: 'Waves',
+        crossfadeEnabled: true,
         updatedAt: '2026-06-18T13:00:00.000Z',
       }),
     ).toMatchObject({
@@ -66,6 +68,7 @@ describe('PlayerStateRepository', () => {
       voiceChannelName: 'ondas-da-noite',
       guildId: 'guild-1',
       guildName: 'Waves',
+      crossfadeEnabled: true,
       updatedAt: '2026-06-18T13:00:00.000Z',
     })
 
@@ -76,6 +79,7 @@ describe('PlayerStateRepository', () => {
       voiceChannelName: 'ondas-da-noite',
       guildId: 'guild-1',
       guildName: 'Waves',
+      crossfadeEnabled: true,
       updatedAt: '2026-06-18T13:00:00.000Z',
     })
   })

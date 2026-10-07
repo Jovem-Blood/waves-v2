@@ -20,6 +20,8 @@ defineProps<{
   autoplayError?: string
   autoplayRejectingId?: string
   autoplayCommittingTrackId?: string
+  crossfadeEnabled?: boolean
+  crossfadeUpdating?: boolean
   actionsDisabled?: boolean
 }>()
 
@@ -34,6 +36,7 @@ const emit = defineEmits<{
   autoplayChange: [enabled: boolean]
   autoplayReject: [providerTrackId: string]
   autoplayCommit: [suggestion: AutoplayState['suggestions'][number]]
+  crossfadeChange: [enabled: boolean]
 }>()
 
 const queueItemsRef = shallowRef<HTMLElement | null>(null)
@@ -119,12 +122,15 @@ onBeforeUnmount(() => {
       <QueueOptionsMenu
         :autoplay-enabled="autoplay?.enabled ?? false"
         :autoplay-busy="!!autoplayLoading || !!autoplayUpdating"
+        :crossfade-enabled="crossfadeEnabled ?? false"
+        :crossfade-busy="crossfadeUpdating"
         :refreshing="refreshing"
         :actions-disabled="loading || !!mutatingId || !!actionsDisabled"
         :can-clear="items.some((item) => item.status === 'queued')"
         @select="
           (action) => {
             if (action === 'autoplay') $emit('autoplayChange', !(autoplay?.enabled ?? false))
+            else if (action === 'crossfade') $emit('crossfadeChange', !(crossfadeEnabled ?? false))
             else if (action === 'refresh') $emit('refresh')
             else if (action === 'import') $emit('importPlaylist')
             else $emit('clearQueue')

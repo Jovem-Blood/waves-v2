@@ -102,4 +102,33 @@ describe('CrossfadeMixer', () => {
     )
     expect(samples).toEqual([500, 500, 750, 750])
   })
+
+  it('discards a prepared source and completes naturally when disabled', async () => {
+    const first = source('first', 500, 5)
+    const second = source('second', 750, 5)
+    const events: string[] = []
+    const mixer = new CrossfadeMixer(first.playbackSource, {
+      crossfadeDurationMs: 40,
+      preloadMs: 80,
+      onPreloadRequired(trackId) {
+        events.push(`preload:${trackId}`)
+        mixer.prepare(second.playbackSource)
+        mixer.setEnabled(false)
+      },
+      onCrossfadeRequired(trackId) {
+        events.push(`crossfade:${trackId}`)
+      },
+      onSourceEnded(trackId) {
+        events.push(`ended:${trackId}`)
+        mixer.finish(trackId)
+      },
+      onCrossfadeCompleted: vi.fn(),
+    })
+
+    const output = await collect(mixer)
+
+    expect(output.byteLength).toBe(PCM_FRAME_BYTES * 5)
+    expect(events).toEqual(['preload:first', 'ended:first'])
+    expect(second.dispose).toHaveBeenCalledOnce()
+  })
 })

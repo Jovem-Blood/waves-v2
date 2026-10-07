@@ -103,6 +103,7 @@ function setup(
   connected = true,
   options: {
     crossfade?: CrossfadeOptions
+    crossfadeEnabled?: boolean
     currentItem?: QueueItem
     decodedStream?: (sourceIdentifier: string) => Readable
   } = {},
@@ -178,6 +179,13 @@ function setup(
   const sendEvent = vi.fn().mockResolvedValue(undefined)
   const reportPlaybackAttempt = vi.fn().mockResolvedValue(undefined)
   const getQueue = vi.fn().mockResolvedValue([])
+  const getPlayer = vi.fn().mockResolvedValue({
+    status: 'playing',
+    volume: 100,
+    progressMs: 0,
+    crossfadeEnabled: options.crossfadeEnabled ?? options.crossfade !== undefined,
+    updatedAt: item.updatedAt,
+  })
   const api: WavesApi = {
     claimPlayback,
     completePlayback,
@@ -187,12 +195,7 @@ function setup(
     resolveSource,
     sendEvent,
     skip,
-    getPlayer: vi.fn().mockResolvedValue({
-      status: 'playing',
-      volume: 100,
-      progressMs: 0,
-      updatedAt: item.updatedAt,
-    }),
+    getPlayer,
     updateProgress: vi.fn(),
     heartbeat: vi.fn(),
     createDiscordLink: vi.fn(),
@@ -248,6 +251,7 @@ function setup(
       createDecodedStream,
       createPcmResource,
       getQueue,
+      getPlayer,
       loggerError,
       loggerInfo,
       loggerWarn,
@@ -416,6 +420,20 @@ describe('AudioPlayerManager', () => {
       )
       expect(player.played).toHaveLength(2)
     })
+  })
+
+  it('uses the standard resource path while persisted crossfade is disabled', async () => {
+    const { manager, mocks } = setup(true, {
+      crossfade: { durationMs: 5_000, preloadMs: 12_000 },
+      crossfadeEnabled: false,
+    })
+
+    await expect(manager.start('guild-1')).resolves.toBe('started')
+
+    expect(mocks.getPlayer).toHaveBeenCalledOnce()
+    expect(mocks.createResource).toHaveBeenCalledOnce()
+    expect(mocks.createDecodedStream).not.toHaveBeenCalled()
+    expect(mocks.createPcmResource).not.toHaveBeenCalled()
   })
 
   it('prepares and crossfades to the API-promoted next item without replacing the player resource', async () => {

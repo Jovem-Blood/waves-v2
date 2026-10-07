@@ -12,6 +12,7 @@ export function usePlayerState(apiBase: string) {
   const loading = ref(true)
   const skipping = ref(false)
   const mutating = ref(false)
+  const crossfadeUpdating = ref(false)
   const error = ref<string>()
   let pollingTimer: ReturnType<typeof setInterval> | undefined
   let requestInFlight = false
@@ -19,7 +20,7 @@ export function usePlayerState(apiBase: string) {
   let realtimeConnected = false
 
   async function load() {
-    if (requestInFlight) return
+    if (requestInFlight || crossfadeUpdating.value) return
     requestInFlight = true
     try {
       state.value = playerStateSchema.parse(await $fetch(`${apiBase}/player`))
@@ -108,6 +109,25 @@ export function usePlayerState(apiBase: string) {
     }
   }
 
+  async function setCrossfadeEnabled(enabled: boolean) {
+    crossfadeUpdating.value = true
+    try {
+      state.value = playerStateSchema.parse(
+        await $fetch(`${apiBase}/player/crossfade`, { method: 'PUT', body: { enabled } }),
+      )
+      error.value = undefined
+      toasts.success(
+        enabled
+          ? 'Crossfade ativado para as próximas transições.'
+          : 'Crossfade desativado para as próximas transições.',
+      )
+    } catch {
+      toasts.error('Não foi possível alterar o crossfade.')
+    } finally {
+      crossfadeUpdating.value = false
+    }
+  }
+
   onMounted(() => {
     mounted = true
     void load()
@@ -124,12 +144,14 @@ export function usePlayerState(apiBase: string) {
     loading,
     skipping,
     mutating,
+    crossfadeUpdating,
     error,
     refresh: load,
     replace,
     skip,
     control,
     setVolume,
+    setCrossfadeEnabled,
     setRealtimeConnected,
   }
 }

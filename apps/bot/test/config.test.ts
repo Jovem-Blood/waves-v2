@@ -78,4 +78,10 @@ describe('parseBotConfig', () => {
     expect(String(error)).toContain('PUBLIC_APP_URL/APP_HOSTNAME')
     expect(String(error)).not.toContain('internal-token')
   })
+
+  it('keeps crossfade activation in the UI instead of accepting a zero duration', () => {
+    expect(() => parseBotConfig({ ...validEnvironment, BOT_CROSSFADE_DURATION_MS: '0' })).toThrow(
+      BotConfigurationError,
+    )
+  })
 })

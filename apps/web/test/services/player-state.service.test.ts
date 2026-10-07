@@ -147,8 +147,26 @@ describe('PlayerStateService', () => {
 
     expect(service.get()).toMatchObject({
       status: 'idle',
+      crossfadeEnabled: false,
       updatedAt: '2026-06-18T15:00:00.000Z',
     })
+  })
+
+  it('persists crossfade and publishes the updated player state', () => {
+    const published: RealtimeEvent[] = []
+    const { service } = setup({
+      publishRealtime: (event) => {
+        published.push(event)
+        return { id: String(published.length), event }
+      },
+    })
+
+    expect(service.setCrossfade({ enabled: true })).toMatchObject({ crossfadeEnabled: true })
+    expect(service.get()).toMatchObject({ crossfadeEnabled: true })
+    expect(published).toHaveLength(1)
+    const event = published[0]
+    expect(event?.type).toBe('player.updated')
+    expect(event?.type === 'player.updated' ? event.player.crossfadeEnabled : undefined).toBe(true)
   })
 
   it('persists and clears the connected voice guild and channel', () => {
