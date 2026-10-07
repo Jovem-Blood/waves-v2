@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:25.5.0-bookworm-slim AS base
+FROM node:26.1.0-bookworm-slim AS base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -34,7 +34,7 @@ FROM deps AS prod-deps
 RUN rm -rf node_modules apps/web/node_modules apps/bot/node_modules packages/shared/node_modules \
   && pnpm install --prod --frozen-lockfile
 
-FROM node:25.5.0-bookworm-slim AS runner
+FROM node:26.1.0-bookworm-slim AS runner
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

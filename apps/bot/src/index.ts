@@ -6,6 +6,7 @@ import { registerInteractionHandler } from './interaction-handler.js'
 import { startBotHealthServer, type BotHealthServer, type BotHealthState } from './health-server.js'
 import { createBotLogger } from './logger.js'
 import { AudioPlayerManager } from './playback/audio-player-manager.js'
+import { defaultPlaybackRuntime } from './playback/playback-runtime.js'
 import { registerCommands } from './register-commands.js'
 import { createBackoffLoop, type BackoffLoop } from './runtime-loop.js'
 import { DiscordVoiceManager } from './voice/discord-voice.manager.js'
@@ -125,7 +126,17 @@ export async function startBot(): Promise<Client> {
       })
     },
   )
-  const playbackManager = new AudioPlayerManager(api, voiceManager, logger, client)
+  const playbackManager = new AudioPlayerManager(
+    api,
+    voiceManager,
+    logger,
+    client,
+    defaultPlaybackRuntime,
+    {
+      durationMs: config.crossfadeDurationMs ?? 5_000,
+      preloadMs: config.crossfadePreloadMs ?? 12_000,
+    },
+  )
   const botStartedAt = new Date().toISOString()
   playbackReference.current = playbackManager
   const healthState: BotHealthState = {

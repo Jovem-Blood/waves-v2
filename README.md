@@ -28,6 +28,7 @@ other ephemeral runtime resources.
 - Confirmed clearing of upcoming tracks without interrupting the current track
   or changing the autoplay setting.
 - YouTube Music audio resolution and playback through Discord voice.
+- Configurable equal-power crossfade between naturally consecutive tracks.
 - Web controls for play state, pause, resume, skip, volume, queue ordering, and
   removal/restoration.
 - Discord commands: `/play`, `/queue`, `/login`, `/join`, `/leave`, `/pause`,
@@ -75,7 +76,7 @@ The image already includes FFmpeg and the required Node.js runtime.
 
 ### Local development
 
-- Node.js 25.5.0 or newer, as declared in `.node-version` and `.mise.toml`.
+- Node.js 26.1.0 or newer, as declared in `.node-version` and `.mise.toml`.
 - pnpm 11.5.2, as declared by `packageManager`.
 - FFmpeg available on `PATH` with Opus support.
 - The same provider credentials and network access required for self-hosting.
@@ -131,21 +132,23 @@ Copy-Item .env.example .env
 
 The minimum values to review are:
 
-| Variable                | Required    | Purpose                                                                   |
-| ----------------------- | ----------- | ------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`         | Yes         | Discord bot token.                                                        |
-| `DISCORD_CLIENT_ID`     | Yes         | Discord application ID.                                                   |
-| `DISCORD_GUILD_ID`      | Yes         | Server where guild commands are registered.                               |
-| `SPOTIFY_CLIENT_ID`     | Yes         | Spotify server-side client ID.                                            |
-| `SPOTIFY_CLIENT_SECRET` | Yes         | Spotify server-side client secret.                                        |
-| `BOT_INTERNAL_SECRET`   | Yes         | Random secret shared only by the web app and bot.                         |
-| `PUBLIC_APP_URL`        | Yes         | Browser-reachable panel URL used in Discord login links and QR codes.     |
-| `INTERNAL_WEB_URL`      | Development | Web origin used by the local bot; normally `http://localhost:3000`.       |
-| `LASTFM_API_KEY`        | No          | Enables the Last.fm recommendation provider.                              |
-| `DATABASE_URL`          | Development | SQLite URL; the default is `file:./dev.db`. Docker uses `/data/waves.db`. |
-| `SESSION_COOKIE_SECURE` | Deployment  | Use `true` behind HTTPS; local HTTP uses `false`.                         |
-| `WAVES_BIND_ADDRESS`    | No          | Published Docker address; defaults to loopback (`127.0.0.1`).             |
-| `LOG_LEVEL`             | No          | `debug`, `info`, `warn`, or `error`.                                      |
+| Variable                    | Required    | Purpose                                                                   |
+| --------------------------- | ----------- | ------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`             | Yes         | Discord bot token.                                                        |
+| `DISCORD_CLIENT_ID`         | Yes         | Discord application ID.                                                   |
+| `DISCORD_GUILD_ID`          | Yes         | Server where guild commands are registered.                               |
+| `SPOTIFY_CLIENT_ID`         | Yes         | Spotify server-side client ID.                                            |
+| `SPOTIFY_CLIENT_SECRET`     | Yes         | Spotify server-side client secret.                                        |
+| `BOT_INTERNAL_SECRET`       | Yes         | Random secret shared only by the web app and bot.                         |
+| `PUBLIC_APP_URL`            | Yes         | Browser-reachable panel URL used in Discord login links and QR codes.     |
+| `INTERNAL_WEB_URL`          | Development | Web origin used by the local bot; normally `http://localhost:3000`.       |
+| `LASTFM_API_KEY`            | No          | Enables the Last.fm recommendation provider.                              |
+| `DATABASE_URL`              | Development | SQLite URL; the default is `file:./dev.db`. Docker uses `/data/waves.db`. |
+| `SESSION_COOKIE_SECURE`     | Deployment  | Use `true` behind HTTPS; local HTTP uses `false`.                         |
+| `WAVES_BIND_ADDRESS`        | No          | Published Docker address; defaults to loopback (`127.0.0.1`).             |
+| `LOG_LEVEL`                 | No          | `debug`, `info`, `warn`, or `error`.                                      |
+| `BOT_CROSSFADE_DURATION_MS` | No          | Crossfade duration; defaults to `5000`. Set `0` to disable it.            |
+| `BOT_CROSSFADE_PRELOAD_MS`  | No          | How early the bot prepares the next source; defaults to `12000`.          |
 
 Generate `BOT_INTERNAL_SECRET` with a password manager or a cryptographically
 secure generator; for example:

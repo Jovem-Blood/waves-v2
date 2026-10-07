@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
-import type { AudioSourceProvider, PlaybackAttemptReport, QueueItem } from '@waves/shared'
+import type {
+  AudioSourceProvider,
+  PlaybackAttemptReport,
+  PlaybackTransitionResult,
+  QueueItem,
+} from '@waves/shared'
 import { ActivityType } from 'discord.js'
 import type { Client } from 'discord.js'
 import { AudioPlayerStatus, type AudioPlayer, type AudioPlayerState } from '@discordjs/voice'
@@ -15,7 +20,12 @@ import {
   SafePlaybackError,
 } from '../observability.js'
 import type { VoiceManager } from '../voice/voice-manager.js'
-import { defaultPlaybackRuntime, type PlaybackRuntime } from './playback-runtime.js'
+import { CrossfadeMixer, type PcmPlaybackSource } from './crossfade-mixer.js'
+import {
+  defaultPlaybackRuntime,
+  type DecodedAudioStream,
+  type PlaybackRuntime,
+} from './playback-runtime.js'
 import { deliverPlayback } from './telemetry-delivery.js'
 
 export type StartPlaybackResult = 'started' | 'already-playing' | 'not-connected' | 'empty'
@@ -55,9 +65,20 @@ interface PlaybackSession {
   player: AudioPlayer
   current: CurrentPlayback | undefined
   settling: boolean
+  crossfade: CrossfadeMixer | undefined
+  prepared: CurrentPlayback | undefined
+  preparing: Promise<void> | undefined
+  crossfadeTransition: Promise<void> | undefined
+  fadingOut: CurrentPlayback | undefined
+}
+
+export interface CrossfadeOptions {
+  durationMs: number
+  preloadMs: number
 }
 
 const MIN_SUCCESSFUL_PLAYBACK_MS = 1_000
+const DEFAULT_CROSSFADE_OPTIONS: CrossfadeOptions = { durationMs: 0, preloadMs: 12_000 }
 
 export class AudioPlayerManager implements PlaybackManager {
   private readonly sessions = new Map<string, PlaybackSession>()
@@ -71,6 +92,7 @@ export class AudioPlayerManager implements PlaybackManager {
     private readonly logger: BotLogger,
     private readonly client: Client,
     private readonly runtime: PlaybackRuntime = defaultPlaybackRuntime,
+    private readonly crossfadeOptions: CrossfadeOptions = DEFAULT_CROSSFADE_OPTIONS,
   ) {}
 
   private reportAttempt(input: PlaybackAttemptReport): Promise<void> {
@@ -285,9 +307,16 @@ export class AudioPlayerManager implements PlaybackManager {
     const state = session.player.state
     if (
       (state.status === AudioPlayerStatus.Playing || state.status === AudioPlayerStatus.Paused) &&
-      state.resource.playbackDuration - desired.progressMs >= 1_000
+      (session.crossfade?.getPlaybackDuration(session.current.item.id) ??
+        state.resource.playbackDuration) -
+        desired.progressMs >=
+        1_000
     ) {
-      await this.api.updateProgress(session.current.item.id, state.resource.playbackDuration)
+      await this.api.updateProgress(
+        session.current.item.id,
+        session.crossfade?.getPlaybackDuration(session.current.item.id) ??
+          state.resource.playbackDuration,
+      )
     }
   }
 
@@ -302,6 +331,7 @@ export class AudioPlayerManager implements PlaybackManager {
     }
     const current = session.current
     session.settling = true
+    this.destroyCrossfade(session)
     current?.abortController.abort()
     if (current) {
       void this.reportAttempt({
@@ -359,6 +389,7 @@ export class AudioPlayerManager implements PlaybackManager {
       })
     }
     session.settling = true
+    this.destroyCrossfade(session)
     current?.abortController.abort()
     session.current = undefined
     session.player.stop(true)
@@ -384,7 +415,16 @@ export class AudioPlayerManager implements PlaybackManager {
     }
 
     const player = this.runtime.createPlayer()
-    const session: PlaybackSession = { player, current: undefined, settling: false }
+    const session: PlaybackSession = {
+      player,
+      current: undefined,
+      settling: false,
+      crossfade: undefined,
+      prepared: undefined,
+      preparing: undefined,
+      crossfadeTransition: undefined,
+      fadingOut: undefined,
+    }
     player.on('stateChange', (previousState, nextState) => {
       this.handleStateChange(guildId, session, previousState, nextState)
     })
@@ -506,6 +546,33 @@ export class AudioPlayerManager implements PlaybackManager {
       current.resolutionDurationMs = Date.now() - resolveStartedAt
       current.sourceIdentifier = resolved.source.sourceIdentifier
       const fetchStartedAt = Date.now()
+      if (this.canCrossfade(item)) {
+        const decoded = await this.runtime.createDecodedStream!(resolved.source.streamUrl, {
+          logger,
+          playbackAttemptId,
+          provider: resolved.source.provider,
+          sourceIdentifier: resolved.source.sourceIdentifier,
+          attempt,
+          signal: abortController.signal,
+        })
+        current.fetchLatencyMs = Date.now() - fetchStartedAt
+        if (abortController.signal.aborted || session.current !== current) {
+          decoded.dispose()
+          const error = new SafePlaybackError('SOURCE_FETCH_CANCELLED')
+          logger.info(
+            {
+              operation: 'playback.attempt',
+              outcome: 'cancelled',
+              errorCode: error.code,
+              err: error,
+            },
+            'Playback attempt cancelled',
+          )
+          return
+        }
+        await this.startCrossfadeResource(guildId, session, current, decoded)
+        return
+      }
       const resource = await this.runtime.createResource(
         resolved.source.streamUrl,
         resolved.queueItemId,
@@ -610,6 +677,399 @@ export class AudioPlayerManager implements PlaybackManager {
     }
   }
 
+  private canCrossfade(item: QueueItem): boolean {
+    return (
+      this.crossfadeOptions.durationMs > 0 &&
+      item.track.durationMs > this.crossfadeOptions.durationMs * 2 &&
+      this.runtime.createDecodedStream !== undefined &&
+      this.runtime.createPcmResource !== undefined
+    )
+  }
+
+  private async startCrossfadeResource(
+    guildId: string,
+    session: PlaybackSession,
+    current: CurrentPlayback,
+    decoded: DecodedAudioStream,
+  ): Promise<void> {
+    const source = this.toPcmSource(current, decoded)
+    const mixer = new CrossfadeMixer(source, {
+      crossfadeDurationMs: this.crossfadeOptions.durationMs,
+      preloadMs: this.crossfadeOptions.preloadMs,
+      onPreloadRequired: (trackId) => this.requestCrossfadePreparation(guildId, session, trackId),
+      onCrossfadeRequired: (trackId, playbackDurationMs) =>
+        this.requestCrossfadeTransition(guildId, session, trackId, playbackDurationMs),
+      onSourceEnded: (trackId, playbackDurationMs) => {
+        void this.handleCrossfadeSourceEnd(guildId, session, trackId, playbackDurationMs)
+      },
+      onCrossfadeCompleted: (outgoingTrackId) => {
+        if (session.fadingOut?.item.id !== outgoingTrackId) return
+        session.fadingOut.abortController.abort()
+        session.fadingOut = undefined
+      },
+    })
+    session.crossfade = mixer
+    const resource = this.runtime.createPcmResource!(mixer, current.item.id)
+    this.logger.info(
+      {
+        operation: 'audio_player.play',
+        outcome: 'submitted',
+        guildId,
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        provider: current.provider,
+        sourceIdentifier: current.sourceIdentifier,
+        crossfadeDurationMs: this.crossfadeOptions.durationMs,
+      },
+      'Crossfade audio resource submitted to player',
+    )
+    session.player.play(resource)
+    resource.volume?.setVolume((await this.api.getPlayer()).volume / 100)
+    this.updateActivity(guildId, current.item)
+  }
+
+  private toPcmSource(current: CurrentPlayback, decoded: DecodedAudioStream): PcmPlaybackSource {
+    return {
+      id: current.item.id,
+      expectedDurationMs: current.item.track.durationMs,
+      stream: decoded.stream,
+      dispose: () => decoded.dispose(),
+    }
+  }
+
+  private requestCrossfadePreparation(
+    guildId: string,
+    session: PlaybackSession,
+    outgoingTrackId: string,
+  ): void {
+    if (
+      session.current?.item.id !== outgoingTrackId ||
+      session.prepared ||
+      session.preparing ||
+      !session.crossfade
+    ) {
+      return
+    }
+    const preparation = this.prepareCrossfade(guildId, session, outgoingTrackId)
+    session.preparing = preparation
+    void preparation.finally(() => {
+      if (session.preparing === preparation) session.preparing = undefined
+    })
+  }
+
+  private async prepareCrossfade(
+    guildId: string,
+    session: PlaybackSession,
+    outgoingTrackId: string,
+  ): Promise<void> {
+    let prepared: CurrentPlayback | undefined
+    let decoded: DecodedAudioStream | undefined
+    try {
+      const queue = await this.api.getQueue()
+      const nextItem = queue.find((queueItem) => queueItem.status === 'queued')
+      if (
+        !nextItem ||
+        !this.canCrossfade(nextItem) ||
+        session.current?.item.id !== outgoingTrackId ||
+        session.crossfade?.currentTrackId !== outgoingTrackId
+      ) {
+        return
+      }
+
+      const playbackAttemptId = randomUUID()
+      const abortController = new AbortController()
+      prepared = {
+        item: nextItem,
+        retries: 0,
+        playbackAttemptId,
+        abortController,
+        provider: 'youtube_music',
+        startedAt: Date.now(),
+      }
+      const logger = playbackLogger(this.logger, {
+        event: 'playback',
+        operation: 'playback.crossfade.prepare',
+        guildId,
+        voiceChannelId: this.voiceManager.getChannelId(guildId),
+        queueItemId: nextItem.id,
+        playbackAttemptId,
+        attempt: 1,
+      })
+      const resolveStartedAt = Date.now()
+      const resolved = await this.api.resolveSource(nextItem.id, false, {
+        playbackAttemptId,
+        attempt: 1,
+      })
+      prepared.provider = resolved.source.provider
+      prepared.sourceIdentifier = resolved.source.sourceIdentifier
+      prepared.resolutionDurationMs = Date.now() - resolveStartedAt
+      const fetchStartedAt = Date.now()
+      decoded = await this.runtime.createDecodedStream!(resolved.source.streamUrl, {
+        logger,
+        playbackAttemptId,
+        provider: resolved.source.provider,
+        sourceIdentifier: resolved.source.sourceIdentifier,
+        attempt: 1,
+        signal: abortController.signal,
+      })
+      prepared.fetchLatencyMs = Date.now() - fetchStartedAt
+
+      if (
+        abortController.signal.aborted ||
+        session.current?.item.id !== outgoingTrackId ||
+        session.crossfade?.currentTrackId !== outgoingTrackId
+      ) {
+        decoded.dispose()
+        return
+      }
+      if (!session.crossfade.prepare(this.toPcmSource(prepared, decoded))) return
+      decoded = undefined
+      session.prepared = prepared
+      logger.info(
+        {
+          outcome: 'prepared',
+          outgoingQueueItemId: outgoingTrackId,
+          sourceIdentifier: prepared.sourceIdentifier,
+        },
+        'Next crossfade source prepared',
+      )
+      if (session.crossfade.isCrossfadeDue(outgoingTrackId)) {
+        const playbackDurationMs =
+          session.crossfade.getPlaybackDuration(outgoingTrackId) ??
+          Math.max(0, prepared.item.track.durationMs - this.crossfadeOptions.durationMs)
+        this.requestCrossfadeTransition(guildId, session, outgoingTrackId, playbackDurationMs)
+      }
+    } catch (error) {
+      prepared?.abortController.abort()
+      decoded?.dispose()
+      this.logger.warn(
+        {
+          operation: 'playback.crossfade.prepare',
+          guildId,
+          queueItemId: prepared?.item.id,
+          outgoingQueueItemId: outgoingTrackId,
+          outcome: 'failed',
+          ...classifyPlaybackError(error),
+          err: error,
+        },
+        'Crossfade preparation failed; natural transition remains available',
+      )
+    }
+  }
+
+  private requestCrossfadeTransition(
+    guildId: string,
+    session: PlaybackSession,
+    outgoingTrackId: string,
+    playbackDurationMs: number,
+  ): void {
+    if (
+      session.current?.item.id !== outgoingTrackId ||
+      !session.prepared ||
+      session.crossfadeTransition ||
+      !session.crossfade
+    ) {
+      return
+    }
+    const transition = this.commitCrossfade(guildId, session, outgoingTrackId, playbackDurationMs)
+    session.crossfadeTransition = transition
+    void transition.finally(() => {
+      if (session.crossfadeTransition === transition) session.crossfadeTransition = undefined
+    })
+  }
+
+  private async commitCrossfade(
+    guildId: string,
+    session: PlaybackSession,
+    outgoingTrackId: string,
+    playbackDurationMs: number,
+  ): Promise<void> {
+    const outgoing = session.current
+    const prepared = session.prepared
+    const mixer = session.crossfade
+    if (!outgoing || outgoing.item.id !== outgoingTrackId || !prepared || !mixer) return
+
+    outgoing.playbackDurationMs = Math.min(
+      outgoing.item.track.durationMs,
+      playbackDurationMs + this.crossfadeOptions.durationMs,
+    )
+    try {
+      const result = await this.completePlaybackTransition(
+        guildId,
+        outgoing,
+        'played',
+        prepared.playbackAttemptId,
+      )
+      if (!result.nextItem || result.nextItem.id !== prepared.item.id) {
+        await this.fallbackFromPreparedTransition(guildId, session, outgoing, prepared, result)
+        return
+      }
+
+      prepared.item = result.nextItem
+      prepared.playbackAttemptId = result.nextPlaybackAttemptId ?? prepared.playbackAttemptId
+      prepared.startedAt = Date.now()
+      session.prepared = undefined
+      session.fadingOut = outgoing
+      session.current = prepared
+      session.settling = false
+      if (!mixer.beginCrossfade(outgoingTrackId, prepared.item.id)) {
+        await this.fallbackFromPreparedTransition(guildId, session, outgoing, prepared, result)
+        return
+      }
+      this.markCrossfadeTrackStarted(guildId, prepared)
+      this.updateActivity(guildId, prepared.item)
+      this.logger.info(
+        {
+          operation: 'playback.crossfade',
+          guildId,
+          outgoingQueueItemId: outgoingTrackId,
+          queueItemId: prepared.item.id,
+          crossfadeDurationMs: this.crossfadeOptions.durationMs,
+          outcome: 'started',
+        },
+        'Crossfade started',
+      )
+    } catch (error) {
+      await this.handleCrossfadeSyncFailure(guildId, session, outgoing, error)
+    }
+  }
+
+  private markCrossfadeTrackStarted(guildId: string, current: CurrentPlayback): void {
+    current.timeToFirstAudioMs = 0
+    void this.reportAttempt({
+      queueItemId: current.item.id,
+      playbackAttemptId: current.playbackAttemptId,
+      attempt: current.retries + 1,
+      outcome: 'pending',
+      terminal: false,
+      sourceProvider: current.provider,
+      ...this.timingFields(current, false),
+    })
+    void this.sendPlaybackEvent('playback.started', guildId, current.item.id)
+  }
+
+  private async handleCrossfadeSourceEnd(
+    guildId: string,
+    session: PlaybackSession,
+    outgoingTrackId: string,
+    playbackDurationMs: number,
+  ): Promise<void> {
+    await session.crossfadeTransition
+    const outgoing = session.current
+    const mixer = session.crossfade
+    if (!outgoing || outgoing.item.id !== outgoingTrackId || !mixer) return
+
+    outgoing.playbackDurationMs = playbackDurationMs
+    const prepared = session.prepared
+    const nextPlaybackAttemptId = prepared?.playbackAttemptId ?? randomUUID()
+    session.settling = true
+    try {
+      const result = await this.completePlaybackTransition(
+        guildId,
+        outgoing,
+        'played',
+        nextPlaybackAttemptId,
+      )
+      if (prepared && result.nextItem?.id === prepared.item.id) {
+        prepared.item = result.nextItem
+        prepared.playbackAttemptId = result.nextPlaybackAttemptId ?? prepared.playbackAttemptId
+        prepared.startedAt = Date.now()
+        session.prepared = undefined
+        session.current = prepared
+        session.settling = false
+        outgoing.abortController.abort()
+        if (!mixer.promotePreparedAfterEnd(outgoingTrackId, prepared.item.id)) {
+          await this.fallbackFromPreparedTransition(guildId, session, outgoing, prepared, result)
+          return
+        }
+        this.markCrossfadeTrackStarted(guildId, prepared)
+        this.updateActivity(guildId, prepared.item)
+        return
+      }
+      await this.fallbackFromPreparedTransition(guildId, session, outgoing, prepared, result)
+    } catch (error) {
+      await this.handleCrossfadeSyncFailure(guildId, session, outgoing, error)
+    }
+  }
+
+  private async fallbackFromPreparedTransition(
+    guildId: string,
+    session: PlaybackSession,
+    outgoing: CurrentPlayback,
+    prepared: CurrentPlayback | undefined,
+    result: PlaybackTransitionResult,
+  ): Promise<void> {
+    session.settling = true
+    session.current = undefined
+    session.prepared = undefined
+    prepared?.abortController.abort()
+    outgoing.abortController.abort()
+    session.crossfade?.discardPrepared(prepared?.item.id ?? '')
+    this.destroyCrossfade(session)
+    session.player.stop(true)
+    session.settling = false
+
+    if (result.nextItem && this.sessions.get(guildId) === session) {
+      await this.playItem(
+        guildId,
+        session,
+        result.nextItem,
+        0,
+        result.nextPlaybackAttemptId ?? randomUUID(),
+      )
+    } else {
+      this.updateActivity(guildId)
+    }
+  }
+
+  private async handleCrossfadeSyncFailure(
+    guildId: string,
+    session: PlaybackSession,
+    current: CurrentPlayback,
+    error: unknown,
+  ): Promise<void> {
+    const classified = classifyPlaybackError(error)
+    await this.reportAttempt({
+      queueItemId: current.item.id,
+      playbackAttemptId: current.playbackAttemptId,
+      attempt: current.retries + 1,
+      outcome: 'failed',
+      terminal: true,
+      failureStage: 'sync',
+      failureClass: 'sync',
+      errorCode: 'PLAYBACK_SYNC_FAILED',
+      sourceProvider: current.provider,
+    })
+    session.settling = true
+    session.current = undefined
+    current.abortController.abort()
+    session.prepared?.abortController.abort()
+    this.destroyCrossfade(session)
+    session.player.stop(true)
+    session.settling = false
+    this.logger.error(
+      {
+        operation: 'playback.complete',
+        guildId,
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        outcome: 'sync_failed',
+        errorCode: 'PLAYBACK_SYNC_FAILED',
+        ...(classified.httpStatus === undefined ? {} : { httpStatus: classified.httpStatus }),
+      },
+      'Crossfade playback completion sync failed',
+    )
+  }
+
+  private destroyCrossfade(session: PlaybackSession): void {
+    session.prepared?.abortController.abort()
+    session.fadingOut?.abortController.abort()
+    session.crossfade?.destroy()
+    session.crossfade = undefined
+    session.prepared = undefined
+    session.fadingOut = undefined
+  }
+
   private handleStateChange(
     guildId: string,
     session: PlaybackSession,
@@ -617,12 +1077,15 @@ export class AudioPlayerManager implements PlaybackManager {
     nextState: AudioPlayerState,
   ): void {
     const current = session.current
-    const playbackDurationMs =
+    const resourcePlaybackDurationMs =
       previousState.status === AudioPlayerStatus.Playing
         ? previousState.resource.playbackDuration
         : nextState.status === AudioPlayerStatus.Playing
           ? nextState.resource.playbackDuration
           : undefined
+    const playbackDurationMs = current
+      ? (session.crossfade?.getPlaybackDuration(current.item.id) ?? resourcePlaybackDurationMs)
+      : resourcePlaybackDurationMs
     if (current && playbackDurationMs !== undefined) current.playbackDurationMs = playbackDurationMs
     this.logger.debug(
       {
@@ -774,6 +1237,7 @@ export class AudioPlayerManager implements PlaybackManager {
     current: CurrentPlayback,
   ): Promise<void> {
     session.settling = true
+    this.destroyCrossfade(session)
     current.abortController.abort()
     session.current = undefined
     await this.reportAttempt({
@@ -814,56 +1278,12 @@ export class AudioPlayerManager implements PlaybackManager {
     session.settling = true
     session.current = undefined
     try {
-      const result = await deliverPlayback(
-        'playback.complete',
-        {
-          queueItemId: current.item.id,
-          playbackAttemptId: current.playbackAttemptId,
-          attempt: current.retries + 1,
-        },
-        () =>
-          this.api.completePlayback({
-            queueItemId: current.item.id,
-            ...timings,
-            outcome,
-            playbackAttemptId: current.playbackAttemptId,
-            attempt: current.retries + 1,
-            retryCount: current.retries,
-            ...(current.provider === undefined ? {} : { sourceProvider: current.provider }),
-            ...(current.sourceIdentifier === undefined
-              ? {}
-              : { sourceIdentifier: current.sourceIdentifier }),
-            ...(outcome === 'played' || current.failureStage === undefined
-              ? {}
-              : { failureStage: current.failureStage }),
-            ...(outcome === 'played' || current.failureClass === undefined
-              ? {}
-              : { failureClass: current.failureClass }),
-            ...(outcome === 'played' || current.errorCode === undefined
-              ? {}
-              : { errorCode: current.errorCode }),
-            ...(outcome === 'played' || current.httpStatus === undefined
-              ? {}
-              : { httpStatus: current.httpStatus }),
-            nextPlaybackAttemptId,
-          }),
-        this.logger,
-      )
-      this.logger.info(
-        {
-          operation: 'playback.complete',
-          guildId,
-          queueItemId: current.item.id,
-          playbackAttemptId: current.playbackAttemptId,
-          outcome,
-          nextQueueItemId: result.nextItem?.id,
-        },
-        outcome === 'played' ? 'Playback completion synchronized' : 'Playback failure synchronized',
-      )
-      void this.sendPlaybackEvent(
-        outcome === 'played' ? 'playback.finished' : 'playback.failed',
+      const result = await this.completePlaybackTransition(
         guildId,
-        current.item.id,
+        current,
+        outcome,
+        nextPlaybackAttemptId,
+        timings,
       )
       session.settling = false
       if (result.nextItem && this.sessions.get(guildId) === session && !session.current) {
@@ -904,6 +1324,67 @@ export class AudioPlayerManager implements PlaybackManager {
         outcome === 'played' ? 'Playback completion sync failed' : 'Playback failure sync failed',
       )
     }
+  }
+
+  private async completePlaybackTransition(
+    guildId: string,
+    current: CurrentPlayback,
+    outcome: 'played' | 'failed',
+    nextPlaybackAttemptId: string,
+    timings = this.timingFields(current, outcome === 'failed'),
+  ): Promise<PlaybackTransitionResult> {
+    const result = await deliverPlayback(
+      'playback.complete',
+      {
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        attempt: current.retries + 1,
+      },
+      () =>
+        this.api.completePlayback({
+          queueItemId: current.item.id,
+          ...timings,
+          outcome,
+          playbackAttemptId: current.playbackAttemptId,
+          attempt: current.retries + 1,
+          retryCount: current.retries,
+          ...(current.provider === undefined ? {} : { sourceProvider: current.provider }),
+          ...(current.sourceIdentifier === undefined
+            ? {}
+            : { sourceIdentifier: current.sourceIdentifier }),
+          ...(outcome === 'played' || current.failureStage === undefined
+            ? {}
+            : { failureStage: current.failureStage }),
+          ...(outcome === 'played' || current.failureClass === undefined
+            ? {}
+            : { failureClass: current.failureClass }),
+          ...(outcome === 'played' || current.errorCode === undefined
+            ? {}
+            : { errorCode: current.errorCode }),
+          ...(outcome === 'played' || current.httpStatus === undefined
+            ? {}
+            : { httpStatus: current.httpStatus }),
+          nextPlaybackAttemptId,
+        }),
+      this.logger,
+    )
+    this.logger.info(
+      {
+        operation: 'playback.complete',
+        guildId,
+        queueItemId: current.item.id,
+        playbackAttemptId: current.playbackAttemptId,
+        outcome,
+        nextQueueItemId: result.nextItem?.id,
+      },
+      outcome === 'played' ? 'Playback completion synchronized' : 'Playback failure synchronized',
+    )
+    void this.sendPlaybackEvent(
+      outcome === 'played' ? 'playback.finished' : 'playback.failed',
+      guildId,
+      current.item.id,
+    )
+    return result
   }
 
   private async sendPlaybackEvent(

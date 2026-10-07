@@ -29,6 +29,7 @@ apenas da voz e de outros recursos efêmeros de runtime.
 - Limpeza confirmada das próximas músicas sem interromper a faixa atual nem
   alterar a configuração do autoplay.
 - Resolução de áudio no YouTube Music e reprodução na voz do Discord.
+- Crossfade equal-power configurável entre faixas consecutivas da fila.
 - Controles web de reprodução, pausa, retomada, skip, volume, ordenação da fila e
   remoção/restauração.
 - Comandos Discord: `/play`, `/queue`, `/login`, `/join`, `/leave`, `/pause`,
@@ -78,7 +79,7 @@ A imagem já inclui o FFmpeg e o runtime Node.js necessário.
 
 ### Desenvolvimento local
 
-- Node.js 25.5.0 ou mais recente, conforme `.node-version` e `.mise.toml`.
+- Node.js 26.1.0 ou mais recente, conforme `.node-version` e `.mise.toml`.
 - pnpm 11.5.2, conforme declarado em `packageManager`.
 - FFmpeg disponível no `PATH` com suporte a Opus.
 - As mesmas credenciais e o mesmo acesso de rede exigidos no self-hosting.
@@ -136,21 +137,23 @@ Copy-Item .env.example .env
 
 Os valores mínimos a revisar são:
 
-| Variável                | Obrigatória     | Finalidade                                                                              |
-| ----------------------- | --------------- | --------------------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`         | Sim             | Token do bot Discord.                                                                   |
-| `DISCORD_CLIENT_ID`     | Sim             | ID da aplicação Discord.                                                                |
-| `DISCORD_GUILD_ID`      | Sim             | Servidor onde os comandos do guild são registrados.                                     |
-| `SPOTIFY_CLIENT_ID`     | Sim             | Client ID do Spotify usado no servidor.                                                 |
-| `SPOTIFY_CLIENT_SECRET` | Sim             | Client secret do Spotify usado no servidor.                                             |
-| `BOT_INTERNAL_SECRET`   | Sim             | Secret aleatório compartilhado apenas pela web e pelo bot.                              |
-| `PUBLIC_APP_URL`        | Sim             | URL do painel acessível pelo navegador, usada nos links e QR codes de login do Discord. |
-| `INTERNAL_WEB_URL`      | Desenvolvimento | Origem da web usada pelo bot local; normalmente `http://localhost:3000`.                |
-| `LASTFM_API_KEY`        | Não             | Habilita o provedor de recomendações do Last.fm.                                        |
-| `DATABASE_URL`          | Desenvolvimento | URL do SQLite; o padrão é `file:./dev.db`. O Docker usa `/data/waves.db`.               |
-| `SESSION_COOKIE_SECURE` | Implantação     | Use `true` atrás de HTTPS; HTTP local usa `false`.                                      |
-| `WAVES_BIND_ADDRESS`    | Não             | Endereço publicado pelo Docker; o padrão é loopback (`127.0.0.1`).                      |
-| `LOG_LEVEL`             | Não             | `debug`, `info`, `warn` ou `error`.                                                     |
+| Variável                    | Obrigatória     | Finalidade                                                                              |
+| --------------------------- | --------------- | --------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`             | Sim             | Token do bot Discord.                                                                   |
+| `DISCORD_CLIENT_ID`         | Sim             | ID da aplicação Discord.                                                                |
+| `DISCORD_GUILD_ID`          | Sim             | Servidor onde os comandos do guild são registrados.                                     |
+| `SPOTIFY_CLIENT_ID`         | Sim             | Client ID do Spotify usado no servidor.                                                 |
+| `SPOTIFY_CLIENT_SECRET`     | Sim             | Client secret do Spotify usado no servidor.                                             |
+| `BOT_INTERNAL_SECRET`       | Sim             | Secret aleatório compartilhado apenas pela web e pelo bot.                              |
+| `PUBLIC_APP_URL`            | Sim             | URL do painel acessível pelo navegador, usada nos links e QR codes de login do Discord. |
+| `INTERNAL_WEB_URL`          | Desenvolvimento | Origem da web usada pelo bot local; normalmente `http://localhost:3000`.                |
+| `LASTFM_API_KEY`            | Não             | Habilita o provedor de recomendações do Last.fm.                                        |
+| `DATABASE_URL`              | Desenvolvimento | URL do SQLite; o padrão é `file:./dev.db`. O Docker usa `/data/waves.db`.               |
+| `SESSION_COOKIE_SECURE`     | Implantação     | Use `true` atrás de HTTPS; HTTP local usa `false`.                                      |
+| `WAVES_BIND_ADDRESS`        | Não             | Endereço publicado pelo Docker; o padrão é loopback (`127.0.0.1`).                      |
+| `LOG_LEVEL`                 | Não             | `debug`, `info`, `warn` ou `error`.                                                     |
+| `BOT_CROSSFADE_DURATION_MS` | Não             | Duração do crossfade; padrão `5000`. Use `0` para desabilitar.                          |
+| `BOT_CROSSFADE_PRELOAD_MS`  | Não             | Antecedência para preparar a próxima fonte; padrão `12000`.                             |
 
 Gere `BOT_INTERNAL_SECRET` com um gerenciador de senhas ou gerador
 criptograficamente seguro; por exemplo:

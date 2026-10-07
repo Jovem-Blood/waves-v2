@@ -25,6 +25,8 @@ describe('parseBotConfig', () => {
       healthHost: '127.0.0.1',
       healthPort: 3_002,
       heartbeatMaxAgeMs: 120_000,
+      crossfadeDurationMs: 5_000,
+      crossfadePreloadMs: 12_000,
     })
   })
 

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { Readable } from 'node:stream'
 
 import {
@@ -5,6 +6,7 @@ import {
   createAudioPlayer,
   createAudioResource,
   demuxProbe,
+  StreamType,
   type AudioPlayer,
   type AudioResource,
 } from '@discordjs/voice'
@@ -30,6 +32,16 @@ export interface PlaybackRuntime {
     queueItemId: string,
     context?: ResourceCreationContext,
   ): Promise<AudioResource<{ queueItemId: string }>>
+  createDecodedStream?(
+    streamUrl: string,
+    context: ResourceCreationContext,
+  ): Promise<DecodedAudioStream>
+  createPcmResource?(input: Readable, queueItemId: string): AudioResource<{ queueItemId: string }>
+}
+
+export interface DecodedAudioStream {
+  stream: Readable
+  dispose(): void
 }
 
 const RESOURCE_FETCH_TIMEOUT_MS = 10_000
@@ -206,6 +218,64 @@ export function createRangedAudioStream(
   return Readable.from(chunks(), { objectMode: false })
 }
 
+export function createFfmpegDecodedStream(
+  streamUrl: string,
+  context: ResourceCreationContext,
+): DecodedAudioStream {
+  const input = createRangedAudioStream(streamUrl, fetch, context)
+  const process = spawn(
+    'ffmpeg',
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      'pipe:0',
+      '-vn',
+      '-f',
+      's16le',
+      '-ar',
+      '48000',
+      '-ac',
+      '2',
+      'pipe:1',
+    ],
+    { stdio: ['pipe', 'pipe', 'pipe'] },
+  )
+  let disposed = false
+
+  const fail = (error: unknown) => {
+    if (!disposed && !process.stdout.destroyed) {
+      process.stdout.destroy(new SafePlaybackError('AUDIO_RESOURCE_FAILED', undefined, error))
+    }
+  }
+  input.on('error', fail)
+  process.on('error', fail)
+  process.on('close', (code, signal) => {
+    if (!disposed && code !== 0) {
+      fail(new Error(`ffmpeg exited with code ${String(code)} and signal ${String(signal)}`))
+    }
+  })
+  process.stderr.resume()
+  input.pipe(process.stdin)
+
+  const abort = () => dispose()
+  context.signal?.addEventListener('abort', abort, { once: true })
+
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    context.signal?.removeEventListener('abort', abort)
+    input.destroy()
+    process.stdin.destroy()
+    process.stdout.destroy()
+    process.stderr.destroy()
+    if (process.exitCode === null && process.signalCode === null) process.kill('SIGKILL')
+  }
+
+  return { stream: process.stdout, dispose }
+}
+
 export const defaultPlaybackRuntime: PlaybackRuntime = {
   createPlayer() {
     return createAudioPlayer({
@@ -252,5 +322,15 @@ export const defaultPlaybackRuntime: PlaybackRuntime = {
     } catch (error) {
       throw new SafePlaybackError('AUDIO_RESOURCE_FAILED', undefined, error)
     }
+  },
+  createDecodedStream(streamUrl, context) {
+    return Promise.resolve(createFfmpegDecodedStream(streamUrl, context))
+  },
+  createPcmResource(input, queueItemId) {
+    return createAudioResource(input, {
+      inputType: StreamType.Raw,
+      metadata: { queueItemId },
+      inlineVolume: true,
+    })
   },
 }

@@ -5,7 +5,7 @@
   "description": "Waves Discord music queue panel monorepo",
   "packageManager": "pnpm@11.5.2",
   "engines": {
-    "node": ">=25.5.0",
+    "node": ">=26.1.0",
     "pnpm": ">=10.0.0"
   },
   "scripts": {

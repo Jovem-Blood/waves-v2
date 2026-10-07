@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { PassThrough, Readable } from 'node:stream'
 
 import { completePlaybackInputSchema, type QueueItem } from '@waves/shared'
 import {
@@ -14,6 +15,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WavesApi } from '../src/api/waves-api.client.js'
 import type { BotLogger } from '../src/logger.js'
 import { AudioPlayerManager } from '../src/playback/audio-player-manager.js'
+import type { CrossfadeOptions } from '../src/playback/audio-player-manager.js'
+import { PCM_FRAME_BYTES } from '../src/playback/crossfade-mixer.js'
 import {
   createRangedAudioStream,
   type ResourceCreationContext,
@@ -96,7 +99,15 @@ class FakeAudioPlayer extends EventEmitter {
   }
 }
 
-function setup(connected = true) {
+function setup(
+  connected = true,
+  options: {
+    crossfade?: CrossfadeOptions
+    currentItem?: QueueItem
+    decodedStream?: (sourceIdentifier: string) => Readable
+  } = {},
+) {
+  const currentItem = options.currentItem ?? item
   const player = new FakeAudioPlayer()
   const createResource = vi.fn(
     (streamUrl: string, queueItemId: string, context?: ResourceCreationContext) => {
@@ -106,10 +117,25 @@ function setup(connected = true) {
       }>
     },
   )
+  const pcmInputs: Readable[] = []
+  const createDecodedStream = vi.fn((_streamUrl: string, context: ResourceCreationContext) =>
+    Promise.resolve({
+      stream: options.decodedStream?.(context.sourceIdentifier) ?? Readable.from([]),
+      dispose: vi.fn(),
+    }),
+  )
+  const createPcmResource = vi.fn((input: Readable, queueItemId: string) => {
+    pcmInputs.push(input)
+    return {
+      metadata: { queueItemId },
+      volume: { setVolume: vi.fn() },
+    } as unknown as AudioResource<{ queueItemId: string }>
+  })
   const runtime: PlaybackRuntime = {
     createPlayer: () => player as unknown as AudioPlayer,
     createResource: (streamUrl, queueItemId, context) =>
       Promise.resolve(createResource(streamUrl, queueItemId, context)),
+    ...(options.crossfade ? { createDecodedStream, createPcmResource } : {}),
   }
   const claimPlayback = vi.fn().mockResolvedValue({
     player: {
@@ -119,7 +145,7 @@ function setup(connected = true) {
       voiceChannelId: 'voice-1',
       updatedAt: item.updatedAt,
     },
-    item,
+    item: currentItem,
   })
   const resolveSource = vi.fn().mockResolvedValue({
     queueItemId: item.id,
@@ -151,11 +177,12 @@ function setup(connected = true) {
   })
   const sendEvent = vi.fn().mockResolvedValue(undefined)
   const reportPlaybackAttempt = vi.fn().mockResolvedValue(undefined)
+  const getQueue = vi.fn().mockResolvedValue([])
   const api: WavesApi = {
     claimPlayback,
     completePlayback,
     reportPlaybackAttempt,
-    getQueue: vi.fn(),
+    getQueue,
     play: vi.fn(),
     resolveSource,
     sendEvent,
@@ -205,17 +232,22 @@ function setup(connected = true) {
     logger as unknown as BotLogger,
     client,
     runtime,
+    options.crossfade,
   )
 
   return {
     manager,
     setActivity,
     player,
+    pcmInputs,
     mocks: {
       claimPlayback,
       completePlayback,
       reportPlaybackAttempt,
       createResource,
+      createDecodedStream,
+      createPcmResource,
+      getQueue,
       loggerError,
       loggerInfo,
       loggerWarn,
@@ -384,6 +416,80 @@ describe('AudioPlayerManager', () => {
       )
       expect(player.played).toHaveLength(2)
     })
+  })
+
+  it('prepares and crossfades to the API-promoted next item without replacing the player resource', async () => {
+    const shortItem: QueueItem = {
+      ...item,
+      track: { ...item.track, durationMs: 200 },
+    }
+    const queuedNext: QueueItem = {
+      ...nextItem,
+      status: 'queued',
+      track: { ...nextItem.track, durationMs: 200 },
+    }
+    const promotedNext: QueueItem = { ...queuedNext, status: 'playing' }
+    const nextPcm = new PassThrough()
+    nextPcm.write(Buffer.alloc(PCM_FRAME_BYTES * 3))
+    const { manager, player, pcmInputs, mocks } = setup(true, {
+      currentItem: shortItem,
+      crossfade: { durationMs: 40, preloadMs: 80 },
+      decodedStream: (sourceIdentifier) =>
+        sourceIdentifier === 'youtube-queue-1'
+          ? Readable.from([Buffer.alloc(PCM_FRAME_BYTES * 10)])
+          : nextPcm,
+    })
+    mocks.getQueue.mockResolvedValue([shortItem, queuedNext])
+    mocks.resolveSource.mockImplementation((queueItemId: string) =>
+      Promise.resolve({
+        queueItemId,
+        source: {
+          provider: 'youtube_music',
+          sourceIdentifier: `youtube-${queueItemId}`,
+          streamUrl: `https://stream.example/${queueItemId}`,
+          expiresAt: '2026-06-20T12:05:00.000Z',
+        },
+      }),
+    )
+    mocks.completePlayback.mockResolvedValue({
+      completedQueueItemId: shortItem.id,
+      player: {
+        status: 'playing',
+        currentQueueItemId: promotedNext.id,
+        guildId: 'guild-1',
+        voiceChannelId: 'voice-1',
+        updatedAt: item.updatedAt,
+      },
+      queue: [promotedNext],
+      nextItem: promotedNext,
+      nextPlaybackAttemptId: 'next-attempt',
+    })
+
+    await expect(manager.start('guild-1')).resolves.toBe('started')
+    const pcmInput = pcmInputs[0]
+    if (!pcmInput) throw new Error('Expected a PCM mixer resource')
+    pcmInput.resume()
+
+    await vi.waitFor(() => {
+      expect(mocks.completePlayback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queueItemId: shortItem.id,
+          outcome: 'played',
+          playbackDurationMs: 200,
+        }),
+      )
+      expect(mocks.sendEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'playback.started',
+          payload: { queueItemId: promotedNext.id },
+        }),
+      )
+    })
+    expect(mocks.resolveSource).toHaveBeenCalledTimes(2)
+    expect(mocks.createPcmResource).toHaveBeenCalledOnce()
+    expect(player.played).toHaveLength(1)
+
+    manager.destroyGuild('guild-1')
   })
 
   it('refreshes the source once after a player error before failing the item', async () => {
