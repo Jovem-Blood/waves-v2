@@ -26,6 +26,19 @@ import {
 const RESTORE_WINDOW_MS = 10_000
 const noopPublish: RealtimePublisher = (event) => ({ id: '0', event })
 
+function shuffled<T>(values: readonly T[], random: () => number): T[] {
+  const result = [...values]
+  for (let index = result.length - 1; index > 0; index--) {
+    const target = Math.floor(random() * (index + 1))
+    const current = result[index]
+    const replacement = result[target]
+    if (current === undefined || replacement === undefined) continue
+    result[index] = replacement
+    result[target] = current
+  }
+  return result
+}
+
 function isActiveTrackConstraintError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -42,6 +55,7 @@ export class QueueService {
     private readonly now: () => Date = () => new Date(),
     private readonly generateId: () => string = randomUUID,
     private readonly publishRealtime: RealtimePublisher = noopPublish,
+    private readonly random: () => number = Math.random,
   ) {}
 
   list(): QueueItem[] {
@@ -52,6 +66,7 @@ export class QueueService {
     tracks: readonly { position: number; track: TrackMetadata }[],
     requester: Pick<AddQueueItemInput, 'requestedByUserId' | 'requestedByDisplayName'>,
     skipped: readonly PlaylistSkippedItem[] = [],
+    options: { shuffle?: boolean } = {},
   ) {
     const result = this.unitOfWork.run(({ queue }) => {
       const active = queue.listActive()
@@ -59,7 +74,8 @@ export class QueueService {
       const failures = [...skipped]
       const timestamp = this.now().toISOString()
       let imported = 0
-      for (const { position, track } of tracks) {
+      const orderedTracks = options.shuffle ? shuffled(tracks, this.random) : tracks
+      for (const { position, track } of orderedTracks) {
         const key = `${track.provider}:${track.providerTrackId}`
         if (seen.has(key)) {
           failures.push({ position, title: track.title, reason: 'duplicate' })

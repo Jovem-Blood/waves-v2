@@ -23,6 +23,10 @@ export const spotifyPlaylistUrlSchema = z
   }, 'Cole um link válido de playlist do Spotify.')
 
 export const playlistInputSchema = z.strictObject({ url: spotifyPlaylistUrlSchema })
+export const playlistImportInputSchema = z.strictObject({
+  url: spotifyPlaylistUrlSchema,
+  shuffle: z.boolean().default(false),
+})
 export const playlistSkippedItemSchema = z.strictObject({
   position: z.number().int().positive(),
   title: z.string(),

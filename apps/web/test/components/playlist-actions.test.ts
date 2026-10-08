@@ -152,9 +152,13 @@ describe('Playlist actions', () => {
     expect(wrapper.findAll('.preview-tracks li')).toHaveLength(5)
     expect(wrapper.get('dialog').classes()).toContain('expanded')
     expect(fetcher).toHaveBeenCalledTimes(1)
+    await wrapper.get('#playlist-shuffle').setValue(true)
     await wrapper.get('footer .primary').trigger('click')
     await flushPromises()
-    expect(fetcher.mock.calls[1]).toEqual(['/api/queue/import', { method: 'POST', body: { url } }])
+    expect(fetcher.mock.calls[1]).toEqual([
+      '/api/queue/import',
+      { method: 'POST', body: { url, shuffle: true } },
+    ])
     expect(wrapper.text()).toContain('4 músicas importadas; 1 ignoradas.')
     expect(wrapper.text()).toContain('Repetida — Já está na fila')
     expect(wrapper.emitted('updated')).toEqual([[[item]]])

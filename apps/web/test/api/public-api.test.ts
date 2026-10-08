@@ -517,7 +517,7 @@ describe('public API', () => {
     expect((await postJson('/api/queue/import', { url })).response.status).toBe(401)
     await addTrack(firstTrack)
     const beforePlayer = context.dependencies.playerStateService.get()
-    const result = await postJson('/api/queue/import', { url })
+    const result = await postJson('/api/queue/import', { url, shuffle: false })
     expect(result.response.status).toBe(200)
     expect(result.body).toMatchObject({
       imported: 1,

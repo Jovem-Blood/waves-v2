@@ -34,9 +34,11 @@ const input: AddQueueItemInput = {
 function setup({
   nowProvider = now,
   publishRealtime,
+  random,
 }: {
   nowProvider?: () => Date
   publishRealtime?: (event: RealtimeEvent) => { id: string; event: RealtimeEvent }
+  random?: () => number
 } = {}): {
   connection: DatabaseConnection
   repository: QueueRepository
@@ -57,6 +59,7 @@ function setup({
       nowProvider,
       () => `queue-${++nextId}`,
       publishRealtime,
+      random,
     ),
   }
 }
@@ -105,6 +108,22 @@ describe('QueueService', () => {
       { position: 3, reason: 'duplicate' },
       { position: 4, reason: 'duplicate' },
       { position: 5, reason: 'local' },
+    ])
+  })
+
+  it('shuffles imported playlist tracks when requested', () => {
+    const { service } = setup({ random: () => 0 })
+    const tracks = ['first', 'second', 'third'].map((providerTrackId, index) => ({
+      position: index + 1,
+      track: { ...input.track, id: providerTrackId, providerTrackId },
+    }))
+
+    const result = service.appendPlaylist(tracks, {}, [], { shuffle: true })
+
+    expect(result.queue.map(({ track }) => track.providerTrackId)).toEqual([
+      'second',
+      'third',
+      'first',
     ])
   })
 

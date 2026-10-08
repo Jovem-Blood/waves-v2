@@ -1,4 +1,4 @@
-import { playlistInputSchema, playlistImportResultSchema } from '@waves/shared'
+import { playlistImportInputSchema, playlistImportResultSchema } from '@waves/shared'
 import { readBody } from 'h3'
 import { definePublicApiHandler } from '../../utils/api-error'
 import {
@@ -12,7 +12,7 @@ export function createPlaylistImportHandler(
   getDependencies: () => PublicApiDependencies = usePublicApiDependencies,
 ) {
   return definePublicApiHandler(async (event) => {
-    const { url } = playlistInputSchema.parse(await readBody(event))
+    const { url, shuffle } = playlistImportInputSchema.parse(await readBody(event))
     const dependencies = getDependencies()
     const token = readSessionCookie(event)
     const session = dependencies.authService.getCurrentSession(token)
@@ -26,6 +26,7 @@ export function createPlaylistImportHandler(
         requestedByDisplayName: session.user.displayName,
       },
       playlist.skipped,
+      { shuffle },
     )
     await dependencies.autoplayOrchestrator.queueChanged().catch(() => undefined)
     return playlistImportResultSchema.parse(result)

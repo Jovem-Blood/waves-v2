@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LoaderCircle, LockKeyhole, Music2, X } from '@lucide/vue'
+import { LoaderCircle, LockKeyhole, Music2, Shuffle, X } from '@lucide/vue'
 import {
   apiErrorSchema,
   clearQueueResultSchema,
@@ -23,6 +23,7 @@ let returnFocus: HTMLElement | undefined
 const mode = ref<'import' | 'clear'>('import')
 const open = ref(false)
 const url = ref('')
+const shuffle = ref(false)
 const preview = ref<PlaylistPreview>()
 const result = ref<PlaylistImportResult>()
 const loading = ref(false)
@@ -49,6 +50,7 @@ function show(nextMode: 'import' | 'clear') {
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
   mode.value = nextMode
   url.value = ''
+  shuffle.value = false
   preview.value = undefined
   result.value = undefined
   error.value = ''
@@ -146,7 +148,7 @@ async function confirm() {
       const imported = playlistImportResultSchema.parse(
         await $fetch(`${props.apiBase}/queue/import`, {
           method: 'POST',
-          body: { url: url.value },
+          body: { url: url.value, shuffle: shuffle.value },
         }),
       )
       result.value = imported
@@ -221,9 +223,23 @@ defineExpose({ show, busy })
             autocomplete="off"
           />
           <p id="playlist-help">
-            As músicas serão adicionadas ao final da fila, na ordem da playlist. A reprodução atual
-            continua.
+            As músicas serão adicionadas ao final da fila. A reprodução atual continua.
           </p>
+          <label class="shuffle-option" for="playlist-shuffle">
+            <span class="shuffle-copy">
+              <Shuffle :size="20" aria-hidden="true" />
+              <span>
+                <strong>Embaralhar playlist</strong>
+              </span>
+            </span>
+            <input
+              id="playlist-shuffle"
+              v-model="shuffle"
+              type="checkbox"
+              role="switch"
+              :disabled="busy || !!result"
+            />
+          </label>
           <p v-if="loading" role="status">
             <LoaderCircle class="spinner" :size="18" aria-hidden="true" /> Carregando playlist…
           </p>
@@ -488,7 +504,7 @@ small {
 label {
   font-size: 14px;
 }
-input {
+input[type='url'] {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -500,6 +516,73 @@ input {
   color: var(--text);
   font: inherit;
   font-size: 16px;
+}
+.shuffle-option {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+.shuffle-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.shuffle-copy > svg {
+  flex-shrink: 0;
+  color: var(--accent-secondary);
+}
+.shuffle-copy strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+input[type='checkbox'] {
+  position: relative;
+  width: 48px;
+  min-width: 48px;
+  height: 28px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-strong);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+input[type='checkbox']::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  content: '';
+  transition:
+    transform 140ms ease,
+    background 140ms ease;
+}
+input[type='checkbox']:checked {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 24%, var(--surface-strong));
+}
+input[type='checkbox']:checked::after {
+  transform: translateX(20px);
+  background: var(--accent-primary);
+}
+input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .playlist-preview {
   display: grid;
