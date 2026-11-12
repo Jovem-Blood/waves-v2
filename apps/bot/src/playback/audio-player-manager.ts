@@ -268,6 +268,15 @@ export class AudioPlayerManager implements PlaybackManager {
     if (!session?.current) return
     this.applyCrossfadeSetting(session, desired.crossfadeEnabled)
 
+    // The API transition is synchronized while the audio overlap is already in progress.
+    // Do not interpret the brief difference between local and persisted items as a skip.
+    if (session.crossfadeTransition) {
+      this.setVolume(guildId, desired.volume)
+      if (desired.status === 'paused') this.pause(guildId)
+      if (desired.status === 'playing') this.resume(guildId)
+      return
+    }
+
     if (desired.currentQueueItemId !== session.current.item.id) {
       const currentItem = session.current
       const logger = playbackLogger(this.logger, {
@@ -910,12 +919,25 @@ export class AudioPlayerManager implements PlaybackManager {
       playbackDurationMs + this.crossfadeOptions.durationMs,
     )
     try {
+      // Start the overlap before waiting for the API. Completion delivery can retry for
+      // several seconds; making audio wait for it creates a gap at the end of the track.
+      if (!mixer.beginCrossfade(outgoingTrackId, prepared.item.id)) return
+      session.prepared = undefined
+      session.fadingOut = outgoing
+
       const result = await this.completePlaybackTransition(
         guildId,
         outgoing,
         'played',
         prepared.playbackAttemptId,
       )
+      if (
+        this.sessions.get(guildId) !== session ||
+        session.crossfade !== mixer ||
+        session.current !== outgoing
+      ) {
+        return
+      }
       if (!result.nextItem || result.nextItem.id !== prepared.item.id) {
         await this.fallbackFromPreparedTransition(guildId, session, outgoing, prepared, result)
         return
@@ -924,14 +946,8 @@ export class AudioPlayerManager implements PlaybackManager {
       prepared.item = result.nextItem
       prepared.playbackAttemptId = result.nextPlaybackAttemptId ?? prepared.playbackAttemptId
       prepared.startedAt = Date.now()
-      session.prepared = undefined
-      session.fadingOut = outgoing
       session.current = prepared
       session.settling = false
-      if (!mixer.beginCrossfade(outgoingTrackId, prepared.item.id)) {
-        await this.fallbackFromPreparedTransition(guildId, session, outgoing, prepared, result)
-        return
-      }
       this.markCrossfadeTrackStarted(guildId, prepared)
       this.updateActivity(guildId, prepared.item)
       this.logger.info(
@@ -946,7 +962,13 @@ export class AudioPlayerManager implements PlaybackManager {
         'Crossfade started',
       )
     } catch (error) {
-      await this.handleCrossfadeSyncFailure(guildId, session, outgoing, error)
+      if (
+        this.sessions.get(guildId) === session &&
+        session.crossfade === mixer &&
+        session.current === outgoing
+      ) {
+        await this.handleCrossfadeSyncFailure(guildId, session, outgoing, error)
+      }
     }
   }
 

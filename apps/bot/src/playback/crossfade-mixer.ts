@@ -85,6 +85,7 @@ export class CrossfadeMixer extends Readable {
   private incoming: ActiveSource | undefined
   private pumping = false
   private readRequested = false
+  private finished = false
   private enabled = true
   private waitingForAdvance = false
   private preloadRequested = false
@@ -194,7 +195,8 @@ export class CrossfadeMixer extends Readable {
   }
 
   finish(outgoingTrackId: string): void {
-    if (this.current.source.id !== outgoingTrackId || this.destroyed) return
+    if (this.current.source.id !== outgoingTrackId || this.destroyed || this.finished) return
+    this.finished = true
     this.waitingForAdvance = false
     this.push(null)
   }
@@ -216,7 +218,7 @@ export class CrossfadeMixer extends Readable {
   }
 
   private startPump(): void {
-    if (this.pumping || this.destroyed || this.waitingForAdvance) return
+    if (this.pumping || this.destroyed || this.finished || this.waitingForAdvance) return
     this.pumping = true
     this.readRequested = false
     void this.pump()
@@ -234,7 +236,7 @@ export class CrossfadeMixer extends Readable {
   }
 
   private async pump(): Promise<void> {
-    while (!this.destroyed && !this.waitingForAdvance) {
+    while (!this.destroyed && !this.finished && !this.waitingForAdvance) {
       const outgoingFrame = await this.current.reader.readFrame()
       if (!outgoingFrame && !this.incoming) {
         this.waitingForAdvance = true

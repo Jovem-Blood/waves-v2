@@ -16,7 +16,7 @@ import type { WavesApi } from '../src/api/waves-api.client.js'
 import type { BotLogger } from '../src/logger.js'
 import { AudioPlayerManager } from '../src/playback/audio-player-manager.js'
 import type { CrossfadeOptions } from '../src/playback/audio-player-manager.js'
-import { PCM_FRAME_BYTES } from '../src/playback/crossfade-mixer.js'
+import { CrossfadeMixer, PCM_FRAME_BYTES } from '../src/playback/crossfade-mixer.js'
 import {
   createRangedAudioStream,
   type ResourceCreationContext,
@@ -469,7 +469,11 @@ describe('AudioPlayerManager', () => {
         },
       }),
     )
-    mocks.completePlayback.mockResolvedValue({
+    let finishCompletion!: () => void
+    const completion = new Promise<void>((resolve) => {
+      finishCompletion = resolve
+    })
+    const transitionResult = {
       completedQueueItemId: shortItem.id,
       player: {
         status: 'playing',
@@ -481,6 +485,10 @@ describe('AudioPlayerManager', () => {
       queue: [promotedNext],
       nextItem: promotedNext,
       nextPlaybackAttemptId: 'next-attempt',
+    } as const
+    mocks.completePlayback.mockImplementation(async () => {
+      await completion
+      return transitionResult
     })
 
     await expect(manager.start('guild-1')).resolves.toBe('started')
@@ -488,6 +496,18 @@ describe('AudioPlayerManager', () => {
     if (!pcmInput) throw new Error('Expected a PCM mixer resource')
     pcmInput.resume()
 
+    await vi.waitFor(() => {
+      expect(mocks.completePlayback).toHaveBeenCalledOnce()
+      expect((pcmInput as CrossfadeMixer).currentTrackId).toBe(promotedNext.id)
+    })
+    expect(mocks.sendEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'playback.started',
+        payload: { queueItemId: promotedNext.id },
+      }),
+    )
+
+    finishCompletion()
     await vi.waitFor(() => {
       expect(mocks.completePlayback).toHaveBeenCalledWith(
         expect.objectContaining({
