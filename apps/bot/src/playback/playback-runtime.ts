@@ -46,6 +46,7 @@ export interface DecodedAudioStream {
 
 const RESOURCE_FETCH_TIMEOUT_MS = 10_000
 const SOURCE_CHUNK_SIZE = 256 * 1024
+const PCM_OPUS_BITRATE = 128_000
 
 export type AudioSourceFetch = (
   input: string | URL | Request,
@@ -327,10 +328,12 @@ export const defaultPlaybackRuntime: PlaybackRuntime = {
     return Promise.resolve(createFfmpegDecodedStream(streamUrl, context))
   },
   createPcmResource(input, queueItemId) {
-    return createAudioResource(input, {
+    const resource = createAudioResource(input, {
       inputType: StreamType.Raw,
       metadata: { queueItemId },
       inlineVolume: true,
     })
+    resource.encoder?.setBitrate(PCM_OPUS_BITRATE)
+    return resource
   },
 }
